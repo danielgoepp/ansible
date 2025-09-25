@@ -7,6 +7,11 @@ Against my better judgement, I'm making this repository public. I have removed
 all the secrets. Yes, it does contain information that is specific to, and
 provides knowledge of, my internal network, but I don't think anything too bad.
 
+This is a far from complete project, very much a work in progress. It doesn't
+include all of my work yet, just stuff that I had put in this directory already
+as tested(sih). I will continue over time to migrate more of my lab work here
+as I get a chance to clean it up.
+
 ## Operations
 
 ### Version Management
@@ -98,3 +103,5 @@ ansible-playbook playbooks/ops-upgrade-helm-mongodb.yaml
 - Vault password file at `~/.ansible/.vault-pass`
 - Utility scripts directory (`../utility-scripts/`) must exist relative to this
   project
+- Kubernetes configuration directory (`../k3s-config/`) must exist relative to
+  this project for cluster upgrade operations
