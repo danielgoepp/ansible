@@ -1,0 +1,19 @@
+---
+- name: Restart nut-server
+  ansible.builtin.systemd:
+    name: nut-server
+    state: restarted
+
+- name: Restart nut-monitor
+  ansible.builtin.systemd:
+    name: nut-monitor
+    state: restarted
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart wyoming-satellite
+  ansible.builtin.systemd:
+    name: wyoming-satellite
+    state: restarted

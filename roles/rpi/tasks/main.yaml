@@ -1,0 +1,23 @@
+---
+- name: Install rpi packages
+  ansible.builtin.apt:
+    name:
+      - dnsutils
+    state: present
+    update_cache: true
+
+- name: Cron homeassistant backup
+  ansible.builtin.cron:
+    name: homeassistant backup
+    hour: "5"
+    minute: "0"
+    job: "rsync -ah /k3s/homeassistant/config/backups/ /mnt/backups/homeassistant/{{ ansible_hostname }} --delete"
+  when: "'homeassistant' in (services | default([]))"
+
+- name: Include install nut tasks
+  ansible.builtin.include_tasks: setup-rpi-nut.yaml
+  when: "'nut' in (services | default([]))"
+
+- name: Include install wyoming satellite tasks
+  ansible.builtin.include_tasks: setup-rpi-wyoming-satellite.yaml
+  when: "'wyoming' in (services | default([]))"

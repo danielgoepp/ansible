@@ -1,0 +1,122 @@
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Install python3 and pip
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - python3-dev
+    state: present
+
+- name: Create wyoming user
+  ansible.builtin.user:
+    name: wyoming
+    system: true
+    shell: /bin/bash
+    home: /var/lib/wyoming
+    create_home: true
+    groups: audio
+    append: true
+
+- name: Create ansible tmp directory for wyoming user
+  ansible.builtin.file:
+    path: /var/lib/wyoming/.ansible/tmp
+    state: directory
+    owner: wyoming
+    group: wyoming
+    mode: '0755'
+
+- name: Create wyoming satellite directory
+  ansible.builtin.file:
+    path: /opt/wyoming-satellite
+    state: directory
+    owner: wyoming
+    group: wyoming
+    mode: '0755'
+
+- name: Check if wyoming satellite repository exists
+  ansible.builtin.stat:
+    path: /opt/wyoming-satellite/.git
+  register: rpi_repo_exists
+
+- name: Clone wyoming satellite repository
+  ansible.builtin.git:
+    repo: https://github.com/rhasspy/wyoming-satellite.git
+    dest: /opt/wyoming-satellite
+    version: master
+  become: true
+  become_user: wyoming
+  when: not rpi_repo_exists.stat.exists
+
+- name: Create python virtual environment
+  ansible.builtin.command: python3 -m venv /opt/wyoming-satellite/venv
+  become: true
+  become_user: wyoming
+  args:
+    creates: /opt/wyoming-satellite/venv
+  changed_when: false
+
+- name: Upgrade pip in virtual environment
+  ansible.builtin.pip:
+    name: pip
+    state: present
+    virtualenv: /opt/wyoming-satellite/venv
+  become: true
+  become_user: wyoming
+
+- name: Check if seeed-voicecard driver is already installed
+  ansible.builtin.command: dkms status seeed-voicecard
+  register: rpi_dkms_status
+  failed_when: false
+  changed_when: false
+
+- name: Install respeaker driver
+  ansible.builtin.command: ./install-respeaker-driver
+  args:
+    chdir: /opt/wyoming-satellite
+  when: rpi_dkms_status.rc != 0
+  register: rpi_respeaker_installed
+  changed_when: rpi_respeaker_installed.rc == 0
+
+- name: Reboot after respeaker driver installation
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+  when: rpi_respeaker_installed.changed
+
+- name: Install wheel and setuptools
+  ansible.builtin.pip:
+    name:
+      - wheel
+      - setuptools
+    state: present
+    virtualenv: /opt/wyoming-satellite/venv
+  become: true
+  become_user: wyoming
+
+- name: Install wyoming satellite with prebuilt dependencies
+  ansible.builtin.pip:
+    name: ".[all]"
+    virtualenv: /opt/wyoming-satellite/venv
+    chdir: /opt/wyoming-satellite
+    extra_args: "-f https://synesthesiam.github.io/prebuilt-apps/ -e"
+  become: true
+  become_user: wyoming
+
+- name: Create wyoming satellite systemd service
+  ansible.builtin.template:
+    src: "wyoming-satellite.service.j2"
+    dest: /etc/systemd/system/wyoming-satellite.service
+    mode: '0644'
+  notify:
+    - Reload systemd
+    - Restart wyoming-satellite
+
+- name: Enable and start wyoming satellite service
+  ansible.builtin.systemd:
+    name: wyoming-satellite
+    enabled: true
+    state: started
+    daemon_reload: true

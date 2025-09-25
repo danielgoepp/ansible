@@ -1,0 +1,51 @@
+- name: Install nut package
+  ansible.builtin.apt:
+    name:
+      - nut
+    state: present
+    update_cache: true
+
+- name: Copy ups.conf
+  ansible.builtin.copy:
+    src: "nut/nut-{{ ansible_hostname }}/ups.conf"
+    dest: /etc/nut/ups.conf
+    mode: '0640'
+  notify:
+    - Restart nut-server
+    - Restart nut-monitor
+
+- name: Copy upsd.conf
+  ansible.builtin.copy:
+    src: "nut/nut-{{ ansible_hostname }}/upsd.conf"
+    dest: /etc/nut/upsd.conf
+    mode: '0640'
+  notify:
+    - Restart nut-server
+    - Restart nut-monitor
+
+- name: Copy upsd.users
+  ansible.builtin.copy:
+    src: "nut/nut-{{ ansible_hostname }}/upsd.users"
+    dest: /etc/nut/upsd.users
+    mode: '0640'
+  notify:
+    - Restart nut-server
+    - Restart nut-monitor
+
+- name: Copy upsmon.conf
+  ansible.builtin.copy:
+    src: "nut/nut-{{ ansible_hostname }}/upsmon.conf"
+    dest: /etc/nut/upsmon.conf
+    mode: '0640'
+  notify:
+    - Restart nut-server
+    - Restart nut-monitor
+
+- name: Copy nut.conf
+  ansible.builtin.copy:
+    src: "nut/nut-{{ ansible_hostname }}/nut.conf"
+    dest: /etc/nut/nut.conf
+    mode: '0640'
+  notify:
+    - Restart nut-server
+    - Restart nut-monitor
