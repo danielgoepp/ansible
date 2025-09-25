@@ -4,6 +4,9 @@
 # Ansible vault password file (if stored locally)
 .vault-pass
 
+# Ansible configuration file
+ansible.cfg
+
 # All password and secure files
 *.secret
 
