@@ -9,7 +9,7 @@ provides knowledge of, my internal network, but I don't think anything too bad.
 
 This is a far from complete project, very much a work in progress. It doesn't
 include all of my work yet, just stuff that I had put in this directory already
-as tested(sih). I will continue over time to migrate more of my lab work here
+as tested(ish). I will continue over time to migrate more of my lab work here
 as I get a chance to clean it up.
 
 ## Operations
