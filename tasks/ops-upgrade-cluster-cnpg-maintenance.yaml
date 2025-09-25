@@ -1,0 +1,47 @@
+---
+# CNPG Maintenance Mode Operations
+# Manages CloudNativePG maintenance mode for cluster upgrades
+#
+# Parameters:
+#   maintenance_action: "enable" or "disable"
+
+- name: Validate maintenance_action parameter
+  fail:
+    msg: "maintenance_action must be 'enable' or 'disable'"
+  when: maintenance_action not in ['enable', 'disable']
+
+# ENABLE CNPG MAINTENANCE MODE
+- block:
+    - name: Set CNPG maintenance mode
+      command: kubectl cnpg maintenance set --all-namespaces
+      register: cnpg_maintenance
+      failed_when: false
+
+    - name: Display CNPG maintenance result
+      debug:
+        var: cnpg_maintenance.stdout_lines
+      when: cnpg_maintenance is defined
+
+    - name: CNPG maintenance mode enabled
+      debug:
+        msg: "CNPG maintenance mode enabled - database operations paused"
+
+  when: maintenance_action == 'enable'
+
+# DISABLE CNPG MAINTENANCE MODE
+- block:
+    - name: Unset CNPG maintenance mode
+      command: kubectl cnpg maintenance unset --all-namespaces
+      register: cnpg_unmaintenance
+      failed_when: false
+
+    - name: Display CNPG unmaintenance result
+      debug:
+        var: cnpg_unmaintenance.stdout_lines
+      when: cnpg_unmaintenance is defined
+
+    - name: CNPG maintenance mode disabled
+      debug:
+        msg: "CNPG maintenance mode disabled - database operations resumed"
+
+  when: maintenance_action == 'disable'

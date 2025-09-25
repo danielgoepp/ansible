@@ -1,0 +1,200 @@
+---
+- name: Upgrade MongoDB Custom Resource
+  hosts: localhost
+  gather_facts: false
+  vars:
+    mongodb_cr_file: "/Users/dang/Documents/Development/k3s-config/mongodb/manifests/mongodb-cr-prod.yaml"
+    k8s_context: "k3s-prod"
+    mongodb_namespace: "mongodb"
+    mongodb_name: "mongodb"
+  tasks:
+    - name: Get current MongoDB CR status (before upgrade)
+      kubernetes.core.k8s_info:
+        api_version: mongodbcommunity.mongodb.com/v1
+        kind: MongoDBCommunity
+        name: "{{ mongodb_name }}"
+        namespace: "{{ mongodb_namespace }}"
+        context: "{{ k8s_context }}"
+      register: mongodb_current_status
+      ignore_errors: true
+
+    - name: Display current MongoDB CR status
+      debug:
+        msg:
+          - "Current MongoDB Custom Resource:"
+          - "  Name: {{ mongodb_current_status.resources[0].metadata.name | default('Not found') }}"
+          - "  Version: {{ mongodb_current_status.resources[0].spec.version | default('Unknown') }}"
+          - "  Members: {{ mongodb_current_status.resources[0].spec.members | default('Unknown') }}"
+          - "  Phase: {{ mongodb_current_status.resources[0].status.phase | default('Unknown') }}"
+      when: mongodb_current_status.resources is defined and mongodb_current_status.resources | length > 0
+
+    - name: Display status if MongoDB CR not found
+      debug:
+        msg: "MongoDB Custom Resource '{{ mongodb_name }}' not found in namespace '{{ mongodb_namespace }}'"
+      when: mongodb_current_status.resources is not defined or mongodb_current_status.resources | length == 0
+
+    - name: Validate manifest with kubectl (dry-run)
+      shell: kubectl apply -f "{{ mongodb_cr_file }}" --context="{{ k8s_context }}" --dry-run=server --validate=true
+      register: kubectl_validate_result
+      failed_when: kubectl_validate_result.rc != 0
+
+    - name: Apply MongoDB Custom Resource manifest
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ mongodb_cr_file }}"
+        namespace: "{{ mongodb_namespace }}"
+        context: "{{ k8s_context }}"
+      register: mongodb_apply_result
+      failed_when: mongodb_apply_result.failed | default(false)
+
+    - name: Display manifest validation and application result
+      debug:
+        msg:
+          - "MongoDB Custom Resource manifest validation:"
+          - "  Kubectl validation: {{ 'SUCCESS' if kubectl_validate_result.rc == 0 else 'FAILED' }}"
+          - "  Kubectl error: {{ kubectl_validate_result.stderr | default('None') }}"
+          - "MongoDB Custom Resource manifest application:"
+          - "  Ansible result: {{ 'SUCCESS' if not (mongodb_apply_result.failed | default(false)) else 'FAILED' }}"
+          - "  Changed: {{ mongodb_apply_result.changed }}"
+          - "  Error: {{ mongodb_apply_result.msg | default('None') }}"
+
+    - name: Wait for MongoDB Custom Resource to be processed
+      kubernetes.core.k8s_info:
+        api_version: mongodbcommunity.mongodb.com/v1
+        kind: MongoDBCommunity
+        name: "{{ mongodb_name }}"
+        namespace: "{{ mongodb_namespace }}"
+        context: "{{ k8s_context }}"
+      register: mongodb_wait_result
+      until:
+        - mongodb_wait_result.resources is defined
+        - mongodb_wait_result.resources | length > 0
+        - mongodb_wait_result.resources[0].status.phase is defined
+        - mongodb_wait_result.resources[0].status.phase in ['Running', 'Failed']
+      retries: 60
+      delay: 5
+      failed_when:
+        - mongodb_wait_result.resources is defined
+        - mongodb_wait_result.resources | length > 0
+        - mongodb_wait_result.resources[0].status.phase == 'Failed'
+
+    - name: Check MongoDB Custom Resource health after application
+      kubernetes.core.k8s_info:
+        api_version: mongodbcommunity.mongodb.com/v1
+        kind: MongoDBCommunity
+        name: "{{ mongodb_name }}"
+        namespace: "{{ mongodb_namespace }}"
+        context: "{{ k8s_context }}"
+      register: mongodb_health_check
+
+    - name: Validate MongoDB Custom Resource is healthy
+      fail:
+        msg: "MongoDB Custom Resource failed to reach healthy state. Phase: {{ mongodb_health_check.resources[0].status.phase | default('Unknown') }}"
+      when:
+        - mongodb_health_check.resources is defined
+        - mongodb_health_check.resources | length > 0
+        - mongodb_health_check.resources[0].status.phase | default('') not in ['Running', 'Pending']
+
+    - name: Rolling restart of MongoDB StatefulSet
+      kubernetes.core.k8s:
+        api_version: apps/v1
+        kind: StatefulSet
+        name: "{{ mongodb_name }}"
+        namespace: "{{ mongodb_namespace }}"
+        context: "{{ k8s_context }}"
+        state: present
+        definition:
+          spec:
+            template:
+              metadata:
+                annotations:
+                  kubectl.kubernetes.io/restartedAt: "{{ ansible_date_time.iso8601 | default(lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ')) }}"
+        merge_type: strategic-merge
+      register: mongodb_restart_result
+      failed_when: mongodb_restart_result.failed | default(false)
+      when:
+        - not (mongodb_apply_result.failed | default(false))
+        - mongodb_health_check.resources is defined
+        - mongodb_health_check.resources | length > 0
+        - mongodb_health_check.resources[0].status.phase | default('') in ['Running', 'Pending']
+
+    - name: Wait for StatefulSet to be ready after restart
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: StatefulSet
+        name: "{{ mongodb_name }}"
+        namespace: "{{ mongodb_namespace }}"
+        context: "{{ k8s_context }}"
+      register: statefulset_wait_result
+      until:
+        - statefulset_wait_result.resources is defined
+        - statefulset_wait_result.resources | length > 0
+        - statefulset_wait_result.resources[0].status.readyReplicas is defined
+        - statefulset_wait_result.resources[0].status.replicas is defined
+        - statefulset_wait_result.resources[0].status.readyReplicas == statefulset_wait_result.resources[0].status.replicas
+      retries: 60
+      delay: 5
+      failed_when: false
+      when: mongodb_restart_result is not skipped
+
+    - name: Check MongoDB StatefulSet status
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: StatefulSet
+        name: "{{ mongodb_name }}"
+        namespace: "{{ mongodb_namespace }}"
+        context: "{{ k8s_context }}"
+      register: mongodb_rollout_status
+      when: mongodb_restart_result is not skipped
+
+    - name: Validate StatefulSet is healthy
+      fail:
+        msg: "MongoDB StatefulSet failed to reach healthy state. Ready replicas: {{ mongodb_rollout_status.resources[0].status.readyReplicas | default(0) }}/{{ mongodb_rollout_status.resources[0].status.replicas | default(0) }}"
+      when:
+        - mongodb_restart_result is not skipped
+        - mongodb_rollout_status.resources is defined
+        - mongodb_rollout_status.resources | length > 0
+        - (mongodb_rollout_status.resources[0].status.readyReplicas | default(0)) != (mongodb_rollout_status.resources[0].status.replicas | default(1))
+
+    - name: Check MongoDB upgrade status
+      kubernetes.core.k8s_info:
+        api_version: mongodbcommunity.mongodb.com/v1
+        kind: MongoDBCommunity
+        name: "{{ mongodb_name }}"
+        namespace: "{{ mongodb_namespace }}"
+        context: "{{ k8s_context }}"
+      register: mongodb_final_status
+      when: mongodb_restart_result is not skipped
+
+    - name: Display updated MongoDB CR status
+      debug:
+        msg:
+          - "Updated MongoDB Custom Resource:"
+          - "  Name: {{ mongodb_final_status.resources[0].metadata.name }}"
+          - "  Version: {{ mongodb_final_status.resources[0].spec.version }}"
+          - "  Members: {{ mongodb_final_status.resources[0].spec.members }}"
+          - "  Phase: {{ mongodb_final_status.resources[0].status.phase | default('Unknown') }}"
+      when: mongodb_restart_result is not skipped
+
+    - name: Display successful upgrade summary
+      debug:
+        msg:
+          - "MongoDB Custom Resource upgrade completed successfully!"
+          - "{% if mongodb_current_status.resources is defined and mongodb_current_status.resources | length > 0 %}Previous version: {{ mongodb_current_status.resources[0].spec.version | default('Unknown') }}{% endif %}"
+          - "Current version: {{ mongodb_final_status.resources[0].spec.version }}"
+          - "Resource applied: {{ mongodb_apply_result.changed }}"
+          - "StatefulSet restarted: {{ mongodb_restart_result.changed }}"
+          - "Custom Resource healthy: {{ mongodb_health_check.resources[0].status.phase | default('Unknown') }}"
+          - "StatefulSet ready: {{ mongodb_rollout_status.resources[0].status.readyReplicas | default(0) }}/{{ mongodb_rollout_status.resources[0].status.replicas | default(0) }} replicas"
+          - "All validation checks passed: ✓"
+      when: mongodb_restart_result is not skipped
+
+    - name: Display failed upgrade summary
+      debug:
+        msg:
+          - "MongoDB Custom Resource upgrade FAILED!"
+          - "Resource application failed: {{ mongodb_apply_result.failed | default(false) }}"
+          - "Custom Resource unhealthy: {{ mongodb_health_check.resources[0].status.phase | default('Unknown') if mongodb_health_check.resources is defined and mongodb_health_check.resources | length > 0 else 'Resource not found' }}"
+          - "StatefulSet restart skipped due to failures"
+          - "Please check the manifest file and Custom Resource status"
+      when: mongodb_restart_result is skipped

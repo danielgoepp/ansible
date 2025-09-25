@@ -1,0 +1,72 @@
+---
+# Cluster Alerts Management
+# Mutes/unmutes alerts across all monitoring systems
+#
+# Parameters:
+#   maintenance_action: "enable" or "disable"
+#   graylog_enabled: true/false (default: true) - manage Graylog alerts
+#   alertmanager_enabled: true/false (default: true) - manage Alertmanager
+#   hertzbeat_enabled: true/false (default: true) - manage HerzBeat silences
+
+- name: Set default maintenance parameters
+  set_fact:
+    graylog_enabled: "{{ graylog_enabled | default(true) }}"
+    alertmanager_enabled: "{{ alertmanager_enabled | default(true) }}"
+    hertzbeat_enabled: "{{ hertzbeat_enabled | default(true) }}"
+
+- name: Validate maintenance_action parameter
+  fail:
+    msg: "maintenance_action must be 'enable' or 'disable'"
+  when: maintenance_action not in ['enable', 'disable']
+
+# ENABLE MAINTENANCE MODE
+- block:
+    - name: Mute Graylog alerts
+      command: "{{ scripts_base_path }}/venv/bin/python {{ scripts_base_path }}/graylog/graylog-maintenance.py --mute"
+      register: graylog_mute
+      failed_when: false
+      when: graylog_enabled | bool
+
+    - name: Enable Alertmanager maintenance
+      command: "{{ scripts_base_path }}/venv/bin/python {{ scripts_base_path }}/alertmanager/alertmanager-maintenance.py --mute"
+      register: alertmanager_maintenance
+      failed_when: false
+      when: alertmanager_enabled | bool
+
+    - name: Create HerzBeat silence
+      command: "{{ scripts_base_path }}/venv/bin/python {{ scripts_base_path }}/hertzbeat/hertzbeat-maintenance.py --mute"
+      register: hertzbeat_silence
+      failed_when: false
+      when: hertzbeat_enabled | bool
+
+    - name: Display maintenance mode status
+      debug:
+        msg: "Maintenance mode enabled - alerts muted, monitoring silenced"
+
+  when: maintenance_action == 'enable'
+
+# DISABLE MAINTENANCE MODE
+- block:
+    - name: Unmute Graylog alerts
+      command: "{{ scripts_base_path }}/venv/bin/python {{ scripts_base_path }}/graylog/graylog-maintenance.py --unmute"
+      register: graylog_unmute
+      failed_when: false
+      when: graylog_enabled | bool
+
+    - name: Disable Alertmanager maintenance
+      command: "{{ scripts_base_path }}/venv/bin/python {{ scripts_base_path }}/alertmanager/alertmanager-maintenance.py --unmute"
+      register: alertmanager_unmaintenance
+      failed_when: false
+      when: alertmanager_enabled | bool
+
+    - name: Remove HerzBeat silences
+      command: "{{ scripts_base_path }}/venv/bin/python {{ scripts_base_path }}/hertzbeat/hertzbeat-maintenance.py --unmute"
+      register: hertzbeat_unsilence
+      failed_when: false
+      when: hertzbeat_enabled | bool
+
+    - name: Display maintenance mode disabled
+      debug:
+        msg: "Maintenance mode disabled - monitoring and alerts restored"
+
+  when: maintenance_action == 'disable'

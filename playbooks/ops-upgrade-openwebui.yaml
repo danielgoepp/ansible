@@ -1,0 +1,49 @@
+- name: Upgrade Open WebUI on adambalm
+  hosts: adambalm
+  become: true
+  gather_facts: false
+
+  tasks:
+
+    - name: Stop existing Open WebUI container
+      docker_container:
+        name: open-webui
+        state: stopped
+      ignore_errors: true
+
+    - name: Remove existing Open WebUI container
+      docker_container:
+        name: open-webui
+        state: absent
+      ignore_errors: true
+
+    - name: Pull latest Open WebUI image
+      docker_image:
+        name: ghcr.io/open-webui/open-webui:main
+        source: pull
+        force_source: true
+        force_tag: true
+
+    - name: Start new Open WebUI container
+      docker_container:
+        name: open-webui
+        image: ghcr.io/open-webui/open-webui:main
+        state: started
+        restart_policy: always
+        ports:
+          - "3000:8080"
+        env:
+          OLLAMA_BASE_URL: "http://10.1.11.18:11434"
+        etc_hosts:
+          host.docker.internal: host-gateway
+        volumes:
+          - open-webui:/app/backend/data
+
+    - name: Wait for Open WebUI to be ready
+      uri:
+        url: http://localhost:3000/health
+        method: GET
+        status_code: [200]
+      retries: 30
+      delay: 2
+      delegate_to: "{{ inventory_hostname }}"

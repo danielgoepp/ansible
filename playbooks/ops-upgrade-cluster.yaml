@@ -1,0 +1,250 @@
+- name: Proxmox and K3S Cluster Upgrade with Maintenance Mode
+  hosts: localhost
+  gather_facts: false
+  vars:
+    k3s_nodes: "{{ groups['k3s_prod'] }}"
+    pve_nodes: "{{ groups['pve'] }}"
+    interactive_mode: "{{ interactive_mode | default(true) }}"
+    verbose_status: "{{ verbose_status | default(true) }}"
+
+  tasks:
+    # PRE-UPGRADE VALIDATION AND STATUS
+    - name: Validate node lists are not empty
+      fail:
+        msg: "{{ item.name }} list is empty. Check your inventory configuration."
+      when: item.list | length == 0
+      loop:
+        - { name: "Proxmox nodes", list: "{{ pve_nodes }}" }
+        - { name: "K3S nodes", list: "{{ k3s_nodes }}" }
+
+    - name: Display cluster information
+      debug:
+        msg: |
+          ========================================
+          CLUSTER UPGRADE PREPARATION
+          ========================================
+          Interactive Mode: {{ interactive_mode }}
+          Verbose Status: {{ verbose_status }}
+
+          Proxmox nodes: {{ pve_nodes | join(', ') }}
+          K3S nodes: {{ k3s_nodes | join(', ') }}
+
+    - name: Check current cluster status
+      block:
+        - name: Get current K3s node status
+          command: kubectl get nodes -o wide
+          register: k3s_nodes_status
+
+        - name: Display current K3s cluster status
+          debug:
+            var: k3s_nodes_status.stdout_lines
+          when: verbose_status | bool
+
+        - name: Get current pod distribution
+          command: kubectl get pods --all-namespaces -o wide
+          register: current_pods
+
+        - name: Show critical pod count by node
+          shell: |
+            echo "Pod distribution by node:"
+            kubectl get pods --all-namespaces -o wide --no-headers | awk '{print $8}' | sort | uniq -c
+          register: pod_distribution
+
+        - name: Display pod distribution
+          debug:
+            var: pod_distribution.stdout_lines
+          when: verbose_status | bool
+
+    - name: Check Proxmox cluster status
+      block:
+        - name: Check PVE cluster status
+          command: pvecm status
+          delegate_to: "{{ pve_nodes[0] }}"
+          become: true
+          register: pve_cluster_status
+
+        - name: Display PVE cluster status
+          debug:
+            var: pve_cluster_status.stdout_lines
+          when: verbose_status | bool
+
+        - name: Check Ceph status
+          command: ceph status
+          delegate_to: "{{ pve_nodes[0] }}"
+          become: true
+          register: ceph_status
+          failed_when: false
+
+        - name: Display Ceph status
+          debug:
+            var: ceph_status.stdout_lines
+          when: verbose_status | bool and ceph_status.rc == 0
+
+    - name: Pre-upgrade validation pause
+      pause:
+        prompt: |
+
+          ========================================
+          PRE-UPGRADE VALIDATION COMPLETE
+          ========================================
+
+          Please review the cluster status above and confirm:
+          1. All nodes are Ready and healthy
+          2. All critical pods are running
+          3. Ceph is healthy (if applicable)
+          4. No ongoing maintenance or issues
+
+          CONTINUE with upgrade preparation? (yes/no)
+      register: validation_confirm
+      when: interactive_mode | bool
+
+    - name: Fail if validation not confirmed
+      fail:
+        msg: "Upgrade cancelled during validation"
+      when: interactive_mode | bool and validation_confirm.user_input | lower not in ['yes', 'y']
+
+    - name: Confirm cluster upgrade
+      pause:
+        prompt: |
+
+          About to upgrade clusters:
+          - {{ pve_nodes | length }} Proxmox nodes: {{ pve_nodes | join(', ') }}
+          - {{ k3s_nodes | length }} K3S nodes: {{ k3s_nodes | join(', ') }}
+
+          This will:
+          - Enable maintenance mode (Ceph noout, mute alerts, CNPG maintenance)
+          - Upgrade Proxmox nodes sequentially
+          - Drain and upgrade K3S nodes sequentially
+          - Upgrade packages and reboot if needed
+          - Wait for node recovery and uncordon K3S nodes
+          - Disable maintenance mode
+
+          This process may take 60+ minutes. Continue? (yes/no)
+      register: confirm_upgrade
+
+    - name: Fail if not confirmed
+      fail:
+        msg: "Cluster upgrade cancelled by user"
+      when: confirm_upgrade.user_input | lower not in ['yes', 'y']
+
+    # PRE-UPGRADE: Enable maintenance mode
+    - name: Enable Ceph noout flag
+      include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
+      vars:
+        maintenance_action: enable
+
+    - name: Enable CNPG maintenance mode
+      include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
+      vars:
+        maintenance_action: enable
+
+    - name: Enable maintenance mode (mute alerts)
+      include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
+      vars:
+        maintenance_action: enable
+
+    - name: Create node pairs for upgrade
+      set_fact:
+        node_pairs: |
+          {% set pairs = [] %}
+          {% for pve_node in pve_nodes %}
+            {% set node_number = pve_node.replace('pve', '') %}
+            {% set k3s_node = 'k3s-prod-' + node_number %}
+            {% if k3s_node in k3s_nodes %}
+              {% set _ = pairs.append({'pve': pve_node, 'k3s': k3s_node}) %}
+            {% endif %}
+          {% endfor %}
+          {{ pairs }}
+
+    - name: Display node pairs for upgrade
+      debug:
+        msg: "Node pairs to upgrade:"
+
+    - name: Validate node pairing was successful
+      fail:
+        msg: "No valid node pairs found. Check that PVE and K3S nodes have matching numbers (e.g., pve11 <-> k3s-prod-11)"
+      when: node_pairs | length == 0
+
+    - name: Display each node pair
+      debug:
+        msg: "- {{ item.pve }} + {{ item.k3s }}"
+      loop: "{{ node_pairs }}"
+
+# Paired upgrade loop - process each pair sequentially
+- name: Upgrade paired nodes sequentially
+  hosts: localhost
+  gather_facts: false
+  vars:
+    node_pairs: "{{ hostvars['localhost']['node_pairs'] }}"
+
+  tasks:
+    - name: Upgrade each paired set of nodes
+      include_tasks: ../tasks/ops-upgrade-cluster-paired.yaml
+      vars:
+        pve_node: "{{ pair.pve }}"
+        k3s_node: "{{ pair.k3s }}"
+        vm_migrations: "{{ vm_migrations_map[pair.pve] | default([]) }}"
+        vm_shutdowns: "{{ vm_shutdowns_map[pair.pve] | default([]) }}"
+        vm_migrations_map:
+          pve11:
+            - vm_id: 101
+              vm_name: "opnsense"
+              target_node: "pve12"
+        vm_shutdowns_map:
+          pve15:
+            - vm_id: 103
+              vm_name: "backup"
+              vm_type: "qemu"
+            - vm_id: 105
+              vm_name: "dev"
+              vm_type: "qemu"
+            - vm_id: 254
+              vm_name: "ui-network"
+              vm_type: "qemu"
+            - vm_id: 106
+              vm_name: "smb"
+              vm_type: "lxc"
+      loop: "{{ node_pairs }}"
+      loop_control:
+        loop_var: pair
+        label: "{{ pair.pve }} + {{ pair.k3s }}"
+
+# POST-UPGRADE: Disable maintenance mode
+- name: Disable maintenance mode
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Check overall cluster health
+      include_tasks: ../tasks/ops-upgrade-cluster-health.yaml
+      vars:
+        health_action: cluster-status
+
+    - name: Disable maintenance mode (unmute alerts)
+      include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
+      vars:
+        maintenance_action: disable
+
+    - name: Disable CNPG maintenance mode
+      include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
+      vars:
+        maintenance_action: disable
+
+    - name: Disable Ceph noout flag
+      include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
+      vars:
+        maintenance_action: disable
+
+    - name: Cluster upgrade completed
+      debug:
+        msg: |
+          ===================================================
+          PROXMOX AND K3S CLUSTER UPGRADE COMPLETED SUCCESSFULLY
+          ===================================================
+          Upgraded Proxmox nodes: {{ hostvars['localhost']['pve_nodes'] | join(', ') }}
+          Upgraded K3S nodes: {{ hostvars['localhost']['k3s_nodes'] | join(', ') }}
+
+          Next steps:
+          - Verify all applications are running correctly
+          - Check logs for any issues
+          - Monitor cluster performance

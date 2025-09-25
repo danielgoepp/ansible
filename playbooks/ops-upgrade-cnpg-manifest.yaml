@@ -1,0 +1,124 @@
+---
+- name: Upgrade CNPG (CloudNative PostgreSQL) using remote manifest
+  hosts: localhost
+  gather_facts: false
+  vars:
+    cnpg_version: "{{ cnpg_version_override | default('1.27.0') }}"
+    cnpg_release_branch: "{{ cnpg_release_branch_override | default('release-1.27') }}"
+    cnpg_manifest_url: "https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/{{ cnpg_release_branch }}/releases/cnpg-{{ cnpg_version }}.yaml"
+    k8s_context: "k3s-prod"
+    cnpg_namespace: "cnpg-system"
+  tasks:
+    - name: Display upgrade parameters
+      debug:
+        msg:
+          - "CNPG Upgrade Parameters:"
+          - "  Version: {{ cnpg_version }}"
+          - "  Release Branch: {{ cnpg_release_branch }}"
+          - "  Manifest URL: {{ cnpg_manifest_url }}"
+          - "  Kubernetes Context: {{ k8s_context }}"
+
+    - name: Get current CNPG operator deployment (before upgrade)
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: cnpg-controller-manager
+        namespace: "{{ cnpg_namespace }}"
+        context: "{{ k8s_context }}"
+      register: cnpg_current_deployment
+      ignore_errors: true
+
+    - name: Display current CNPG operator status
+      debug:
+        msg:
+          - "Current CNPG Operator:"
+          - "  Name: {{ cnpg_current_deployment.resources[0].metadata.name | default('Not found') }}"
+          - "  Image: {{ cnpg_current_deployment.resources[0].spec.template.spec.containers[0].image | default('Unknown') }}"
+          - "  Ready Replicas: {{ cnpg_current_deployment.resources[0].status.readyReplicas | default(0) }}/{{ cnpg_current_deployment.resources[0].status.replicas | default(0) }}"
+          - "  Status: {{ cnpg_current_deployment.resources[0].status.conditions[-1].type | default('Unknown') if cnpg_current_deployment.resources[0].status.conditions is defined else 'Unknown' }}"
+      when: cnpg_current_deployment.resources is defined and cnpg_current_deployment.resources | length > 0
+
+    - name: Display status if CNPG operator not found
+      debug:
+        msg: "CNPG operator deployment 'cnpg-controller-manager' not found in namespace '{{ cnpg_namespace }}'"
+      when: cnpg_current_deployment.resources is not defined or cnpg_current_deployment.resources | length == 0
+
+    - name: Fetch CNPG manifest from remote URL
+      uri:
+        url: "{{ cnpg_manifest_url }}"
+        method: GET
+        return_content: yes
+        timeout: 30
+      register: cnpg_manifest_content
+
+    - name: Validate CNPG manifest with kubectl (dry-run)
+      shell: |
+        echo '{{ cnpg_manifest_content.content }}' | kubectl apply --context="{{ k8s_context }}" --dry-run=server --validate=true -f -
+      register: kubectl_validate_result
+      failed_when: kubectl_validate_result.rc != 0
+
+    - name: Apply CNPG manifest from remote URL (server-side)
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ cnpg_manifest_content.content | from_yaml_all | list }}"
+        context: "{{ k8s_context }}"
+        server_side_apply:
+          field_manager: "ansible-cnpg-upgrade"
+      register: cnpg_apply_result
+      failed_when: cnpg_apply_result.failed | default(false)
+
+    - name: Display CNPG manifest validation and application result
+      debug:
+        msg:
+          - "CNPG manifest validation and application:"
+          - "  Kubectl validation: {{ 'SUCCESS' if kubectl_validate_result.rc == 0 else 'FAILED' }}"
+          - "  Kubectl error: {{ kubectl_validate_result.stderr | default('None') }}"
+          - "  Ansible result: {{ 'SUCCESS' if not (cnpg_apply_result.failed | default(false)) else 'FAILED' }}"
+          - "  Changed: {{ cnpg_apply_result.changed }}"
+          - "  Error: {{ cnpg_apply_result.msg | default('None') }}"
+
+    - name: Wait for CNPG operator deployment to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: cnpg-controller-manager
+        namespace: "{{ cnpg_namespace }}"
+        context: "{{ k8s_context }}"
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 300
+      register: cnpg_deployment_ready
+
+    - name: Get updated CNPG operator deployment (after upgrade)
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: cnpg-controller-manager
+        namespace: "{{ cnpg_namespace }}"
+        context: "{{ k8s_context }}"
+      register: cnpg_updated_deployment
+
+    - name: Display updated CNPG operator status
+      debug:
+        msg:
+          - "Updated CNPG Operator:"
+          - "  Name: {{ cnpg_updated_deployment.resources[0].metadata.name }}"
+          - "  Image: {{ cnpg_updated_deployment.resources[0].spec.template.spec.containers[0].image }}"
+          - "  Ready Replicas: {{ cnpg_updated_deployment.resources[0].status.readyReplicas }}/{{ cnpg_updated_deployment.resources[0].status.replicas }}"
+          - "  Status: {{ cnpg_updated_deployment.resources[0].status.conditions[-1].type }}"
+
+    - name: Extract version information from container images
+      set_fact:
+        cnpg_previous_image: "{{ cnpg_current_deployment.resources[0].spec.template.spec.containers[0].image | default('Unknown') }}"
+        cnpg_current_image: "{{ cnpg_updated_deployment.resources[0].spec.template.spec.containers[0].image }}"
+
+    - name: Display upgrade summary
+      debug:
+        msg:
+          - "CNPG upgrade completed successfully!"
+          - "Previous image: {{ cnpg_previous_image }}"
+          - "Current image: {{ cnpg_current_image }}"
+          - "Manifest applied: {{ cnpg_apply_result.changed }}"
+          - "Deployment ready: {{ cnpg_deployment_ready.resources[0].status.conditions[-1].status == 'True' }}"

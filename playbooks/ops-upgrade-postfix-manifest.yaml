@@ -1,0 +1,9 @@
+---
+- name: Upgrade Postfix using local manifest
+  hosts: localhost
+  gather_facts: false
+  vars:
+    service_name: "postfix"
+  tasks:
+    - name: Run manifest upgrade tasks
+      include_tasks: ../tasks/ops-upgrade-manifest.yaml

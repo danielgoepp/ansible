@@ -1,0 +1,106 @@
+---
+- name: Discover ESPHome devices and update configuration
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # ESPHome configuration
+    esphome_namespace: "esphome"
+    esphome_deployment_name: "esphome"
+    k3s_context: "k3s-prod"  # Default context, can be overridden
+
+  tasks:
+    - name: Get ESPHome pod name
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ esphome_namespace }}"
+        label_selectors:
+          - "app={{ esphome_deployment_name }}"
+        context: "{{ k3s_context }}"
+      register: esphome_pods
+
+    - name: Validate ESPHome pod exists
+      fail:
+        msg: "ESPHome pod not found in namespace {{ esphome_namespace }}"
+      when: esphome_pods.resources | length == 0
+
+    - name: Validate ESPHome pod is running
+      fail:
+        msg: "ESPHome pod is not running (status: {{ esphome_pods.resources[0].status.phase }})"
+      when:
+        - esphome_pods.resources | length > 0
+        - esphome_pods.resources[0].status.phase != "Running"
+
+    - name: Set ESPHome pod name
+      set_fact:
+        esphome_pod_name: "{{ esphome_pods.resources[0].metadata.name }}"
+
+    - name: Discover ESPHome config files
+      kubernetes.core.k8s_exec:
+        namespace: "{{ esphome_namespace }}"
+        pod: "{{ esphome_pod_name }}"
+        command: "find . -maxdepth 1 -name '*.yaml' -not -name 'secrets.yaml' -exec basename {} \\;"
+        context: "{{ k3s_context }}"
+      register: esphome_config_files
+
+    - name: Parse discovered devices
+      set_fact:
+        discovered_devices: "{{ esphome_config_files.stdout_lines |
+          sort |
+          map('regex_replace', '\\.yaml$', '') |
+          map('regex_replace', '^(.*)$', '{\"name\": \"\\1\", \"config_file\": \"\\1\"}') |
+          map('from_json') |
+          list }}"
+
+    - name: Display discovered devices
+      debug:
+        msg: |
+          Discovered {{ discovered_devices | length }} ESPHome devices:
+          {% for device in discovered_devices %}
+          - {{ device.name }}
+          {% endfor %}
+
+    - name: Read current esphome.yml
+      slurp:
+        src: "{{ playbook_dir }}/../group_vars/esphome.yml"
+      register: current_esphome_config
+
+    - name: Parse current config
+      set_fact:
+        current_config: "{{ current_esphome_config.content | b64decode | from_yaml }}"
+
+    - name: Update esphome_devices in config
+      set_fact:
+        updated_config: "{{ current_config | combine({'esphome_devices': discovered_devices}) }}"
+
+    - name: Write updated configuration
+      copy:
+        content: |
+          # Define your ESPHome devices here
+          esphome_devices:
+          {% for device in discovered_devices %}
+            - name: "{{ device.name }}"
+              config_file: "{{ device.config_file }}"
+          {% endfor %}
+
+          # Default ESPHome options
+          esphome_compile_only: {{ current_config.esphome_compile_only | default(false) }}        # Set to true to only validate/compile
+          esphome_wait_for_completion: {{ current_config.esphome_wait_for_completion | default(true) }}  # Wait for install to complete
+          esphome_timeout: {{ current_config.esphome_timeout | default(600) }}               # Timeout in seconds (10 minutes)
+        dest: "{{ playbook_dir }}/../group_vars/esphome.yml"
+        backup: yes
+
+    - name: Summary
+      debug:
+        msg: |
+          ESPHome Discovery Complete:
+          - Found {{ discovered_devices | length }} devices
+          - Updated group_vars/esphome.yml
+          - Backup created of previous configuration
+
+          Discovered devices:
+          {% for device in discovered_devices %}
+          - {{ device.name }}
+          {% endfor %}
+
+          You can now run: ansible-playbook playbooks/ops-esphome-upgrade.yaml

@@ -1,0 +1,57 @@
+- name: Upgrade Ollama on adambalm
+  hosts: adambalm
+  become: true
+  gather_facts: false
+
+  tasks:
+
+    - name: Get current Ollama version
+      command: ollama --version
+      register: ollama_current_version
+      ignore_errors: true
+
+    - name: Display current Ollama version
+      debug:
+        msg: "Current Ollama version: {{ ollama_current_version.stdout | default('Not installed') }}"
+
+    - name: Download and run Ollama install script (handles upgrades)
+      shell: curl -fsSL https://ollama.com/install.sh | sh
+      register: ollama_install_result
+
+    - name: Get new Ollama version
+      command: ollama --version
+      register: ollama_new_version
+
+    - name: Display new Ollama version
+      debug:
+        msg: "New Ollama version: {{ ollama_new_version.stdout }}"
+
+    - name: Add OLLAMA_HOST environment variable to service file
+      lineinfile:
+        path: /etc/systemd/system/ollama.service
+        regexp: '^Environment="OLLAMA_HOST='
+        line: 'Environment="OLLAMA_HOST=0.0.0.0"'
+        insertafter: '^\[Service\]'
+        state: present
+      register: ollama_service_modified
+
+    - name: Reload systemd daemon after service file changes
+      systemd:
+        daemon_reload: yes
+      when: ollama_service_modified.changed
+
+    - name: Restart Ollama service to ensure it's running with new version
+      systemd:
+        name: ollama
+        state: restarted
+        enabled: yes
+      ignore_errors: true
+
+    - name: Wait for Ollama service to be ready
+      uri:
+        url: http://localhost:11434/api/version
+        method: GET
+        status_code: [200]
+      retries: 30
+      delay: 2
+      delegate_to: "{{ inventory_hostname }}"

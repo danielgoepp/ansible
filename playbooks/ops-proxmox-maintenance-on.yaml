@@ -1,0 +1,92 @@
+- name: Perform proxmox mainteancen
+  hosts: localhost
+  become: false
+  gather_facts: false
+  vars_files:
+    - ../group_vars/vault.yaml.secret
+  tasks:
+
+  # - name: List all existing virtual machines on node
+  #   community.general.proxmox_vm_info:
+  #     api_user: root@pam
+  #     api_token_id: "{{ vault_proxmox_api_token_id }}"
+  #     api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+  #     api_host: pve11
+  #     node: pve11
+  #   register: vm_info
+
+  # - name: Output VM information
+  #   debug:
+  #     var: vm_info
+
+  # - name: Display VM information
+  #   debug:
+  #     msg: "VM ID: {{ item.vmid }} - Name: {{ item.name }} - Status: {{ item.status }}"
+  #   loop: "{{ vm_info.proxmox_vms }}"
+
+  - name: Migrate dev VM
+    community.general.proxmox_kvm:
+      api_user: root@pam
+      api_token_id: "{{ vault_proxmox_api_token_id }}"
+      api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+      api_host: pve11
+      args: --with-local-disks
+      name: dev
+      node: pve11
+      migrate: true
+      # vmid: 105
+      timeout: 10
+    # register: migration_result
+    
+  # - name: Display migration result
+  #   debug:
+  #     # msg: "Migration completed successfully"
+  #     var: migration_result
+  #   # when: migration_result.changed
+
+  # - name: Shutdown non-k3s VMs
+  #   community.general.proxmox_vm:
+  #     api_host: "{{ proxmox_api_host }}"
+  #     api_user: "{{ proxmox_api_user }}"
+  #     api_password: "{{ proxmox_api_password }}"
+  #     node: "{{ proxmox_node }}"
+  #     vmid: "{{ item.vmid }}"
+  #     state: stopped
+  #     validate_certs: false  # Change to true in production
+  #   when: 
+  #     - item.name is not match("^k3s.*")
+  #     - item.status == "running"
+  #   loop: "{{ vm_info.proxmox_vms }}"
+  #   register: shutdown_results
+    
+  # - name: Display shutdown results
+  #   debug:
+  #     msg: "Shutdown initiated for VM: {{ item.vmid }}"
+  #   loop: "{{ shutdown_results.results }}"
+  #   when: 
+  #     - item.changed | default(false)
+  #     - not item.skipped | default(true)
+      
+  # - name: Stop VMs
+  #   proxmox_kvm:
+  #     api_user: root@pam
+  #     api_token_id: "{{ vault_proxmox_api_token_id }}"
+  #     api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+  #     api_host: pve11
+  #     vmid: "{{ item }}"
+  #     state: stopped
+  #   loop:
+  #     - 103
+  #     - 105
+
+  # - name: Start VMs
+  #   proxmox_kvm:
+  #     api_user: root@pam
+  #     api_token_id: "{{ vault_proxmox_api_token_id }}"
+  #     api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+  #     api_host: pve11
+  #     vmid: "{{ item }}"
+  #     state: started
+  #   loop:
+  #     - 103
+  #     - 105

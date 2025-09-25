@@ -1,0 +1,125 @@
+---
+# K3s Node Upgrade Operations
+# Handles K3s node lifecycle during cluster upgrades
+#
+# Parameters:
+#   k3s_action: "drain", "shutdown", "startup", "uncordon", "validate"
+#   k3s_node: K3s node hostname
+#   wait_timeout: timeout for wait operations in seconds (default: 600)
+
+- name: Set default K3s parameters
+  set_fact:
+    k3s_node: "{{ k3s_node | default(inventory_hostname) }}"
+    wait_timeout: "{{ wait_timeout | default(600) }}"
+
+- name: Validate k3s_action parameter
+  fail:
+    msg: "k3s_action must be one of: drain, shutdown, startup, uncordon, validate"
+  when: k3s_action not in ['drain', 'shutdown', 'startup', 'uncordon', 'validate']
+
+- name: Display K3s action
+  debug:
+    msg: "=== K3s {{ k3s_action | upper }} for node {{ k3s_node }} ==="
+
+# DRAIN K3S NODE
+- block:
+    - name: Drain K3s node
+      include_tasks: ops-upgrade-cluster-drain.yaml
+      vars:
+        node_action: drain
+        node_name: "{{ k3s_node }}"
+
+  when: k3s_action == 'drain'
+
+# SHUTDOWN K3S SERVICE
+- block:
+    - name: Shutdown K3s service
+      delegate_to: "{{ k3s_node }}"
+      become: true
+      systemd:
+        name: k3s
+        state: stopped
+
+    - name: Wait for K3s service to be fully stopped
+      delegate_to: localhost
+      wait_for:
+        port: 6443
+        host: "{{ k3s_node }}"
+        state: stopped
+        timeout: 120
+
+    - name: Verify K3s node is offline in cluster
+      delegate_to: localhost
+      shell: "kubectl get nodes {{ k3s_node }} -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}'"
+      register: k3s_node_status
+      until: k3s_node_status.stdout != "True"
+      retries: 12
+      delay: 10
+
+    - name: Display K3s node offline confirmation
+      debug:
+        msg: "K3s node {{ k3s_node }} is now offline and service stopped"
+
+  when: k3s_action == 'shutdown'
+
+# STARTUP K3S SERVICE
+- block:
+    - name: Start K3s service
+      delegate_to: "{{ k3s_node }}"
+      become: true
+      systemd:
+        name: k3s
+        state: started
+        enabled: yes
+
+    - name: Wait for K3s node to be ready
+      include_tasks: ops-upgrade-cluster-health.yaml
+      vars:
+        health_action: node-ready
+        node_name: "{{ k3s_node }}"
+
+    - name: Display K3s node startup confirmation
+      debug:
+        msg: "K3s node {{ k3s_node }} is now online and ready"
+
+  when: k3s_action == 'startup'
+
+# UNCORDON K3S NODE
+- block:
+    - name: Uncordon K3s node
+      include_tasks: ops-upgrade-cluster-drain.yaml
+      vars:
+        node_action: uncordon
+        node_name: "{{ k3s_node }}"
+
+    - name: Wait for pods to be ready on K3s node
+      include_tasks: ops-upgrade-cluster-health.yaml
+      vars:
+        health_action: pods-ready
+        node_name: "{{ k3s_node }}"
+
+    - name: Display K3s node uncordon confirmation
+      debug:
+        msg: "K3s node {{ k3s_node }} is now uncordoned and pods are ready"
+
+  when: k3s_action == 'uncordon'
+
+# VALIDATE K3S NODE
+- block:
+    - name: Verify K3s node status
+      include_tasks: ops-upgrade-cluster-health.yaml
+      vars:
+        health_action: node-ready
+        node_name: "{{ k3s_node }}"
+
+    - name: Verify pods on K3s node
+      include_tasks: ops-upgrade-cluster-health.yaml
+      vars:
+        health_action: pods-ready
+        node_name: "{{ k3s_node }}"
+
+    - name: Display K3s node validation result
+      debug:
+        msg: "K3s node {{ k3s_node }} validation completed successfully"
+
+  when: k3s_action == 'validate'

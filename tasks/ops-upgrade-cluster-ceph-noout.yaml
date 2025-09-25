@@ -1,0 +1,86 @@
+---
+# Ceph NoOut Flag Management
+# Sets/unsets the Ceph noout flag to prevent OSD rebalancing during maintenance
+#
+# Parameters:
+#   maintenance_action: "enable" or "disable"
+#   ceph_host: target host (defaults to first pve host)
+#   ceph_user: SSH user for Ceph commands (default: root)
+
+- name: Set default Ceph parameters
+  set_fact:
+    ceph_host: "{{ ceph_host | default(groups['pve'][0]) }}"
+    ceph_user: "{{ ceph_user | default('root') }}"
+
+- name: Validate maintenance_action parameter
+  fail:
+    msg: "maintenance_action must be 'enable' or 'disable'"
+  when: maintenance_action not in ['enable', 'disable']
+
+# ENABLE NOOUT FLAG
+- block:
+    - name: Set Ceph noout flag
+      delegate_to: "{{ ceph_host }}"
+      become: true
+      become_user: "{{ ceph_user }}"
+      command: ceph osd set noout
+      register: ceph_noout_set
+
+    - name: Verify noout flag is set
+      delegate_to: "{{ ceph_host }}"
+      become: true
+      become_user: "{{ ceph_user }}"
+      command: ceph osd dump
+      register: ceph_status
+      failed_when: "'noout' not in ceph_status.stdout"
+
+    - name: Display Ceph noout status
+      debug:
+        msg: "Ceph noout flag enabled - OSD rebalancing prevented during maintenance"
+
+    - name: Show current Ceph flags
+      delegate_to: "{{ ceph_host }}"
+      become: true
+      become_user: "{{ ceph_user }}"
+      shell: ceph osd dump | grep -E "^flags"
+      register: ceph_flags
+
+    - name: Display current Ceph flags
+      debug:
+        var: ceph_flags.stdout
+
+  when: maintenance_action == 'enable'
+
+# DISABLE NOOUT FLAG
+- block:
+    - name: Unset Ceph noout flag
+      delegate_to: "{{ ceph_host }}"
+      become: true
+      become_user: "{{ ceph_user }}"
+      command: ceph osd unset noout
+      register: ceph_noout_unset
+
+    - name: Verify noout flag is unset
+      delegate_to: "{{ ceph_host }}"
+      become: true
+      become_user: "{{ ceph_user }}"
+      command: ceph osd dump
+      register: ceph_status
+      failed_when: "'noout' in ceph_status.stdout"
+
+    - name: Display Ceph noout status
+      debug:
+        msg: "Ceph noout flag disabled - OSD rebalancing restored"
+
+    - name: Show current Ceph flags
+      delegate_to: "{{ ceph_host }}"
+      become: true
+      become_user: "{{ ceph_user }}"
+      shell: ceph osd dump | grep -E "^flags"
+      register: ceph_flags
+
+    - name: Display current Ceph flags
+      debug:
+        var: ceph_flags.stdout
+
+  when: maintenance_action == 'disable'

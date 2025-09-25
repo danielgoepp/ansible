@@ -1,0 +1,31 @@
+---
+- name: Update Home Assistant instances
+  hosts: localhost
+  gather_facts: false
+  vars:
+    homeassistant_contexts:
+      - name: "morgspi"
+        context: "k3s-morgspi"
+      - name: "mudderpi" 
+        context: "k3s-mudderpi"
+      - name: "local"
+        context: "k3s-prod"
+  tasks:
+    - name: Delete Home Assistant pods to trigger update
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Pod
+        namespace: homeassistant
+        label_selectors:
+          - "app=homeassistant"
+        context: "{{ item.context }}"
+        wait: false
+      loop: "{{ homeassistant_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Display update status
+      debug:
+        msg: "Home Assistant pods on {{ item.name }} have been deleted and will restart automatically"
+      loop: "{{ homeassistant_contexts }}"

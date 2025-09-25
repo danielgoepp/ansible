@@ -1,0 +1,20 @@
+    - name: Upgrade all packages to latest
+      ansible.builtin.apt:
+        upgrade: dist
+        update_cache: yes
+
+    - name: Clean apt cache and autoremove
+      ansible.builtin.apt:
+        autoclean: yes
+        autoremove: yes
+
+    - name: Check if reboot is required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+
+    - name: Reboot if required
+      reboot:
+        msg: "Reboot initiated by Ansible for kernel updates"
+        reboot_timeout: 3600
+      when: reboot_required_file.stat.exists

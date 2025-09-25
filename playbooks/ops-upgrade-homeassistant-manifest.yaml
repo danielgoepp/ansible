@@ -1,0 +1,263 @@
+---
+- name: Upgrade Home Assistant using local manifest across multiple contexts
+  hosts: localhost
+  gather_facts: false
+  vars:
+    homeassistant_namespace: "homeassistant"
+    homeassistant_deployment_name: "homeassistant"
+    homeassistant_contexts:
+      - name: "morgspi"
+        context: "k3s-morgspi"
+        manifest_path: "/Users/dang/Documents/Development/k3s-config/homeassistant/manifests/homeassistant-deployment-morgspi.yaml"
+      - name: "mudderpi" 
+        context: "k3s-mudderpi"
+        manifest_path: "/Users/dang/Documents/Development/k3s-config/homeassistant/manifests/homeassistant-deployment-mudderpi.yaml"
+      - name: "prod"
+        context: "k3s-prod"
+        manifest_path: "/Users/dang/Documents/Development/k3s-config/homeassistant/manifests/homeassistant-deployment-prod.yaml"
+  tasks:
+    - name: Prompt for target instance when not specified
+      pause:
+        prompt: |
+          
+          Available Home Assistant instances:
+          {% for ctx in homeassistant_contexts %}  {{ loop.index }}. {{ ctx.name }} ({{ ctx.context }})
+          {% endfor %}  {{ homeassistant_contexts | length + 1 }}. all - Upgrade all instances
+          
+          Which instance would you like to upgrade? Enter number or name (default: all)
+      register: instance_choice
+      when: target_instance is not defined
+
+    - name: Set target_instance from user choice
+      set_fact:
+        target_instance: "{{ parsed_choice }}"
+      vars:
+        user_input: "{{ instance_choice.user_input | default('all') | trim }}"
+        # Parse numeric choice to instance name
+        parsed_choice: >-
+          {%- if user_input == 'all' or user_input == (homeassistant_contexts | length + 1) | string -%}
+            all
+          {%- elif user_input | int > 0 and user_input | int <= homeassistant_contexts | length -%}
+            {{ homeassistant_contexts[user_input | int - 1].name }}
+          {%- else -%}
+            {{ user_input }}
+          {%- endif -%}
+      when: target_instance is not defined
+
+    - name: Set filtered contexts based on target selection
+      set_fact:
+        filtered_contexts: >-
+          {%- if target_instance == 'all' -%}
+            {{ homeassistant_contexts }}
+          {%- else -%}
+            {{ homeassistant_contexts | selectattr('name', 'equalto', target_instance) | list }}
+          {%- endif -%}
+
+    - name: Validate target instance exists
+      fail:
+        msg: "Instance '{{ target_instance }}' not found. Available instances: {{ homeassistant_contexts | map(attribute='name') | list | join(', ') }}"
+      when: 
+        - target_instance != 'all'
+        - filtered_contexts | length == 0
+
+    - name: Display upgrade parameters
+      debug:
+        msg:
+          - "Home Assistant Upgrade Parameters:"
+          - "  Namespace: {{ homeassistant_namespace }}"
+          - "  Target: {{ target_instance | default('all') }}"
+          - "  Contexts: {{ filtered_contexts | map(attribute='name') | list | join(', ') }}"
+          - "  Manifest files:"
+          - "{% for ctx in filtered_contexts %}    {{ ctx.name }}: {{ ctx.manifest_path }}{% endfor %}"
+
+    - name: Verify manifest files exist
+      stat:
+        path: "{{ item.manifest_path }}"
+      register: manifest_file_check
+      loop: "{{ filtered_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+      failed_when: not manifest_file_check.stat.exists
+
+    - name: Get current Home Assistant deployment (before upgrade)
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ homeassistant_deployment_name }}"
+        namespace: "{{ homeassistant_namespace }}"
+        context: "{{ item.context }}"
+      register: homeassistant_current_deployments
+      loop: "{{ filtered_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+      ignore_errors: true
+
+    - name: Display current Home Assistant status for each context
+      debug:
+        msg:
+          - "Current Home Assistant Deployment ({{ item.item.name }}):"
+          - "  Name: {{ item.resources[0].metadata.name | default('Not found') }}"
+          - "  Image: {{ item.resources[0].spec.template.spec.containers[0].image | default('Unknown') }}"
+          - "  Ready Replicas: {{ item.resources[0].status.readyReplicas | default(0) }}/{{ item.resources[0].status.replicas | default(0) }}"
+          - "  Status: {{ item.resources[0].status.conditions[-1].type | default('Unknown') if item.resources[0].status.conditions is defined else 'Unknown' }}"
+      loop: "{{ homeassistant_current_deployments.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.resources is defined and item.resources | length > 0
+
+    - name: Display status if Home Assistant deployment not found
+      debug:
+        msg: "Home Assistant deployment '{{ homeassistant_deployment_name }}' not found in namespace '{{ homeassistant_namespace }}' for context '{{ item.item.name }}'"
+      loop: "{{ homeassistant_current_deployments.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.resources is not defined or item.resources | length == 0
+
+    - name: Validate Home Assistant manifests with kubectl (dry-run)
+      shell: kubectl apply -f "{{ item.manifest_path }}" --context="{{ item.context }}" --dry-run=server --validate=true
+      register: kubectl_validate_results
+      failed_when: kubectl_validate_results.rc != 0
+      loop: "{{ filtered_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Apply Home Assistant manifest from local file (server-side)
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ item.manifest_path }}"
+        context: "{{ item.context }}"
+        server_side_apply:
+          field_manager: "ansible-homeassistant-upgrade"
+      register: homeassistant_apply_results
+      failed_when: homeassistant_apply_results.failed | default(false)
+      loop: "{{ filtered_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Display Home Assistant manifest validation and application results
+      debug:
+        msg:
+          - "{{ item.item.name }} Home Assistant manifest validation and application:"
+          - "  Kubectl validation: {{ 'SUCCESS' if kubectl_validate_results.results[ansible_loop.index0].rc == 0 else 'FAILED' }}"
+          - "  Kubectl error: {{ kubectl_validate_results.results[ansible_loop.index0].stderr | default('None') }}"
+          - "  Ansible result: {{ 'SUCCESS' if not (item.failed | default(false)) else 'FAILED' }}"
+          - "  Changed: {{ item.changed }}"
+          - "  Error: {{ item.msg | default('None') }}"
+      loop: "{{ homeassistant_apply_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+        extended: true
+
+    - name: Wait for manifest application to complete
+      pause:
+        seconds: 5
+
+    - name: Check if deployment was restarted by manifest application
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ homeassistant_deployment_name }}"
+        namespace: "{{ homeassistant_namespace }}"
+        context: "{{ item.context }}"
+      register: homeassistant_post_apply_deployments
+      loop: "{{ filtered_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Get current pods to check if restart is needed
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ homeassistant_namespace }}"
+        label_selectors:
+          - "app=homeassistant"
+        context: "{{ item.context }}"
+      register: homeassistant_current_pods
+      loop: "{{ filtered_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Force pod restart if manifest didn't trigger restart
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Pod
+        namespace: "{{ homeassistant_namespace }}"
+        label_selectors:
+          - "app=homeassistant"
+        context: "{{ item.context }}"
+      loop: "{{ filtered_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+      vars:
+        apply_result: "{{ homeassistant_apply_results.results | selectattr('item.context', 'equalto', item.context) | first }}"
+        pod_result: "{{ homeassistant_current_pods.results | selectattr('item.context', 'equalto', item.context) | first }}"
+      when: 
+        - pod_result.resources is defined
+        - pod_result.resources | length > 0
+        - not apply_result.changed
+      register: pod_deletion_results
+
+    - name: Display pod restart action for each context
+      debug:
+        msg: 
+          - "Pod restart status ({{ item.name }}):"
+          - "  Manifest caused restart: {{ (homeassistant_apply_results.results | selectattr('item.context', 'equalto', item.context) | first).changed }}"
+          - "  Manual pod deletion performed: {{ pod_deletion_results.changed | default(false) }}"
+      loop: "{{ filtered_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Wait for Home Assistant deployment to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ homeassistant_deployment_name }}"
+        namespace: "{{ homeassistant_namespace }}"
+        context: "{{ item.context }}"
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 300
+      register: homeassistant_deployments_ready
+      loop: "{{ filtered_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Get updated Home Assistant deployment (after upgrade)
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ homeassistant_deployment_name }}"
+        namespace: "{{ homeassistant_namespace }}"
+        context: "{{ item.context }}"
+      register: homeassistant_updated_deployments
+      loop: "{{ filtered_contexts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Display updated Home Assistant status for each context
+      debug:
+        msg:
+          - "Updated Home Assistant Deployment ({{ item.item.name }}):"
+          - "  Name: {{ item.resources[0].metadata.name }}"
+          - "  Image: {{ item.resources[0].spec.template.spec.containers[0].image }}"
+          - "  Ready Replicas: {{ item.resources[0].status.readyReplicas }}/{{ item.resources[0].status.replicas }}"
+          - "  Status: {{ item.resources[0].status.conditions[-1].type }}"
+      loop: "{{ homeassistant_updated_deployments.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Display upgrade summary for each context
+      debug:
+        msg:
+          - "Home Assistant upgrade completed for {{ current_deployment.item.name }}!"
+          - "Previous image: {{ (homeassistant_current_deployments.results | selectattr('item.context', 'equalto', current_deployment.item.context) | first).resources[0].spec.template.spec.containers[0].image | default('Unknown') }}"
+          - "Current image: {{ current_deployment.resources[0].spec.template.spec.containers[0].image }}"
+          - "Manifest applied: {{ (homeassistant_apply_results.results | selectattr('item.context', 'equalto', current_deployment.item.context) | first).changed }}"
+          - "Deployment ready: {{ (homeassistant_deployments_ready.results | selectattr('item.context', 'equalto', current_deployment.item.context) | first).resources[0].status.conditions[-1].status == 'True' }}"
+      loop: "{{ homeassistant_updated_deployments.results }}"
+      loop_control:
+        loop_var: current_deployment
+        label: "{{ current_deployment.item.name }}"

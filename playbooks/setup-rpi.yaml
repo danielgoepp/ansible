@@ -1,0 +1,47 @@
+- name: raspberry pi server install
+  hosts: "rpi"
+  become: true
+
+  handlers:
+
+    - name: restart nut-server
+      systemd:
+        name: nut-server
+        state: restarted
+
+    - name: restart nut-monitor
+      systemd:
+        name: nut-monitor
+        state: restarted
+
+    - name: reload systemd
+      systemd:
+        daemon_reload: true
+
+  tasks:
+
+    - name: Include ops upgrade tasks
+      include_tasks: ../tasks/ops-upgrade.yaml
+
+    - name: install rpi packages
+      apt:
+        name:
+          - dnsutils
+        state: present
+        update_cache: true
+
+    - name: cron homeassistant backup
+      cron:
+        name: homeassistant backup
+        hour: "5"
+        minute: "0"
+        job: "rsync -ah /k3s/homeassistant/config/backups/ /mnt/backups/homeassistant/{{ansible_hostname}} --delete"
+      when: "'homeassistant' in (services | default([]))"
+
+    - name: include install nut tasks
+      include_tasks: ../tasks/setup-rpi-nut.yaml
+      when: "'nut' in (services | default([]))"
+
+    - name: include install wyoming satellite tasks
+      include_tasks: ../tasks/setup-rpi-wyoming-satellite.yaml
+      when: "'wyoming' in (services | default([]))"

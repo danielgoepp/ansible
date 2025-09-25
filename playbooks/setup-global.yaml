@@ -1,0 +1,108 @@
+- name: Base setup for Ubuntu and Raspberry Pi servers
+  hosts: "all:!pve"
+  become: true
+
+  handlers:
+    - name: restart rsyslog
+      systemd:
+        name: rsyslog
+        state: restarted
+  
+  tasks:
+    - name: create ansible tmp directory for root
+      ansible.builtin.file:
+        path: /root/.ansible/tmp
+        state: directory
+        mode: 0755
+
+    - name: setting timezone to America/New_York
+      ansible.builtin.timezone:
+        name: America/New_York
+
+    - name: install default packages
+      ansible.builtin.include_tasks: ../tasks/setup-global-packages.yaml
+
+    - name: change user shell to zsh 
+      ansible.builtin.user:
+        name: root
+        shell: /usr/bin/zsh
+
+    - name: change user shell to zsh 
+      ansible.builtin.user:
+        name: dang
+        shell: /usr/bin/zsh
+
+    - name: include oh my zsh tasks
+      ansible.builtin.include_tasks: ../tasks/setup-global-oh-my-zsh.yaml
+
+    # Leaving this commented out for now. I'm thinking that enabling this for
+    # root on all servers might not be a good idea.
+    # - name: setup git and vim
+    #   include_tasks: [../tasks/tasks-setup-git.yaml, ../tasks/tasks-setup-vim.yaml]
+
+    - name: include mount smb (right now just media)
+      include_tasks: ../tasks/setup-global-mount-smb.yaml
+      when: inventory_hostname in groups['k3s_prod']
+
+    - name: include mount ceph
+      include_tasks: ../tasks/setup-global-mount-ceph.yaml
+      when: ansible_hostname != 'adambalm' or ansible_hostname != 'ui-network'
+
+    - name: include rsyslog
+      include_tasks: ../tasks/setup-global-rsyslog.yaml
+
+    - name: manage /etc/hosts entries
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        block: |
+          {% for line in lookup('file', '../files/linux/hosts').splitlines() %}
+          {% if line.strip() and not line.strip().startswith('#') %}
+          {{ line.strip() }}
+          {% endif %}
+          {% endfor %}
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - Infrastructure hosts"
+        backup: true
+
+- name: Install extra virtual packages for ubuntu VMs
+  hosts: "k3s_prod:ubuntu:!smb"
+  become: true
+
+  tasks:
+    - name: install extra virutal packages for ubuntu VMs
+      apt:
+        name:
+          - linux-image-extra-virtual
+          # - qemu-guest-agent ## done in a snippit - move to here?
+        state: present
+        update_cache: true
+      when: ansible_virtualization_type != "NA"
+
+    - name: Stop and disable multipathd
+      systemd:
+        name: multipathd.service
+        state: stopped
+        enabled: false
+    - name: Stop and disable multipathd
+      systemd:
+        name: multipathd.socket
+        state: stopped
+        enabled: false
+
+- name: Base setup of user dang for Ubuntu and Raspberry Pi servers
+  hosts: "all:!pve"
+  become: false
+  remote_user: dang
+
+  tasks:
+    - name: create ansible tmp directory for dang
+      ansible.builtin.file:
+        path: "{{ ansible_env.HOME }}/.ansible/tmp"
+        state: directory
+        mode: 0755
+
+    - name: Include global tasks
+      ansible.builtin.import_tasks: ../tasks/setup-global-oh-my-zsh.yaml
+    
+    - name: Setup user settings (git and vim right now)
+      ansible.builtin.import_tasks: ../tasks/setup-global-user.yaml
+      

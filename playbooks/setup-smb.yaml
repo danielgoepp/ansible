@@ -1,0 +1,43 @@
+- name: smb server install
+  hosts: "smb"
+  become: true
+
+  handlers:
+
+    # Restart smbd
+    - name: restart smbd
+      systemd:
+        name: smbd
+        state: restarted
+
+  tasks:
+
+    # Install SAMBA
+    - name: install samba
+      apt:
+        name: samba
+        state: present
+        update_cache: true
+    - name: copy smb.conf
+      copy:
+        src: ../files/smb/smb.conf
+        dest: /etc/samba/smb.conf
+        owner: root
+        group: root
+        mode: 0644
+      notify:
+         - restart smbd
+
+    - name: Create user jen
+      ansible.builtin.user:
+        name: jen
+        create_home: no
+        shell: /dev/null
+        password: "!"
+
+    - name: Create user linux
+      ansible.builtin.user:
+        name: linux
+        create_home: no
+        shell: /dev/null
+        password: "!"

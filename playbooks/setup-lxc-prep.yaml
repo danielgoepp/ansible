@@ -1,0 +1,38 @@
+- name: LXC Pre-build Setup - add dang
+  hosts: lxc
+  become: false
+  vars_files:
+    - ../group_vars/vault.yaml.secret
+
+  tasks:
+
+    - name: Ensure user 'dang' exists
+      ansible.builtin.user:
+        name: dang
+        state: present
+        
+    - name: Set password for user 'dang'
+      ansible.builtin.user:
+        name: dang
+        password: "{{ vault_dang_password | password_hash('sha512') }}"
+        update_password: on_create
+
+    - name: Add dang to sudoers
+      ansible.builtin.user:
+        name: dang
+        groups: sudo
+        append: yes
+
+    - name: Allow sudo group to sudo without password
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers.d/sudo-group-nopasswd
+        line: '%sudo ALL=(ALL) NOPASSWD:ALL'
+        create: yes
+        mode: '0440'
+
+    - name: Add SSH public key for dang
+      ansible.posix.authorized_key:
+        user: dang
+        state: present
+        key: "{{ lookup('file', '../files/ssh/dang_id_rsa.pub.secret') }}"
+

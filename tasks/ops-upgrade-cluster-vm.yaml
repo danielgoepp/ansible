@@ -1,0 +1,159 @@
+---
+# VM/LXC Operations for Cluster Upgrades
+# Handles VM migrations and shutdown/startup operations
+#
+# Parameters:
+#   vm_action: "migrate-away", "migrate-back", "shutdown", "startup"
+#   pve_node: Source/target Proxmox node
+#   vm_migrations: list of VMs to migrate (for migrate actions)
+#   vm_shutdowns: list of VMs/LXCs to shutdown (for shutdown/startup actions)
+
+- name: Set default VM parameters
+  set_fact:
+    vm_migrations: "{{ vm_migrations | default([]) }}"
+    vm_shutdowns: "{{ vm_shutdowns | default([]) }}"
+
+- name: Validate vm_action parameter
+  fail:
+    msg: "vm_action must be one of: migrate-away, migrate-back, shutdown, startup"
+  when: vm_action not in ['migrate-away', 'migrate-back', 'shutdown', 'startup']
+
+- name: Display VM action
+  debug:
+    msg: "=== VM {{ vm_action | upper }} for node {{ pve_node }} ==="
+
+# MIGRATE VMs AWAY FROM NODE
+- block:
+    - name: Migrate VMs away from {{ pve_node }}
+      delegate_to: "{{ pve_node }}"
+      become: true
+      shell: |
+        echo "Migrating VM {{ item.vm_id }} ({{ item.vm_name }}) to {{ item.target_node }}"
+        qm migrate {{ item.vm_id }} {{ item.target_node }} --online
+      loop: "{{ vm_migrations }}"
+      when: vm_migrations | length > 0
+
+    - name: Wait for VM migrations to complete
+      delegate_to: "{{ item.target_node }}"
+      become: true
+      shell: "qm status {{ item.vm_id }} | grep -q 'status: running'"
+      loop: "{{ vm_migrations }}"
+      register: vm_migration_status
+      until: vm_migration_status.rc == 0
+      retries: 30
+      delay: 10
+      when: vm_migrations | length > 0
+
+    - name: Display VM migration completion
+      debug:
+        msg: "All VMs successfully migrated away from {{ pve_node }}"
+      when: vm_migrations | length > 0
+
+  when: vm_action == 'migrate-away'
+
+# MIGRATE VMs BACK TO NODE
+- block:
+    - name: Migrate VMs back to {{ pve_node }}
+      delegate_to: "{{ item.target_node }}"
+      become: true
+      shell: |
+        echo "Migrating VM {{ item.vm_id }} ({{ item.vm_name }}) back to {{ pve_node }}"
+        qm migrate {{ item.vm_id }} {{ pve_node }} --online
+      loop: "{{ vm_migrations }}"
+      when: vm_migrations | length > 0
+
+    - name: Wait for VM migrations back to complete
+      delegate_to: "{{ pve_node }}"
+      become: true
+      shell: "qm status {{ item.vm_id }} | grep -q 'status: running'"
+      loop: "{{ vm_migrations }}"
+      register: vm_migration_back_status
+      until: vm_migration_back_status.rc == 0
+      retries: 30
+      delay: 10
+      when: vm_migrations | length > 0
+
+    - name: Display VM migration back completion
+      debug:
+        msg: "All VMs successfully migrated back to {{ pve_node }}"
+      when: vm_migrations | length > 0
+
+  when: vm_action == 'migrate-back'
+
+# SHUTDOWN VMs/LXCs
+- block:
+    - name: Shutdown VMs/LXCs on {{ pve_node }}
+      delegate_to: "{{ pve_node }}"
+      become: true
+      shell: |
+        {% if item.vm_type == 'qemu' %}
+        echo "Shutting down VM {{ item.vm_id }} ({{ item.vm_name }})"
+        qm shutdown {{ item.vm_id }} --timeout 300
+        {% elif item.vm_type == 'lxc' %}
+        echo "Shutting down LXC {{ item.vm_id }} ({{ item.vm_name }})"
+        pct shutdown {{ item.vm_id }} --timeout 300
+        {% endif %}
+      loop: "{{ vm_shutdowns }}"
+      when: vm_shutdowns | length > 0
+
+    - name: Wait for VMs/LXCs to shutdown completely
+      delegate_to: "{{ pve_node }}"
+      become: true
+      shell: |
+        {% if item.vm_type == 'qemu' %}
+        qm status {{ item.vm_id }} | grep -q "status: stopped"
+        {% elif item.vm_type == 'lxc' %}
+        pct status {{ item.vm_id }} | grep -q "status: stopped"
+        {% endif %}
+      loop: "{{ vm_shutdowns }}"
+      register: vm_shutdown_status
+      until: vm_shutdown_status.rc == 0
+      retries: 30
+      delay: 10
+      when: vm_shutdowns | length > 0
+
+    - name: Display VM/LXC shutdown completion
+      debug:
+        msg: "All VMs/LXCs successfully shutdown on {{ pve_node }}"
+      when: vm_shutdowns | length > 0
+
+  when: vm_action == 'shutdown'
+
+# STARTUP VMs/LXCs
+- block:
+    - name: Start VMs/LXCs on {{ pve_node }}
+      delegate_to: "{{ pve_node }}"
+      become: true
+      shell: |
+        {% if item.vm_type == 'qemu' %}
+        echo "Starting VM {{ item.vm_id }} ({{ item.vm_name }})"
+        qm start {{ item.vm_id }}
+        {% elif item.vm_type == 'lxc' %}
+        echo "Starting LXC {{ item.vm_id }} ({{ item.vm_name }})"
+        pct start {{ item.vm_id }}
+        {% endif %}
+      loop: "{{ vm_shutdowns }}"
+      when: vm_shutdowns | length > 0
+
+    - name: Wait for VMs/LXCs to start completely
+      delegate_to: "{{ pve_node }}"
+      become: true
+      shell: |
+        {% if item.vm_type == 'qemu' %}
+        qm status {{ item.vm_id }} | grep -q "status: running"
+        {% elif item.vm_type == 'lxc' %}
+        pct status {{ item.vm_id }} | grep -q "status: running"
+        {% endif %}
+      loop: "{{ vm_shutdowns }}"
+      register: vm_startup_status
+      until: vm_startup_status.rc == 0
+      retries: 30
+      delay: 10
+      when: vm_shutdowns | length > 0
+
+    - name: Display VM/LXC startup completion
+      debug:
+        msg: "All VMs/LXCs successfully started on {{ pve_node }}"
+      when: vm_shutdowns | length > 0
+
+  when: vm_action == 'startup'

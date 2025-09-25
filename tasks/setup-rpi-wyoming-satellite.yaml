@@ -1,0 +1,115 @@
+    - name: update apt cache
+      apt:
+        update_cache: true
+
+    - name: install python3 and pip
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+          - python3-dev
+        state: present
+
+    - name: create wyoming user
+      user:
+        name: wyoming
+        system: true
+        shell: /bin/bash
+        home: /var/lib/wyoming
+        create_home: true
+        groups: audio
+        append: true
+
+    - name: create ansible tmp directory for wyoming user
+      file:
+        path: /var/lib/wyoming/.ansible/tmp
+        state: directory
+        owner: wyoming
+        group: wyoming
+        mode: 0755
+
+    - name: create wyoming satellite directory
+      file:
+        path: /opt/wyoming-satellite
+        state: directory
+        owner: wyoming
+        group: wyoming
+        mode: 0755
+
+    - name: check if wyoming satellite repository exists
+      stat:
+        path: /opt/wyoming-satellite/.git
+      register: repo_exists
+
+    - name: clone wyoming satellite repository
+      git:
+        repo: https://github.com/rhasspy/wyoming-satellite.git
+        dest: /opt/wyoming-satellite
+        version: master
+      become_user: wyoming
+      when: not repo_exists.stat.exists
+
+    - name: create python virtual environment
+      command: python3 -m venv /opt/wyoming-satellite/venv
+      become_user: wyoming
+      args:
+        creates: /opt/wyoming-satellite/venv
+
+    - name: upgrade pip in virtual environment
+      pip:
+        name: pip
+        state: latest
+        virtualenv: /opt/wyoming-satellite/venv
+      become_user: wyoming
+
+    - name: check if seeed-voicecard driver is already installed
+      command: dkms status seeed-voicecard
+      register: dkms_status
+      failed_when: false
+      changed_when: false
+
+    - name: install respeaker driver
+      command: ./install-respeaker-driver
+      args:
+        chdir: /opt/wyoming-satellite
+      when: dkms_status.rc != 0
+      register: respeaker_installed
+
+    - name: reboot after respeaker driver installation
+      reboot:
+        reboot_timeout: 300
+      when: respeaker_installed.changed
+
+    - name: install wheel and setuptools
+      pip:
+        name:
+          - wheel
+          - setuptools
+        state: latest
+        virtualenv: /opt/wyoming-satellite/venv
+      become_user: wyoming
+
+    - name: install wyoming satellite with prebuilt dependencies
+      pip:
+        name: ".[all]"
+        virtualenv: /opt/wyoming-satellite/venv
+        chdir: /opt/wyoming-satellite
+        extra_args: "-f https://synesthesiam.github.io/prebuilt-apps/ -e"
+      become_user: wyoming
+
+    - name: create wyoming satellite systemd service
+      template:
+        src: ../templates/wyoming-satellite.service.j2
+        dest: /etc/systemd/system/wyoming-satellite.service
+        mode: 0644
+      notify:
+        - reload systemd
+        - restart wyoming-satellite
+
+    - name: enable and start wyoming satellite service
+      systemd:
+        name: wyoming-satellite
+        enabled: true
+        state: started
+        daemon_reload: true

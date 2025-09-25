@@ -1,0 +1,338 @@
+---
+# Paired Proxmox and K3s Node Upgrade
+# Orchestrates upgrade of a paired PVE and K3s node with proper sequencing
+#
+# Parameters:
+#   pve_node: Proxmox node hostname (e.g., pve11)
+#   k3s_node: K3s node hostname (e.g., k3s-prod-11)
+#   vm_migrations: list of VMs to migrate (optional)
+#     - vm_id: VM ID number
+#       vm_name: VM name
+#       target_node: destination PVE node
+#   vm_shutdowns: list of VMs/LXCs to shutdown (optional)
+#     - vm_id: VM/LXC ID number
+#       vm_name: VM/LXC name
+#       vm_type: "qemu" or "lxc"
+
+- name: Validate required parameters
+  fail:
+    msg: "Both pve_node and k3s_node parameters are required"
+  when: pve_node is not defined or k3s_node is not defined
+
+- name: Set default VM operations and modes
+  set_fact:
+    vm_migrations: "{{ vm_migrations | default([]) }}"
+    vm_shutdowns: "{{ vm_shutdowns | default([]) }}"
+    interactive_mode: "{{ hostvars['localhost']['interactive_mode'] | default(true) }}"
+    verbose_status: "{{ hostvars['localhost']['verbose_status'] | default(true) }}"
+
+- name: Display paired upgrade information
+  debug:
+    msg: "==================================================="
+
+- name: Display upgrade target
+  debug:
+    msg: "PAIRED UPGRADE: {{ pve_node }} + {{ k3s_node }}"
+
+- name: Display VM migrations if configured
+  debug:
+    msg: "0a. Migrate VMs: {{ vm_migrations | map(attribute='vm_name') | join(', ') }}"
+  when: vm_migrations | length > 0
+
+- name: Display VM shutdowns if configured
+  debug:
+    msg: "0b. Shutdown VMs/LXCs: {{ vm_shutdowns | map(attribute='vm_name') | join(', ') }}"
+  when: vm_shutdowns | length > 0
+
+- name: Display upgrade steps
+  debug:
+    msg: "{{ item }}"
+  loop:
+    - "1. Drain K3s node: {{ k3s_node }}"
+    - "2. Shutdown K3s node"
+    - "3. Upgrade Proxmox node: {{ pve_node }}"
+    - "4. Start K3s node"
+    - "5. Uncordon K3s node"
+
+- name: Display VM restore operations if configured
+  debug:
+    msg: "{{ item }}"
+  loop:
+    - "6a. Migrate VMs back to {{ pve_node }}"
+  when: vm_migrations | length > 0
+
+- name: Display VM startup operations if configured
+  debug:
+    msg: "{{ item }}"
+  loop:
+    - "6b. Start VMs/LXCs back up"
+  when: vm_shutdowns | length > 0
+
+- name: Display separator
+  debug:
+    msg: "==================================================="
+
+- name: Pre-upgrade status check for {{ pve_node }}
+  block:
+    - name: Check current VMs on {{ pve_node }}
+      delegate_to: "{{ pve_node }}"
+      become: true
+      shell: |
+        echo "=== VMs on {{ pve_node }} ==="
+        qm list | grep -v VMID || echo "No VMs found"
+        echo ""
+        echo "=== LXCs on {{ pve_node }} ==="
+        pct list | grep -v VMID || echo "No LXCs found"
+      register: current_vms_status
+
+    - name: Display current VM/LXC status
+      debug:
+        var: current_vms_status.stdout_lines
+      when: verbose_status | bool
+
+    - name: Check K3s node {{ k3s_node }} status
+      delegate_to: localhost
+      shell: |
+        echo "=== Node Status ==="
+        kubectl get node {{ k3s_node }} -o wide
+        echo ""
+        echo "=== Pods on {{ k3s_node }} ==="
+        kubectl get pods --all-namespaces --field-selector spec.nodeName={{ k3s_node }} | wc -l | xargs echo "Pod count:"
+      register: k3s_node_prestatus
+
+    - name: Display K3s node pre-status
+      debug:
+        var: k3s_node_prestatus.stdout_lines
+      when: verbose_status | bool
+
+- name: Confirm paired upgrade start
+  pause:
+    prompt: |
+
+      ========================================
+      READY TO START PAIRED UPGRADE
+      ========================================
+      Target: {{ pve_node }} + {{ k3s_node }}
+
+      {% if vm_migrations | length > 0 %}
+      VMs to migrate: {{ vm_migrations | map(attribute='vm_name') | join(', ') }}
+      {% endif %}
+      {% if vm_shutdowns | length > 0 %}
+      VMs/LXCs to shutdown: {{ vm_shutdowns | map(attribute='vm_name') | join(', ') }}
+      {% endif %}
+
+      Review the status above. CONTINUE with this pair? (yes/no)
+  register: pair_confirm
+  when: interactive_mode | bool
+
+- name: Fail if pair upgrade not confirmed
+  fail:
+    msg: "Paired upgrade cancelled for {{ pve_node }} + {{ k3s_node }}"
+  when: interactive_mode | bool and pair_confirm.user_input | lower not in ['yes', 'y']
+
+# STEP 0: Migrate VMs away from PVE node (if specified)
+- name: Migrate VMs away from {{ pve_node }}
+  include_tasks: ops-upgrade-cluster-vm.yaml
+  vars:
+    vm_action: migrate-away
+    pve_node: "{{ pve_node }}"
+    vm_migrations: "{{ vm_migrations }}"
+  when: vm_migrations | length > 0
+
+# STEP 0b: Shutdown VMs/LXCs on PVE node (if specified)
+- name: Shutdown VMs/LXCs on {{ pve_node }}
+  include_tasks: ops-upgrade-cluster-vm.yaml
+  vars:
+    vm_action: shutdown
+    pve_node: "{{ pve_node }}"
+    vm_shutdowns: "{{ vm_shutdowns }}"
+  when: vm_shutdowns | length > 0
+
+- name: VM operations completed - confirm before K3s drain
+  pause:
+    prompt: |
+
+      ========================================
+      VM OPERATIONS COMPLETED
+      ========================================
+      {{ pve_node }} VM Status:
+      {% if vm_migrations | length > 0 %}
+      ✓ Migrated: {{ vm_migrations | map(attribute='vm_name') | join(', ') }}
+      {% endif %}
+      {% if vm_shutdowns | length > 0 %}
+      ✓ Shutdown: {{ vm_shutdowns | map(attribute='vm_name') | join(', ') }}
+      {% endif %}
+
+      NEXT: Drain K3s node {{ k3s_node }}
+      This will move all pods off this node.
+
+      CONTINUE with K3s drain? (yes/no)
+  register: drain_confirm
+  when: interactive_mode | bool and (vm_migrations | length > 0 or vm_shutdowns | length > 0)
+
+- name: Fail if drain not confirmed
+  fail:
+    msg: "K3s drain cancelled for {{ k3s_node }}"
+  when: interactive_mode | bool and (vm_migrations | length > 0 or vm_shutdowns | length > 0) and drain_confirm.user_input | lower not in ['yes', 'y']
+
+# STEP 1: Drain K3s node
+- name: Drain K3s node
+  include_tasks: ops-upgrade-cluster-k3s.yaml
+  vars:
+    k3s_action: drain
+    k3s_node: "{{ k3s_node }}"
+
+# STEP 2: Shutdown K3s node
+- name: Shutdown K3s node
+  include_tasks: ops-upgrade-cluster-k3s.yaml
+  vars:
+    k3s_action: shutdown
+    k3s_node: "{{ k3s_node }}"
+
+- name: Verify K3s drain status before Proxmox upgrade
+  block:
+    - name: Show current cluster status
+      delegate_to: localhost
+      shell: |
+        echo "=== Current Node Status ==="
+        kubectl get nodes
+        echo ""
+        echo "=== Remaining pods on {{ k3s_node }} (should be minimal) ==="
+        kubectl get pods --all-namespaces --field-selector spec.nodeName={{ k3s_node }} || echo "No pods found"
+      register: post_drain_status
+
+    - name: Display post-drain status
+      debug:
+        var: post_drain_status.stdout_lines
+      when: verbose_status | bool
+
+- name: Confirm before Proxmox upgrade
+  pause:
+    prompt: |
+
+      ========================================
+      CRITICAL POINT: PROXMOX UPGRADE
+      ========================================
+      Status:
+      ✓ VMs migrated/shutdown on {{ pve_node }}
+      ✓ K3s node {{ k3s_node }} drained and offline
+      ✓ Pods redistributed to other nodes
+
+      NEXT: Upgrade and REBOOT {{ pve_node }}
+      This is the most disruptive operation!
+
+      Review the drain status above. All good?
+      CONTINUE with Proxmox upgrade? (yes/no)
+  register: pve_upgrade_confirm
+  when: interactive_mode | bool
+
+- name: Fail if Proxmox upgrade not confirmed
+  fail:
+    msg: "Proxmox upgrade cancelled for {{ pve_node }}"
+  when: interactive_mode | bool and pve_upgrade_confirm.user_input | lower not in ['yes', 'y']
+
+# STEP 3: Upgrade Proxmox node
+- name: Upgrade Proxmox node
+  include_tasks: ops-upgrade-cluster-proxmox.yaml
+  delegate_to: "{{ pve_node }}"
+
+# STEP 4: Start K3s node back up
+- name: Start K3s service
+  include_tasks: ops-upgrade-cluster-k3s.yaml
+  vars:
+    k3s_action: startup
+    k3s_node: "{{ k3s_node }}"
+
+# STEP 5: Uncordon K3s node
+- name: Uncordon K3s node
+  include_tasks: ops-upgrade-cluster-k3s.yaml
+  vars:
+    k3s_action: uncordon
+    k3s_node: "{{ k3s_node }}"
+
+# STEP 6: Migrate VMs back to original PVE node
+- name: Migrate VMs back to {{ pve_node }}
+  include_tasks: ops-upgrade-cluster-vm.yaml
+  vars:
+    vm_action: migrate-back
+    pve_node: "{{ pve_node }}"
+    vm_migrations: "{{ vm_migrations }}"
+  when: vm_migrations | length > 0
+
+# STEP 6b: Start VMs/LXCs back up
+- name: Start VMs/LXCs on {{ pve_node }}
+  include_tasks: ops-upgrade-cluster-vm.yaml
+  vars:
+    vm_action: startup
+    pve_node: "{{ pve_node }}"
+    vm_shutdowns: "{{ vm_shutdowns }}"
+  when: vm_shutdowns | length > 0
+
+- name: Final status verification
+  block:
+    - name: Check final node status
+      delegate_to: localhost
+      shell: |
+        echo "=== Final Node Status ==="
+        kubectl get nodes
+        echo ""
+        echo "=== Pods back on {{ k3s_node }} ==="
+        kubectl get pods --all-namespaces --field-selector spec.nodeName={{ k3s_node }} | wc -l | xargs echo "Pod count:"
+        echo ""
+        echo "=== VM Status on {{ pve_node }} ==="
+      register: final_status
+
+    - name: Check final VM status
+      delegate_to: "{{ pve_node }}"
+      become: true
+      shell: |
+        qm list 2>/dev/null || echo "No VMs"
+        pct list 2>/dev/null || echo "No LXCs"
+      register: final_vm_status
+
+    - name: Display final status
+      debug:
+        msg: |
+          {{ final_status.stdout }}
+          {{ final_vm_status.stdout }}
+      when: verbose_status | bool
+
+- name: Confirm paired upgrade completion
+  pause:
+    prompt: |
+
+      ========================================
+      PAIRED UPGRADE COMPLETED
+      ========================================
+      {{ pve_node }} + {{ k3s_node }}
+
+      ✓ Proxmox node {{ pve_node }} upgraded and healthy
+      ✓ K3s node {{ k3s_node }} back online and ready
+      ✓ Pods redistributed back to {{ k3s_node }}
+      {% if vm_migrations | length > 0 %}
+      ✓ VMs migrated back: {{ vm_migrations | map(attribute='vm_name') | join(', ') }}
+      {% endif %}
+      {% if vm_shutdowns | length > 0 %}
+      ✓ VMs/LXCs restarted: {{ vm_shutdowns | map(attribute='vm_name') | join(', ') }}
+      {% endif %}
+
+      Review the status above. Does everything look healthy?
+      CONTINUE to next node pair? (yes/no)
+  register: completion_confirm
+  when: interactive_mode | bool
+
+- name: Fail if completion not confirmed
+  fail:
+    msg: "Upgrade stopped - manual intervention needed for {{ pve_node }} + {{ k3s_node }}"
+  when: interactive_mode | bool and completion_confirm.user_input | lower not in ['yes', 'y']
+
+- name: Paired upgrade completed
+  debug:
+    msg: |
+      ===================================================
+      PAIRED UPGRADE COMPLETED: {{ pve_node }} + {{ k3s_node }}
+      ===================================================
+      - Proxmox node {{ pve_node }} upgraded and healthy
+      - K3s node {{ k3s_node }} upgraded and ready
+      - All pods redistributed and running
+      ===================================================

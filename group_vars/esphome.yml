@@ -1,0 +1,35 @@
+# Define your ESPHome devices here
+esphome_devices:
+  - name: "airgradient-greatroom"
+    config_file: "airgradient-greatroom"
+  - name: "airthings-wave-makerspace"
+    config_file: "airthings-wave-makerspace"
+  - name: "airthings-wave-office"
+    config_file: "airthings-wave-office"
+  - name: "ble-proxy-bedroom"
+    config_file: "ble-proxy-bedroom"
+  - name: "ble-proxy-greatroom"
+    config_file: "ble-proxy-greatroom"
+  - name: "ble-proxy-studio-a"
+    config_file: "ble-proxy-studio-a"
+  - name: "ble-proxy-workshop"
+    config_file: "ble-proxy-workshop"
+  - name: "co2-makerspace"
+    config_file: "co2-makerspace"
+  - name: "co2-office"
+    config_file: "co2-office"
+  - name: "esp-heat-control-og"
+    config_file: "esp-heat-control-og"
+  - name: "esp-heat-control-studio-b"
+    config_file: "esp-heat-control-studio-b"
+  - name: "garage-door-opener-car"
+    config_file: "garage-door-opener-car"
+  - name: "garage-door-opener-workshop"
+    config_file: "garage-door-opener-workshop"
+  - name: "m5-echo-greatroom"
+    config_file: "m5-echo-greatroom"
+
+# Default ESPHome options
+esphome_compile_only: False        # Set to true to only validate/compile
+esphome_wait_for_completion: True  # Wait for install to complete
+esphome_timeout: 600               # Timeout in seconds (10 minutes)

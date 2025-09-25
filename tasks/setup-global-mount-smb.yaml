@@ -1,0 +1,41 @@
+    - name: copy smb cifs credentials
+      copy:
+        src: ../files/smb/smb_cifs_credentials.secret
+        dest: /etc/smb_cifs_credentials
+        decrypt: yes
+        owner: root
+        group: root
+        mode: 0600
+      when: ansible_hostname != 'adambalm'
+
+    - name: create smb media directory
+      file:
+        path: /mnt/smb_media
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+    - name: mount smb media directory
+      mount:
+        src: //smb.goepp.net/media
+        path: /mnt/smb_media
+        state: mounted
+        fstype: cifs
+        opts: credentials=/etc/smb_cifs_credentials
+
+    - name: create smb kopia-hdd directory
+      file:
+        path: /mnt/kopia-hdd
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+      when: inventory_hostname in groups['k3s_prod']
+    - name: mount smb kopia-hdd directory
+      mount:
+        src: //smb.goepp.net/kopia-hdd
+        path: /mnt/kopia-hdd
+        state: mounted
+        fstype: cifs
+        opts: credentials=/etc/smb_cifs_credentials
+      when: inventory_hostname in groups['k3s_prod']

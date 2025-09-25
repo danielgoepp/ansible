@@ -1,0 +1,26 @@
+---
+- name: Upgrade Telegraf VM deployment using local manifest
+  hosts: localhost
+  gather_facts: false
+  vars:
+    service_name: "telegraf"
+    deployment_name: "telegraf-vm"
+    app_label: "telegraf"
+  tasks:
+    - name: Run manifest upgrade tasks for Telegraf VM
+      include_tasks: ../tasks/ops-upgrade-manifest.yaml
+      vars:
+        manifest_path: "/Users/dang/Documents/Development/k3s-config/telegraf/manifests/telegraf-deployment-prod-vm.yaml"
+
+- name: Upgrade Telegraf Graylog deployment using local manifest
+  hosts: localhost
+  gather_facts: false
+  vars:
+    service_name: "telegraf"
+    deployment_name: "telegraf-graylog"
+    app_label: "telegraf"
+  tasks:
+    - name: Run manifest upgrade tasks for Telegraf Graylog
+      include_tasks: ../tasks/ops-upgrade-manifest.yaml
+      vars:
+        manifest_path: "/Users/dang/Documents/Development/k3s-config/telegraf/manifests/telegraf-deployment-prod-graylog.yaml"

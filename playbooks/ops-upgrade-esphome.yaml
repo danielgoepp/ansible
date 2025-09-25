@@ -1,0 +1,115 @@
+---
+- name: Upgrade ESPHome devices via container shell
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../group_vars/esphome.yml"
+  vars:
+    # ESPHome configuration
+    esphome_namespace: "esphome"
+    esphome_deployment_name: "esphome"
+    k3s_context: "k3s-prod"  # Default context, can be overridden
+
+    # Options
+    esphome_no_logs: true
+    esphome_timeout: 600  # 10 minutes
+
+  tasks:
+    - name: Validate devices are configured
+      fail:
+        msg: |
+          No ESPHome devices configured in group_vars/esphome.yml.
+          Run: ansible-playbook playbooks/ops-esphome-discover.yaml
+      when: esphome_devices is not defined or esphome_devices | length == 0
+
+    - name: Get ESPHome pod name
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ esphome_namespace }}"
+        label_selectors:
+          - "app={{ esphome_deployment_name }}"
+        context: "{{ k3s_context }}"
+      register: esphome_pods
+
+    - name: Validate ESPHome pod exists
+      fail:
+        msg: "ESPHome pod not found in namespace {{ esphome_namespace }}"
+      when: esphome_pods.resources | length == 0
+
+    - name: Validate ESPHome pod is running
+      fail:
+        msg: "ESPHome pod is not running (status: {{ esphome_pods.resources[0].status.phase }})"
+      when:
+        - esphome_pods.resources | length > 0
+        - esphome_pods.resources[0].status.phase != "Running"
+
+    - name: Set ESPHome pod name
+      set_fact:
+        esphome_pod_name: "{{ esphome_pods.resources[0].metadata.name }}"
+
+    - name: Filter devices for target device
+      set_fact:
+        devices_to_upgrade: "{{ esphome_devices | selectattr('name', 'equalto', target_device) | list }}"
+      when: target_device is defined
+
+    - name: Use all devices if no target specified
+      set_fact:
+        devices_to_upgrade: "{{ esphome_devices }}"
+      when: target_device is not defined
+
+    - name: Validate target device exists
+      fail:
+        msg: |
+          Target device '{{ target_device }}' not found in configuration.
+          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
+      when:
+        - target_device is defined
+        - devices_to_upgrade | length == 0
+
+    - name: Display upgrade plan header
+      debug:
+        msg: "ESPHome Device Upgrade Plan:"
+
+    - name: Display upgrade plan details
+      debug:
+        msg: "Pod: {{ esphome_pod_name }} | Namespace: {{ esphome_namespace }} | Context: {{ k3s_context }} | Devices: {{ devices_to_upgrade | length }}"
+
+    - name: List devices to upgrade
+      debug:
+        msg: "- {{ item.name }} ({{ item.config_file }}.yaml)"
+      loop: "{{ devices_to_upgrade }}"
+
+    - name: Upgrade ESPHome device
+      kubernetes.core.k8s_exec:
+        namespace: "{{ esphome_namespace }}"
+        pod: "{{ esphome_pod_name }}"
+        command: >
+          esphome -q run {{ item.config_file | default(item.name) }}.yaml
+          {% if esphome_no_logs %}--no-logs{% endif %}
+        context: "{{ k3s_context }}"
+      register: esphome_upgrade_result
+      loop: "{{ devices_to_upgrade }}"
+      loop_control:
+        label: "{{ item.name }}"
+      failed_when: false  # Don't fail the entire playbook if one device fails
+      timeout: "{{ esphome_timeout }}"
+
+    - name: Display upgrade results
+      debug:
+        msg: "Device: {{ item.item.name }} | Config: {{ item.item.config_file | default(item.item.name) }}.yaml | Success: {{ item.rc == 0 }}{% if item.rc != 0 %} | Error: {{ (item.stderr | default('Unknown error') | trim | regex_replace('\n.*', '') | truncate(80)) }}{% endif %}"
+      loop: "{{ esphome_upgrade_result.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Summary of upgrade results
+      debug:
+        msg: "ESPHome Upgrade Summary: {{ devices_to_upgrade | length }} total, {{ esphome_upgrade_result.results | selectattr('rc', 'equalto', 0) | list | length }} successful, {{ esphome_upgrade_result.results | rejectattr('rc', 'equalto', 0) | list | length }} failed"
+
+    - name: Failed device details
+      debug:
+        msg: "Failed: {{ item.item.name }} - {{ (item.stderr | default('No error details available') | trim | regex_replace('\n.*', '')) }}"
+      loop: "{{ esphome_upgrade_result.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.rc != 0

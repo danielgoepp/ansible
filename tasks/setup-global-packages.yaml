@@ -1,0 +1,26 @@
+    - name: install default globalpackages
+      apt:
+        name:
+          # Basic tools
+          - iftop
+          - htop
+          - unzip
+          - zsh
+          - vim
+          - ncdu
+          - keyutils ## what is this for?
+          - acl ## what is this for?
+          # Monitoring tools
+          - prometheus-node-exporter
+          # File system tools
+          - nfs-common ## this can be removed?
+          - ceph-common
+          - cifs-utils
+          # Development tools
+          - git
+          - gh
+          - build-essential
+          - python3-pip
+          - python3-venv
+        state: present
+        update_cache: true

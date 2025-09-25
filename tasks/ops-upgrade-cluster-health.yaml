@@ -1,0 +1,118 @@
+---
+# K3S Cluster Health Check Operations
+# Validates cluster and node health status
+#
+# Parameters:
+#   health_action: "node-ready", "pods-ready", "cluster-status"
+#   node_name: target node hostname (for node-specific checks)
+#   wait_timeout: timeout for wait operations in seconds (default: 300)
+#   stabilize_delay: delay for cluster stabilization in seconds (default: 60)
+
+- name: Set default health parameters
+  set_fact:
+    node_name: "{{ node_name | default(inventory_hostname) }}"
+    wait_timeout: "{{ wait_timeout | default(300) }}"
+    stabilize_delay: "{{ stabilize_delay | default(60) }}"
+
+- name: Validate health_action parameter
+  fail:
+    msg: "health_action must be 'node-ready', 'pods-ready', or 'cluster-status'"
+  when: health_action not in ['node-ready', 'pods-ready', 'cluster-status']
+
+# CHECK NODE READY STATUS
+- block:
+    - name: Check k3s service is running
+      systemd:
+        name: k3s
+        state: started
+      register: k3s_service
+
+    - name: Wait for k3s node to be ready
+      delegate_to: localhost
+      command: kubectl wait --for=condition=Ready node/{{ node_name }} --timeout={{ wait_timeout }}s
+      register: node_ready_result
+
+    - name: Display node ready status
+      debug:
+        var: node_ready_result.stdout
+
+    - name: Get detailed node status
+      delegate_to: localhost
+      command: kubectl get nodes {{ node_name }}
+      register: node_status
+
+    - name: Display node status
+      debug:
+        var: node_status.stdout_lines
+
+  when: health_action == 'node-ready'
+
+# CHECK PODS READY ON NODE
+- block:
+    - name: Wait for system to stabilize
+      pause:
+        seconds: "{{ stabilize_delay }}"
+
+    - name: Wait for all pods on node to be ready
+      delegate_to: localhost
+      shell: |
+        kubectl get pods --all-namespaces --field-selector spec.nodeName={{ node_name }} \
+        --no-headers | awk '$3 != "Running" || $2 !~ /^[0-9]+\/[0-9]+$/ || $2 ~ /0\// { print $1, $2, $3 }'
+      register: not_ready_pods
+      until: not_ready_pods.stdout == ""
+      retries: 24
+      delay: 10
+      failed_when: false
+
+    - name: Display final pods status on node
+      delegate_to: localhost
+      command: kubectl get pods --all-namespaces --field-selector spec.nodeName={{ node_name }}
+      register: node_pods
+
+    - name: Show all pods on node
+      debug:
+        var: node_pods.stdout_lines
+
+  when: health_action == 'pods-ready'
+
+# CHECK OVERALL CLUSTER STATUS
+- block:
+    - name: Wait for cluster to stabilize
+      pause:
+        seconds: "{{ stabilize_delay * 3 }}"
+
+    - name: Check all nodes status
+      delegate_to: localhost
+      command: kubectl get nodes
+      register: all_nodes_status
+
+    - name: Display all nodes status
+      debug:
+        var: all_nodes_status.stdout_lines
+
+    - name: Check all pods are running
+      delegate_to: localhost
+      command: kubectl get pods --all-namespaces --field-selector=status.phase!=Running
+      register: failed_pods
+
+    - name: Display any non-running pods
+      debug:
+        var: failed_pods.stdout_lines
+      when: failed_pods.stdout_lines | length > 1
+
+    - name: Get cluster component status
+      delegate_to: localhost
+      command: kubectl get componentstatuses
+      register: component_status
+      failed_when: false
+
+    - name: Display component status
+      debug:
+        var: component_status.stdout_lines
+      when: component_status.rc == 0
+
+    - name: Cluster health summary
+      debug:
+        msg: "Cluster health check completed - review output above for any issues"
+
+  when: health_action == 'cluster-status'

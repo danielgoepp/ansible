@@ -1,0 +1,74 @@
+---
+# K3S Node Drain Operations
+# Safely drains and manages k3s node scheduling
+#
+# Parameters:
+#   node_action: "drain" or "uncordon"
+#   node_name: target node hostname (defaults to inventory_hostname)
+#   drain_timeout: timeout for drain operation in seconds (default: 600)
+
+- name: Set default node parameters
+  set_fact:
+    node_name: "{{ node_name | default(inventory_hostname) }}"
+    drain_timeout: "{{ drain_timeout | default(600) }}"
+
+- name: Validate node_action parameter
+  fail:
+    msg: "node_action must be 'drain' or 'uncordon'"
+  when: node_action not in ['drain', 'uncordon']
+
+# DRAIN NODE
+- block:
+    - name: Display current node being drained
+      debug:
+        msg: "=== Draining node {{ node_name }} ==="
+
+    - name: Drain the node
+      delegate_to: localhost
+      command: kubectl drain {{ node_name }} --ignore-daemonsets --delete-emptydir-data --timeout={{ drain_timeout }}s
+      register: drain_result
+      async: "{{ drain_timeout + 100 }}"
+      poll: 5
+
+    - name: Display drain result
+      debug:
+        var: drain_result.stdout_lines
+
+    - name: Verify node is drained
+      delegate_to: localhost
+      command: kubectl get node {{ node_name }} -o jsonpath='{.spec.unschedulable}'
+      register: node_schedulable
+      until: node_schedulable.stdout == "true"
+      retries: 12
+      delay: 10
+
+    - name: Confirm node is drained
+      debug:
+        msg: "Node {{ node_name }} successfully drained and marked unschedulable"
+
+  when: node_action == 'drain'
+
+# UNCORDON NODE
+- block:
+    - name: Uncordon the node
+      delegate_to: localhost
+      command: kubectl uncordon {{ node_name }}
+      register: uncordon_result
+
+    - name: Display uncordon result
+      debug:
+        var: uncordon_result.stdout
+
+    - name: Verify node is schedulable
+      delegate_to: localhost
+      command: kubectl get node {{ node_name }} -o jsonpath='{.spec.unschedulable}'
+      register: node_schedulable
+      until: node_schedulable.stdout == "" or node_schedulable.stdout == "null"
+      retries: 6
+      delay: 5
+
+    - name: Confirm node is uncordoned
+      debug:
+        msg: "Node {{ node_name }} successfully uncordoned and marked schedulable"
+
+  when: node_action == 'uncordon'

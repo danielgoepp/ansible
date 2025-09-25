@@ -1,0 +1,100 @@
+# Ansible Home Lab Infrastructure
+
+Infrastructure automation for home lab environment managing Ubuntu servers,
+Raspberry Pi devices, Proxmox VE hypervisors, and Kubernetes clusters.
+
+Against my better judgement, I'm making this repository public. I have removed
+all the secrets. Yes, it does contain information that is specific to, and
+provides knowledge of, my internal network, but I don't think anything too bad.
+
+## Operations
+
+### Version Management
+
+```bash
+# List all tracked applications
+ansible-playbook playbooks/ops-version-check.yaml -e version_check_action=list
+
+# Check specific application versions
+ansible-playbook playbooks/ops-version-check.yaml \
+  -e version_check_action=app -e app_name="home assistant"
+
+# Full version check across all services
+ansible-playbook playbooks/ops-version-check.yaml \
+  -e version_check_action=check-all
+```
+
+### Manifest Upgrades
+
+```bash
+# Individual service upgrades (recommended)
+ansible-playbook playbooks/ops-upgrade-postfix-manifest.yaml
+ansible-playbook playbooks/ops-upgrade-grafana-manifest.yaml
+
+# Home Assistant upgrade with interactive instance selection
+ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml
+
+# Home Assistant upgrade targeting specific instance
+ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml \
+  -e target_instance=prod
+ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml \
+  -e target_instance=morgspi
+
+# Generic manifest upgrade for ad-hoc services
+ansible-playbook playbooks/ops-upgrade-manifest-generic.yaml \
+  -e service_name=myservice
+```
+
+### Helm Chart Upgrades
+
+```bash
+# Individual helm chart upgrades
+ansible-playbook playbooks/ops-upgrade-helm-traefik.yaml
+ansible-playbook playbooks/ops-upgrade-helm-cert-manager.yaml
+ansible-playbook playbooks/ops-upgrade-helm-mongodb.yaml
+```
+
+## Infrastructure Overview
+
+- **Ubuntu Servers**: General purpose servers (ui-network, backup, dev, smb)
+- **Raspberry Pi**: IoT and edge services (Home Assistant, NUT UPS, Wyoming
+  voice satellites)
+- **Kubernetes**: k3s production cluster with Ceph storage
+- **Proxmox VE**: Virtualization platform hosts
+- **LXC Containers**: Lightweight application containers
+
+## Key Features
+
+- **Service-based configuration**: Hosts define their roles via `services`
+  variables
+- **Consolidated upgrade architecture**: Task-based approach for manifest
+  upgrades
+- **Version tracking**: Automated version checking across all applications
+- **Secure secret management**: ansible-vault encrypted credentials
+- **Automated storage mounting**: SMB media shares and Ceph distributed
+  storage
+- **Multi-play structure**: System and user-level configuration separation
+
+## Documentation
+
+- **[CLAUDE.md](CLAUDE.md)**: AI assistant working instructions and command
+  reference
+
+## Repository Structure
+
+```text
+├── inventories/hosts.yml    # Host inventory and group definitions
+├── playbooks/              # Main execution playbooks
+├── tasks/                  # Reusable task modules
+├── files/                  # Static configuration files
+├── group_vars/             # Group-specific variables (encrypted)
+└── host_vars/              # Host-specific overrides
+```
+
+## Requirements
+
+- Ansible 2.9+
+- SSH key authentication configured
+- Vault password file at `~/.ansible/.vault-pass`
+- Utility scripts directory (`../utility-scripts/`) must exist relative to this
+  project

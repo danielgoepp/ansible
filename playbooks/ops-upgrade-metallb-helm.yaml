@@ -1,0 +1,80 @@
+---
+- name: Upgrade MetalLB using Helm
+  hosts: localhost
+  gather_facts: false
+  vars:
+    helm_release_name: "metallb"
+    helm_chart_name: "metallb/metallb"
+    helm_namespace: "metallb-system"
+    helm_values_file: "/Users/dang/Documents/Development/k3s-config/metallb/helm/metallb-values-prod.yaml"
+    k8s_context: "k3s-prod"
+  tasks:
+    - name: Update Helm repositories
+      kubernetes.core.helm_repository:
+        name: metallb
+        repo_url: https://metallb.github.io/metallb
+        state: present
+
+    - name: Get current MetalLB version (before upgrade)
+      kubernetes.core.helm_info:
+        name: "{{ helm_release_name }}"
+        namespace: "{{ helm_namespace }}"
+        release_state: deployed
+        kube_context: "{{ k8s_context }}"
+      register: metallb_current_version
+      ignore_errors: true
+
+    - name: Display current MetalLB version
+      debug:
+        msg:
+          - "Current MetalLB release:"
+          - "  Name: {{ metallb_current_version.status.name | default('Not installed') }}"
+          - "  Version: {{ metallb_current_version.status.chart | default('Unknown') }}"
+          - "  App Version: {{ metallb_current_version.status.app_version | default('Unknown') }}"
+          - "  Status: {{ metallb_current_version.status.status | default('Unknown') }}"
+      when: metallb_current_version.status is defined
+
+    - name: Display installation status if not found
+      debug:
+        msg: "MetalLB release '{{ helm_release_name }}' not found in namespace '{{ helm_namespace }}'"
+      when: metallb_current_version.status is not defined
+
+    - name: Upgrade MetalLB using Helm
+      kubernetes.core.helm:
+        name: "{{ helm_release_name }}"
+        chart_ref: "{{ helm_chart_name }}"
+        namespace: "{{ helm_namespace }}"
+        values_files:
+          - "{{ helm_values_file }}"
+        state: present
+        update_repo_cache: true
+        kube_context: "{{ k8s_context }}"
+        wait: true
+        wait_timeout: "300s"
+      register: metallb_upgrade_result
+
+    - name: Get updated MetalLB version (after upgrade)
+      kubernetes.core.helm_info:
+        name: "{{ helm_release_name }}"
+        namespace: "{{ helm_namespace }}"
+        release_state: deployed
+        kube_context: "{{ k8s_context }}"
+      register: metallb_updated_version
+
+    - name: Display updated MetalLB version
+      debug:
+        msg:
+          - "Updated MetalLB release:"
+          - "  Name: {{ metallb_updated_version.status.name }}"
+          - "  Version: {{ metallb_updated_version.status.chart }}"
+          - "  App Version: {{ metallb_updated_version.status.app_version }}"
+          - "  Status: {{ metallb_updated_version.status.status }}"
+          - "  Revision: {{ metallb_updated_version.status.revision }}"
+
+    - name: Display upgrade summary
+      debug:
+        msg:
+          - "MetalLB upgrade completed successfully!"
+          - "{% if metallb_current_version.status is defined %}Previous version: {{ metallb_current_version.status.chart | default('Unknown') }}{% endif %}"
+          - "Current version: {{ metallb_updated_version.status.chart }}"
+          - "Upgrade performed: {{ metallb_upgrade_result.changed }}"
