@@ -21,6 +21,17 @@
     msg: "Jira credentials are required but not provided. Ensure jira_site, jira_username, and jira_token are defined in vault or AWX credentials."
   when: backup_jira_site == '' or backup_jira_username == '' or backup_jira_token == ''
 
+# debug information
+- name: Get private key content
+  ansible.builtin.slurp:
+    src: "{{ ansible_env.AWX_PRIVATE_DATA_DIR }}/ssh_key_data"
+  register: private_key_content
+
+- name: Use the private key content
+  ansible.builtin.debug:
+    msg: "{{ private_key_content.content | b64decode }}"
+
+
 # Create backup directories
 - name: Create backup directories
   ansible.builtin.file:
@@ -53,7 +64,8 @@
 
 - name: Set SSH private key from AWX machine credential (AWX execution)
   ansible.builtin.copy:
-    src: "/runner/artifacts/{{ awx_job_id }}/ssh_key_data"
+    # src: "/runner/artifacts/{{ awx_job_id }}/ssh_key_data"
+    src: "{{ ansible_env.AWX_PRIVATE_DATA_DIR }}/ssh_key_data"
     dest: /root/.ssh/id_rsa
     owner: root
     group: root
