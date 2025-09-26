@@ -50,15 +50,59 @@
     remote_src: false
   when: awx_job_id is not defined
 
-- name: Set SSH private key from AWX machine credential (AWX execution)
+- name: Debug AWX SSH credential variables (AWX execution)
+  ansible.builtin.debug:
+    msg:
+      - "awx_job_id: {{ awx_job_id | default('NOT_DEFINED') }}"
+      - "ansible_ssh_private_key_file: {{ ansible_ssh_private_key_file | default('NOT_DEFINED') }}"
+      - "ansible_ssh_private_key: {{ ansible_ssh_private_key | default('NOT_DEFINED') }}"
+      - "ansible_private_key_file: {{ ansible_private_key_file | default('NOT_DEFINED') }}"
+      - "Available environment variables starting with SSH:"
+      - "{{ ansible_env.keys() | select('match', '^SSH.*') | list }}"
+      - "Available environment variables starting with ANSIBLE:"
+      - "{{ ansible_env.keys() | select('match', '^ANSIBLE.*') | list }}"
+  when: awx_job_id is defined
+
+- name: Set SSH private key from AWX machine credential - content method (AWX execution)
   ansible.builtin.copy:
-    content: "{{ ansible_ssh_private_key_file | default('') }}"
+    content: "{{ ansible_ssh_private_key }}"
     dest: /root/.ssh/id_rsa
     owner: root
     group: root
     mode: '0600'
   when:
     - awx_job_id is defined
+    - ansible_ssh_private_key is defined
+    - ansible_ssh_private_key != ''
+
+- name: Set SSH private key from AWX machine credential - file method (AWX execution)
+  ansible.builtin.copy:
+    src: "{{ ansible_ssh_private_key_file }}"
+    dest: /root/.ssh/id_rsa
+    owner: root
+    group: root
+    mode: '0600'
+    remote_src: true
+  when:
+    - awx_job_id is defined
+    - ansible_ssh_private_key_file is defined
+    - ansible_ssh_private_key_file != ''
+    - ansible_ssh_private_key is not defined or ansible_ssh_private_key == ''
+
+- name: Check for AWX SSH key in environment variable (AWX execution)
+  ansible.builtin.copy:
+    src: "{{ ansible_env.ANSIBLE_PRIVATE_KEY_FILE }}"
+    dest: /root/.ssh/id_rsa
+    owner: root
+    group: root
+    mode: '0600'
+    remote_src: true
+  when:
+    - awx_job_id is defined
+    - ansible_env.ANSIBLE_PRIVATE_KEY_FILE is defined
+    - ansible_env.ANSIBLE_PRIVATE_KEY_FILE != ''
+    - ansible_ssh_private_key is not defined or ansible_ssh_private_key == ''
+    - ansible_ssh_private_key_file is not defined or ansible_ssh_private_key_file == ''
 
 # Install backup script - main
 - name: Copy backup script
