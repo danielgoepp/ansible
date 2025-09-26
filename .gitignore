@@ -7,6 +7,9 @@
 # Ansible configuration file
 ansible.cfg
 
+# Ansible runtime directories
+.ansible/
+
 # All password and secure files
 *.secret
 

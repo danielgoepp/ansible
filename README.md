@@ -36,10 +36,10 @@ ansible-playbook playbooks/ops-version-check.yaml \
 ansible-playbook playbooks/ops-upgrade-postfix-manifest.yaml
 ansible-playbook playbooks/ops-upgrade-grafana-manifest.yaml
 
-# Home Assistant upgrade with interactive instance selection
+# Multi-context service upgrades (Home Assistant example)
 ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml
 
-# Home Assistant upgrade targeting specific instance
+# Target specific Home Assistant instance
 ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml \
   -e target_instance=prod
 ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml \
@@ -54,9 +54,9 @@ ansible-playbook playbooks/ops-upgrade-manifest-generic.yaml \
 
 ```bash
 # Individual helm chart upgrades
-ansible-playbook playbooks/ops-upgrade-helm-traefik.yaml
-ansible-playbook playbooks/ops-upgrade-helm-cert-manager.yaml
-ansible-playbook playbooks/ops-upgrade-helm-mongodb.yaml
+ansible-playbook playbooks/ops-upgrade-traefik-helm.yaml
+ansible-playbook playbooks/ops-upgrade-cert-manager-helm.yaml
+ansible-playbook playbooks/ops-upgrade-mongodb-operator-helm.yaml
 ```
 
 ## Infrastructure Overview
@@ -84,6 +84,8 @@ ansible-playbook playbooks/ops-upgrade-helm-mongodb.yaml
 
 - **[CLAUDE.md](CLAUDE.md)**: AI assistant working instructions and command
   reference
+- **[ANSIBLE.md](ANSIBLE.md)**: Detailed technical documentation and
+  architecture
 
 ## Repository Structure
 
@@ -104,4 +106,4 @@ ansible-playbook playbooks/ops-upgrade-helm-mongodb.yaml
 - Utility scripts directory (`../utility-scripts/`) must exist relative to this
   project
 - Kubernetes configuration directory (`../k3s-config/`) must exist relative to
-  this project for cluster upgrade operations
+  this project for manifest upgrade operations

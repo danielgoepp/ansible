@@ -59,7 +59,7 @@ voicepi-greatroom:
   - SMB and Ceph mounts (conditional)
   - Rsyslog configuration
   - Virtual machine specific packages
-- **`setup-lxc.yaml`** - LXC container setup
+- **`setup-lxc-prep.yaml`** - LXC container preparation
   - Global configuration tasks
   - Ceph mounts
   - User creation and SSH key setup
@@ -119,7 +119,7 @@ when: ansible_hostname != 'adambalm'
 ### Vault Management
 
 - Secrets stored in `group_vars/vault.yaml.secret` (encrypted with ansible-vault)
-- Vault password stored in `.ansible/.vault-pass` (default location)
+- Vault password stored in `~/.ansible/.vault-pass` (default location)
 - SSH keys, passwords, and credentials all encrypted
 
 ### User Management
@@ -143,9 +143,11 @@ Raspberry Pi playbook includes automatic reboot handling:
 
 ```yaml
 - name: Check if reboot is required
-  stat: path: /var/run/reboot-required
+  stat:
+    path: /var/run/reboot-required
 - name: Reboot if required
-  reboot: when: reboot_required_file.stat.exists
+  reboot:
+  when: reboot_required_file.stat.exists
 ```
 
 ### Service Management

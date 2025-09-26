@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ansible-playbook playbooks/setup-global.yaml
 ansible-playbook playbooks/setup-rpi.yaml
 ansible-playbook playbooks/setup-lxc-prep.yaml
-ansible-playbook playbooks/ops-upgrade.yaml
+ansible-playbook playbooks/ops-upgrade-cluster.yaml
 
 # Target specific hosts or groups
 ansible-playbook playbooks/setup-global.yaml -l ubuntu
@@ -67,6 +67,7 @@ ansible-playbook playbooks/ops-version-check.yaml -e version_check_action=app -e
 ansible-playbook playbooks/ops-upgrade-postfix-manifest.yaml
 ansible-playbook playbooks/ops-upgrade-grafana-manifest.yaml
 ansible-playbook playbooks/ops-upgrade-n8n-manifest.yaml
+ansible-playbook playbooks/ops-upgrade-telegraf-manifest.yaml
 
 # CRD manifest upgrades (for services with multiple CRD instances)
 ansible-playbook playbooks/ops-upgrade-mongodb-crd-manifests.yaml
@@ -89,16 +90,14 @@ ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml  # Multi-cont
 
 ```bash
 # Upgrade individual helm charts (updates repo, shows before/after versions)
-ansible-playbook playbooks/ops-upgrade-helm-alertmanager.yaml
-ansible-playbook playbooks/ops-upgrade-helm-cert-manager.yaml
-ansible-playbook playbooks/ops-upgrade-helm-fluent-bit.yaml
-ansible-playbook playbooks/ops-upgrade-helm-metallb.yaml
-ansible-playbook playbooks/ops-upgrade-helm-mongodb.yaml
-ansible-playbook playbooks/ops-upgrade-helm-mongodb-cr.yaml
-ansible-playbook playbooks/ops-upgrade-helm-opensearch.yaml
-ansible-playbook playbooks/ops-upgrade-helm-pgadmin.yaml
-ansible-playbook playbooks/ops-upgrade-helm-traefik.yaml
-ansible-playbook playbooks/ops-upgrade-helm-weather.yaml
+ansible-playbook playbooks/ops-upgrade-alertmanager-helm.yaml
+ansible-playbook playbooks/ops-upgrade-cert-manager-helm.yaml
+ansible-playbook playbooks/ops-upgrade-fluent-bit-helm.yaml
+ansible-playbook playbooks/ops-upgrade-metallb-helm.yaml
+ansible-playbook playbooks/ops-upgrade-opensearch-helm.yaml
+ansible-playbook playbooks/ops-upgrade-pgadmin-helm.yaml
+ansible-playbook playbooks/ops-upgrade-traefik-helm.yaml
+ansible-playbook playbooks/ops-upgrade-weather-helm.yaml
 
 # Operator helm upgrades (upgrades the operators that manage CRDs)
 ansible-playbook playbooks/ops-upgrade-mongodb-operator-helm.yaml
@@ -154,6 +153,15 @@ ansible-playbook playbooks/ops-esphome-ota.yaml -e esphome_dashboard_url=https:/
 
 # Set custom timeout (default 10 minutes)
 ansible-playbook playbooks/ops-esphome-ota.yaml -e esphome_timeout=900
+```
+
+### Additional Operations
+
+```bash
+# Cluster maintenance and testing
+ansible-playbook playbooks/ops-proxmox-maintenance-on.yaml
+ansible-playbook playbooks/ops-test-alerts.yaml
+ansible-playbook playbooks/ops-test-ceph-noout.yaml
 ```
 
 ## Architecture
