@@ -4,6 +4,10 @@ STAMP=`date +"%Y-%m-%d_%H%M"`
 BKUPDIR=/mnt/backups/
 SRCDIR=/mnt/k3s-prod-data/
 
+OPNSENSE_KEY={{ backup_opnsense_key }}
+OPNSENSE_SECRET={{ backup_opnsense_secret }}
+OPNSENSE_HOST={{ backup_opnsense_host }}
+
 # disabled uptime kuma until I can improve it - no need to backup data, just config - some kind of custom sqlite export perhaps?
 
 # for service in "esphome" "zigbee2mqtt" "uptime-kuma" "kopia"; do
@@ -30,8 +34,7 @@ done
 
 ## backup opnsense
 echo "Processing backup for opnsense"
-source /usr/local/bin/.opnsense.env
-curl -s -k -u $KEY:$SECRET https://$HOST/api/core/backup/download/this -o $BKUPDIR/opnsense/opnsense-$STAMP.xml
+curl -s -k -u $OPNSENSE_KEY:$OPNSENSE_SECRET https://$OPNSENSE_HOST/api/core/backup/download/this -o $BKUPDIR/opnsense/opnsense-$STAMP.xml
 find $BKUPDIR/opnsense -mtime +7 -delete
 
 ## backup homeassistant

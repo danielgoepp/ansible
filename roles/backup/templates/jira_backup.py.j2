@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # coding=utf-8
 
 # Script created by The Epic Battlebeard 10/08/18
@@ -19,10 +20,10 @@ import configparser
 JSON_DATA = b'{"cbAttachments": "true", "exportToCloud": "true"}'
 
 
-def jira_backup(account, username, token, json, folder):
+def jira_backup(site, username, token, json, folder):
 
-    # Create the full base url for the JIRA instance using the account name.
-    url = "https://" + account + ".atlassian.net"
+    # Create the full base url for the JIRA instance using the site name.
+    url = "https://" + site + ".atlassian.net"
 
     # Open new session for cookie persistence and auth.
     session = requests.Session()
@@ -89,7 +90,7 @@ def jira_backup(account, username, token, json, folder):
 
         date = time.strftime("%Y%m%d_%H%M%S")
 
-        filename = account + "_backup_" + date + ".zip"
+        filename = site + "_backup_" + date + ".zip"
 
         file = session.get(url + "/plugins/servlet/" + download, stream=True)
 
@@ -103,12 +104,10 @@ def jira_backup(account, username, token, json, folder):
 
 
 if __name__ == "__main__":
-    config = configparser.ConfigParser()
-    config.read("/usr/local/etc/jira.ini")
     jira_backup(
-        config["jira"]["site"],
-        config["jira"]["user"],
-        config["jira"]["token"],
+        "{{ backup_jira_site }}",
+        "{{ backup_jira_username }}",
+        "{{ backup_jira_token }}",
         JSON_DATA,
         "/mnt/backups/jira/",
     )

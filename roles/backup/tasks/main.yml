@@ -1,0 +1,98 @@
+---
+# Set backup credentials from AWX or vault
+- name: Set backup credentials from AWX or vault
+  ansible.builtin.set_fact:
+    backup_opnsense_key: "{{ awx_opnsense_key | default(opnsense_key | default('')) }}"
+    backup_opnsense_secret: "{{ awx_opnsense_secret | default(opnsense_secret | default('')) }}"
+    backup_opnsense_host: "{{ awx_opnsense_host | default(opnsense_host | default('opnsense.local')) }}"
+    backup_jira_site: "{{ awx_jira_site | default(jira_site | default('')) }}"
+    backup_jira_username: "{{ awx_jira_username | default(jira_username | default('')) }}"
+    backup_jira_token: "{{ awx_jira_token | default(jira_token | default('')) }}"
+
+
+# Validate required credentials
+- name: Validate OPNsense credentials are present
+  ansible.builtin.fail:
+    msg: "OPNsense credentials are required but not provided. Ensure opnsense_key and opnsense_secret are defined in vault or AWX credentials."
+  when: backup_opnsense_key == '' or backup_opnsense_secret == ''
+
+- name: Validate Jira credentials are present
+  ansible.builtin.fail:
+    msg: "Jira credentials are required but not provided. Ensure jira_site, jira_username, and jira_token are defined in vault or AWX credentials."
+  when: backup_jira_site == '' or backup_jira_username == '' or backup_jira_token == ''
+
+# Create backup directories
+- name: Create backup directories
+  ansible.builtin.file:
+    path: "/mnt/backups/{{ item }}"
+    state: directory
+    owner: root
+    group: sudo
+    mode: '0775'
+  loop: "{{ backup_directories }}"
+
+# Setup SSH key for backup access to other servers
+- name: Create .ssh directory for root
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Install SSH private key for root
+  ansible.builtin.copy:
+    src: ssh/dang_id_rsa.secret
+    dest: /root/.ssh/id_rsa
+    owner: root
+    group: root
+    mode: '0600'
+
+# Install backup script - main
+- name: Copy backup script
+  ansible.builtin.template:
+    src: backups.sh.j2
+    dest: /usr/local/bin/backups.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+# Install backup script - jira
+- name: Copy jira backup script
+  ansible.builtin.template:
+    src: jira_backup.py.j2
+    dest: /usr/local/bin/jira_backup.py
+    owner: root
+    group: root
+    mode: '0755'
+
+# Install victoria metrics utilities
+- name: Download victoria metrics utilities
+  ansible.builtin.get_url:
+    url: "{{ backup_vmutils_download_url }}"
+    dest: "/usr/local/src/{{ backup_vmutils_filename }}"
+    mode: '0644'
+
+- name: Extract victoria metrics utilities
+  ansible.builtin.unarchive:
+    src: "/usr/local/src/{{ backup_vmutils_filename }}"
+    dest: /usr/local/bin/
+    creates: /usr/local/bin/vmbackup-prod
+    remote_src: true
+
+# Cron main backups script
+- name: Cron main backup
+  ansible.builtin.cron:
+    name: main backup
+    hour: "{{ backup_main_hour }}"
+    minute: "{{ backup_main_minute }}"
+    job: '/usr/local/bin/backups.sh'
+
+# Cron jira backup script
+- name: Cron jira backup
+  ansible.builtin.cron:
+    name: jira backup
+    hour: "{{ backup_jira_hour }}"
+    minute: "{{ backup_jira_minute }}"
+    weekday: "{{ backup_jira_weekday }}"
+    job: '/usr/bin/python3 /usr/local/bin/jira_backup.py'

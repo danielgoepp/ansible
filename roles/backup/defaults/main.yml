@@ -1,0 +1,28 @@
+---
+# Victoria Metrics utilities configuration
+backup_vmutils_version: "v1.109.1"
+backup_vmutils_filename: "vmutils-linux-amd64-{{ backup_vmutils_version }}.tar.gz"
+backup_vmutils_download_url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/{{ backup_vmutils_version }}/{{ backup_vmutils_filename }}"
+
+# Backup cron schedule configuration
+backup_main_hour: "23"
+backup_main_minute: "0"
+backup_jira_hour: "0"
+backup_jira_minute: "0"
+backup_jira_weekday: "6"
+
+# Backup directories to create
+backup_directories:
+  - opnsense
+  - homeassistant
+  - zigbee2mqtt
+  - esphome
+  - kopia
+  - uptime-kuma
+  - torrent
+  - jira
+  - victoriametrics
+  - unifi
+
+# Credential variables are set dynamically in tasks/main.yml
+# from AWX variables or vault variables via set_fact

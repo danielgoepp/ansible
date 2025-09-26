@@ -9,6 +9,7 @@
 
 # All password and secure files
 *.secret
+*_credentials.yml
 
 # Claude-related files (if applicable)
 .claude/
