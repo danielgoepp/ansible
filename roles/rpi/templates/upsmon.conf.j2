@@ -115,7 +115,7 @@
 # MONITOR myups@bigserver 1 upswired blah primary
 # MONITOR su700@server.example.com 1 upsmon secretpass secondary
 # MONITOR myups@localhost 1 upsmon pass primary	# (or secondary)
-MONITOR rockyledge-ups@localhost 1 upsmon password master
+MONITOR {{ nut.ups_name }}@localhost 1 {{ nut.upsmon.username | default('upsmon') }} {{ nut.upsmon.password | default('password') }} {{ nut.upsmon.role | default('master') }}
 
 # --------------------------------------------------------------------------
 # MINSUPPLIES <num>

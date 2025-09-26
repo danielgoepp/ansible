@@ -1,0 +1,10 @@
+---
+# NUT (Network UPS Tools) configuration for mudderpi
+nut:
+  ups_name: "mudderpi-ups"
+  driver: "usbhid-ups"
+  port: "auto"
+  upsmon:
+    username: "upsmon"
+    password: "password"
+    role: "master"

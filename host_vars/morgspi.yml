@@ -1,0 +1,10 @@
+---
+# NUT (Network UPS Tools) configuration for morgspi
+nut:
+  ups_name: "morgspi-ups"
+  driver: "usbhid-ups"
+  port: "auto"
+  upsmon:
+    username: "upsmon"
+    password: "password"
+    role: "master"

@@ -1,0 +1,13 @@
+---
+# Default variables for RPI role
+# These can be overridden in host_vars or group_vars
+
+# NUT (Network UPS Tools) configuration defaults
+nut:
+  ups_name: "{{ ansible_hostname }}-ups"
+  driver: "usbhid-ups"
+  port: "auto"
+  upsmon:
+    username: "upsmon"
+    password: "password"
+    role: "master"
