@@ -4,7 +4,7 @@
   ansible.builtin.set_fact:
     backup_opnsense_key: "{{ awx_opnsense_key | default(opnsense_key | default('')) }}"
     backup_opnsense_secret: "{{ awx_opnsense_secret | default(opnsense_secret | default('')) }}"
-    backup_opnsense_host: "{{ awx_opnsense_host | default(opnsense_host | default('opnsense.local')) }}"
+    backup_opnsense_host: "{{ awx_opnsense_host | default(opnsense_host | default('')) }}"
     backup_jira_site: "{{ awx_jira_site | default(jira_site | default('')) }}"
     backup_jira_username: "{{ awx_jira_username | default(jira_username | default('')) }}"
     backup_jira_token: "{{ awx_jira_token | default(jira_token | default('')) }}"
@@ -40,13 +40,25 @@
     group: root
     mode: '0700'
 
-- name: Install SSH private key for root
+- name: Install SSH private key for root (local execution)
   ansible.builtin.copy:
-    src: ssh/dang_id_rsa.secret
+    src: "~/.ssh/id_rsa"
     dest: /root/.ssh/id_rsa
     owner: root
     group: root
     mode: '0600'
+    remote_src: false
+  when: awx_job_id is not defined
+
+- name: Set SSH private key from AWX machine credential (AWX execution)
+  ansible.builtin.copy:
+    content: "{{ ansible_ssh_private_key_file | default('') }}"
+    dest: /root/.ssh/id_rsa
+    owner: root
+    group: root
+    mode: '0600'
+  when:
+    - awx_job_id is defined
 
 # Install backup script - main
 - name: Copy backup script
