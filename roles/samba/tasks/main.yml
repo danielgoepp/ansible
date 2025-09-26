@@ -1,0 +1,30 @@
+---
+- name: Install samba
+  ansible.builtin.apt:
+    name: samba
+    state: present
+    update_cache: true
+
+- name: Copy smb.conf
+  ansible.builtin.copy:
+    src: smb.conf
+    dest: /etc/samba/smb.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart smbd
+
+- name: Create user jen
+  ansible.builtin.user:
+    name: jen
+    create_home: false
+    shell: /dev/null
+    password: "!"
+
+- name: Create user linux
+  ansible.builtin.user:
+    name: linux
+    create_home: false
+    shell: /dev/null
+    password: "!"
