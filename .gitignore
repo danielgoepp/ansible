@@ -1,19 +1,16 @@
 # VS Code workspace files
 *.code-workspace
 
-# Ansible vault password file (if stored locally)
-.vault-pass
-
 # Ansible runtime directories
 .ansible/
 
-# All password and secure files
-*.secret
-*_credentials.yml
-vault.yml
-
 # Claude-related files (if applicable)
 .claude/
+
+# All password and secure files
+**/*.secret
+**/*_credentials.yml
+**/vault.yml
 
 # Temporary files
 *.tmp
