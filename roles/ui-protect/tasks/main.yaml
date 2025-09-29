@@ -1,0 +1,53 @@
+---
+- name: Download unifi-easy-encrypt.sh script
+  ansible.builtin.get_url:
+    url: "{{ ui_protect_script_url }}"
+    dest: "{{ ui_protect_script_path }}"
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Create Cloudflare credentials file
+  ansible.builtin.template:
+    src: cloudflare.ini.j2
+    dest: "{{ ui_protect_cloudflare_credentials_path }}"
+    mode: '0600'
+    owner: root
+    group: root
+
+- name: Run initial Let's Encrypt certificate setup
+  ansible.builtin.command:
+    cmd: >
+      {{ ui_protect_script_path }}
+      --skip
+      --email {{ ui_protect_email }}
+      --fqdn {{ ui_protect_fqdn }}
+      --dns-challenge
+      --dns-provider cloudflare
+      --dns-provider-credentials {{ ui_protect_cloudflare_credentials_path }}
+      --server-ip {{ ui_protect_server_ip }}
+      --external-dns {{ ui_protect_external_dns }}
+  register: ui_protect_initial_setup
+  changed_when: ui_protect_initial_setup.rc == 0
+  failed_when: ui_protect_initial_setup.rc != 0
+
+- name: Create cron job for certificate renewal
+  ansible.builtin.cron:
+    name: "UniFi Protect Let's Encrypt certificate renewal"
+    minute: "{{ ui_protect_cron_minute }}"
+    hour: "{{ ui_protect_cron_hour }}"
+    day: "{{ ui_protect_cron_day }}"
+    month: "{{ ui_protect_cron_month }}"
+    weekday: "{{ ui_protect_cron_weekday }}"
+    job: >
+      {{ ui_protect_script_path }}
+      --skip
+      --email {{ ui_protect_email }}
+      --fqdn {{ ui_protect_fqdn }}
+      --dns-challenge
+      --dns-provider cloudflare
+      --dns-provider-credentials {{ ui_protect_cloudflare_credentials_path }}
+      --server-ip {{ ui_protect_server_ip }}
+      --external-dns {{ ui_protect_external_dns }}
+    user: root
+    state: present

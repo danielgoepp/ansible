@@ -1,0 +1,16 @@
+---
+dependencies: []
+
+galaxy_info:
+  author: Dan Goepp
+  description: Configure UniFi Protect with Let's Encrypt SSL certificates via Cloudflare DNS
+  license: MIT
+  min_ansible_version: '2.9'
+
+  platforms:
+    - name: Debian
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all

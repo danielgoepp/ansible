@@ -1,0 +1,22 @@
+---
+# Default variables for ui-protect role
+
+# Let's Encrypt configuration
+ui_protect_email: "dan@goepp.com"
+ui_protect_fqdn: "ui-protect.goepp.net"
+ui_protect_server_ip: "10.1.10.10"
+ui_protect_external_dns: "10.1.10.1"
+
+# Script configuration
+ui_protect_script_url: "https://get.glennr.nl/unifi/extra/unifi-easy-encrypt.sh"
+ui_protect_script_path: "/usr/local/bin/unifi-easy-encrypt.sh"
+
+# Cloudflare credentials
+ui_protect_cloudflare_credentials_path: "/root/cloudflare.ini"
+
+# Cron schedule (2 AM every Saturday)
+ui_protect_cron_minute: "0"
+ui_protect_cron_hour: "2"
+ui_protect_cron_day: "*"
+ui_protect_cron_month: "*"
+ui_protect_cron_weekday: "6"
