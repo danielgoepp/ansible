@@ -1,0 +1,36 @@
+---
+- name: Upgrade AirGradient ESPHome devices
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # ESPHome configuration
+    esphome_namespace: "esphome"
+    esphome_deployment_name: "esphome"
+    k3s_context: "k3s-prod"  # Default context, can be overridden
+
+    # AirGradient device identification patterns
+    airgradient_patterns:
+      - "airgradient"
+
+  tasks:
+    - name: Discover ESPHome devices
+      include_tasks: ../../tasks/ops-esphome-discover-devices.yaml
+
+    - name: Filter ESPHome devices for AirGradient devices
+      set_fact:
+        airgradient_devices: "{{ esphome_devices | selectattr('name', 'regex', pattern_regex) | list }}"
+      vars:
+        pattern_regex: "{{ airgradient_patterns | map('regex_escape') | join('|') }}"
+
+    - name: Validate AirGradient devices found
+      fail:
+        msg: |
+          No AirGradient devices found matching patterns: {{ airgradient_patterns | join(', ') }}
+          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
+      when: airgradient_devices | length == 0
+
+    - name: Run ESPHome upgrade for AirGradient devices
+      include_tasks: ../../tasks/ops-esphome-upgrade-devices.yaml
+      vars:
+        devices_to_upgrade: "{{ airgradient_devices }}"
+        upgrade_description: "AirGradient devices"

@@ -1,0 +1,36 @@
+---
+- name: Upgrade ESP Heat Control ESPHome devices
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # ESPHome configuration
+    esphome_namespace: "esphome"
+    esphome_deployment_name: "esphome"
+    k3s_context: "k3s-prod"  # Default context, can be overridden
+
+    # ESP Heat Control device identification patterns
+    heat_control_patterns:
+      - "heat-control"
+
+  tasks:
+    - name: Discover ESPHome devices
+      include_tasks: ../../tasks/ops-esphome-discover-devices.yaml
+
+    - name: Filter ESPHome devices for Heat Control devices
+      set_fact:
+        heat_control_devices: "{{ esphome_devices | selectattr('name', 'regex', pattern_regex) | list }}"
+      vars:
+        pattern_regex: "{{ heat_control_patterns | map('regex_escape') | join('|') }}"
+
+    - name: Validate Heat Control devices found
+      fail:
+        msg: |
+          No Heat Control devices found matching patterns: {{ heat_control_patterns | join(', ') }}
+          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
+      when: heat_control_devices | length == 0
+
+    - name: Run ESPHome upgrade for Heat Control devices
+      include_tasks: ../../tasks/ops-esphome-upgrade-devices.yaml
+      vars:
+        devices_to_upgrade: "{{ heat_control_devices }}"
+        upgrade_description: "Heat Control devices"

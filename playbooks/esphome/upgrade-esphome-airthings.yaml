@@ -1,0 +1,36 @@
+---
+- name: Upgrade Airthings ESPHome devices
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # ESPHome configuration
+    esphome_namespace: "esphome"
+    esphome_deployment_name: "esphome"
+    k3s_context: "k3s-prod"  # Default context, can be overridden
+
+    # Airthings device identification patterns
+    airthings_patterns:
+      - "airthings"
+
+  tasks:
+    - name: Discover ESPHome devices
+      include_tasks: ../../tasks/ops-esphome-discover-devices.yaml
+
+    - name: Filter ESPHome devices for Airthings devices
+      set_fact:
+        airthings_devices: "{{ esphome_devices | selectattr('name', 'regex', pattern_regex) | list }}"
+      vars:
+        pattern_regex: "{{ airthings_patterns | map('regex_escape') | join('|') }}"
+
+    - name: Validate Airthings devices found
+      fail:
+        msg: |
+          No Airthings devices found matching patterns: {{ airthings_patterns | join(', ') }}
+          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
+      when: airthings_devices | length == 0
+
+    - name: Run ESPHome upgrade for Airthings devices
+      include_tasks: ../../tasks/ops-esphome-upgrade-devices.yaml
+      vars:
+        devices_to_upgrade: "{{ airthings_devices }}"
+        upgrade_description: "Airthings devices"

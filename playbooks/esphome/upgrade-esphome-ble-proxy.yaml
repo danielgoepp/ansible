@@ -1,0 +1,36 @@
+---
+- name: Upgrade BLE Proxy ESPHome devices
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # ESPHome configuration
+    esphome_namespace: "esphome"
+    esphome_deployment_name: "esphome"
+    k3s_context: "k3s-prod"  # Default context, can be overridden
+
+    # BLE Proxy device identification patterns
+    ble_proxy_patterns:
+      - "ble-proxy"
+
+  tasks:
+    - name: Discover ESPHome devices
+      include_tasks: ../../tasks/ops-esphome-discover-devices.yaml
+
+    - name: Filter ESPHome devices for BLE Proxy devices
+      set_fact:
+        ble_proxy_devices: "{{ esphome_devices | selectattr('name', 'regex', pattern_regex) | list }}"
+      vars:
+        pattern_regex: "{{ ble_proxy_patterns | map('regex_escape') | join('|') }}"
+
+    - name: Validate BLE Proxy devices found
+      fail:
+        msg: |
+          No BLE Proxy devices found matching patterns: {{ ble_proxy_patterns | join(', ') }}
+          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
+      when: ble_proxy_devices | length == 0
+
+    - name: Run ESPHome upgrade for BLE Proxy devices
+      include_tasks: ../../tasks/ops-esphome-upgrade-devices.yaml
+      vars:
+        devices_to_upgrade: "{{ ble_proxy_devices }}"
+        upgrade_description: "BLE Proxy devices"

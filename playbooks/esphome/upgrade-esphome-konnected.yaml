@@ -1,0 +1,36 @@
+---
+- name: Upgrade Konnected ESPHome devices
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # ESPHome configuration
+    esphome_namespace: "esphome"
+    esphome_deployment_name: "esphome"
+    k3s_context: "k3s-prod"  # Default context, can be overridden
+
+    # Konnected device identification patterns
+    konnected_patterns:
+      - "konnected"
+
+  tasks:
+    - name: Discover ESPHome devices
+      include_tasks: ../../tasks/ops-esphome-discover-devices.yaml
+
+    - name: Filter ESPHome devices for Konnected devices
+      set_fact:
+        konnected_devices: "{{ esphome_devices | selectattr('name', 'regex', pattern_regex) | list }}"
+      vars:
+        pattern_regex: "{{ konnected_patterns | map('regex_escape') | join('|') }}"
+
+    - name: Validate Konnected devices found
+      fail:
+        msg: |
+          No Konnected devices found matching patterns: {{ konnected_patterns | join(', ') }}
+          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
+      when: konnected_devices | length == 0
+
+    - name: Run ESPHome upgrade for Konnected devices
+      include_tasks: ../../tasks/ops-esphome-upgrade-devices.yaml
+      vars:
+        devices_to_upgrade: "{{ konnected_devices }}"
+        upgrade_description: "Konnected devices"

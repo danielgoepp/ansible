@@ -44,3 +44,6 @@ ENV/
 .idea/
 *.swp
 *.swo
+
+# AWX configuration with sensitive tokens
+scripts/awx_config.sh
