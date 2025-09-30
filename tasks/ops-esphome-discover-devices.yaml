@@ -1,0 +1,52 @@
+---
+# Reusable task file for discovering ESPHome devices
+# This task will set the 'esphome_devices' variable with all discovered devices
+# and the 'esphome_pod_name' variable for use in subsequent tasks
+
+- name: Get ESPHome pod name
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ esphome_namespace }}"
+    label_selectors:
+      - "app={{ esphome_deployment_name }}"
+    context: "{{ k3s_context }}"
+  register: esphome_pods
+
+- name: Validate ESPHome pod exists
+  fail:
+    msg: "ESPHome pod not found in namespace {{ esphome_namespace }}"
+  when: esphome_pods.resources | length == 0
+
+- name: Validate ESPHome pod is running
+  fail:
+    msg: "ESPHome pod is not running (status: {{ esphome_pods.resources[0].status.phase }})"
+  when:
+    - esphome_pods.resources | length > 0
+    - esphome_pods.resources[0].status.phase != "Running"
+
+- name: Set ESPHome pod name
+  set_fact:
+    esphome_pod_name: "{{ esphome_pods.resources[0].metadata.name }}"
+
+- name: Discover ESPHome config files
+  kubernetes.core.k8s_exec:
+    namespace: "{{ esphome_namespace }}"
+    pod: "{{ esphome_pod_name }}"
+    command: "find . -maxdepth 1 -name '*.yaml' -not -name 'secrets.yaml' -exec basename {} \\;"
+    context: "{{ k3s_context }}"
+  register: esphome_config_files
+
+- name: Parse discovered devices
+  set_fact:
+    esphome_devices: "{{ esphome_config_files.stdout_lines |
+      sort |
+      map('regex_replace', '\\.yaml$', '') |
+      map('regex_replace', '^(.*)$', '{\"name\": \"\\1\", \"config_file\": \"\\1\"}') |
+      map('from_json') |
+      list }}"
+
+- name: Validate devices were discovered
+  fail:
+    msg: "No ESPHome devices found in {{ esphome_namespace }} namespace"
+  when: esphome_devices | length == 0
