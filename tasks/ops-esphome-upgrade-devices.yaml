@@ -39,18 +39,6 @@
   when: esphome_clean_build | default(true)
   failed_when: false  # Don't fail if clean fails
 
-- name: Delete build files for devices (if requested)
-  kubernetes.core.k8s_exec:
-    namespace: "{{ esphome_namespace }}"
-    pod: "{{ esphome_pod_name }}"
-    command: "rm -rf .esphome/build/{{ item.config_file | default(item.name) }}"
-    context: "{{ k3s_context }}"
-  loop: "{{ devices_to_upgrade }}"
-  loop_control:
-    label: "{{ item.name }}"
-  when: esphome_clean_build | default(true)
-  failed_when: false  # Don't fail if rm fails
-
 - name: Upgrade ESPHome devices
   kubernetes.core.k8s_exec:
     namespace: "{{ esphome_namespace }}"
