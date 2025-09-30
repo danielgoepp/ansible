@@ -1,0 +1,115 @@
+---
+# Disable nouveau driver before installing NVIDIA
+- name: Blacklist nouveau driver
+  ansible.builtin.copy:
+    content: |
+      blacklist nouveau
+      options nouveau modeset=0
+    dest: /etc/modprobe.d/blacklist-nouveau.conf
+    mode: '0644'
+  register: llm_nouveau_blacklisted
+
+- name: Update initramfs after blacklisting nouveau
+  ansible.builtin.command: update-initramfs -u
+  when: llm_nouveau_blacklisted.changed
+  changed_when: true
+  notify: Reboot system
+
+# Install NVIDIA drivers
+- name: Install NVIDIA drivers
+  ansible.builtin.apt:
+    name:
+      - nvidia-driver-575-server-open
+    state: present
+    update_cache: true
+  notify: Reboot system
+
+# Install Docker
+- name: Install Docker prerequisites
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+
+- name: Create apt keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+
+- name: Add Docker repository
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+      https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+      tee /etc/apt/sources.list.d/docker.list > /dev/null
+    executable: /bin/bash
+    creates: /etc/apt/sources.list.d/docker.list
+  register: llm_docker_repo_added
+
+- name: Update apt cache after adding Docker repository
+  ansible.builtin.apt:
+    update_cache: true
+  when: llm_docker_repo_added.changed
+
+- name: Install Docker
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+
+# Install Python AI/ML packages
+- name: Install Python AI/ML system packages
+  ansible.builtin.apt:
+    name:
+      - python3-numpy
+      - python3-scipy
+      - python3-matplotlib
+      - python3-pandas
+      - python3-sklearn
+      - python3-opencv
+      - libopenblas-dev
+      - libblas-dev
+      - liblapack-dev
+      - libhdf5-dev
+      - pkg-config
+    state: present
+
+# Create user ed
+- name: Create user ed
+  ansible.builtin.user:
+    name: ed
+    shell: /bin/bash
+    create_home: true
+  register: llm_ed_user_created
+
+- name: Set password for user ed
+  ansible.builtin.user:
+    name: ed
+    password: "{{ 'changeme' | password_hash('sha512') }}"
+  when: llm_ed_user_created.changed
+
+- name: Create .ssh directory for user ed
+  ansible.builtin.file:
+    path: /home/ed/.ssh
+    state: directory
+    owner: ed
+    group: ed
+    mode: '0700'
+  when: llm_ed_user_created.changed
