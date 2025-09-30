@@ -92,12 +92,36 @@ class AWXTemplateManager:
         """Create or update a job template."""
         existing = self.get_template(template_data['name'])
 
+        # Extract credentials to add separately
+        credentials = template_data.pop('credentials', None)
+
         if existing:
             print(f"Updating existing template: {template_data['name']}")
-            return self.update_template(existing['id'], template_data)
+            result = self.update_template(existing['id'], template_data)
+            template_id = existing['id']
         else:
             print(f"Creating new template: {template_data['name']}")
-            return self.create_template(template_data)
+            result = self.create_template(template_data)
+            template_id = result['id']
+
+        # Associate credentials if provided
+        if credentials:
+            self.associate_credentials(template_id, credentials)
+
+        return result
+
+    def associate_credentials(self, template_id: int, credential_ids: list):
+        """Associate credentials with a job template."""
+        for cred_id in credential_ids:
+            try:
+                self._api_call(
+                    'POST',
+                    f'/job_templates/{template_id}/credentials/',
+                    json={'id': cred_id}
+                )
+                print(f"  ✓ Associated credential {cred_id}")
+            except Exception as e:
+                print(f"  Warning: Could not associate credential {cred_id}: {e}")
 
 
 class PlaybookParser:
@@ -241,6 +265,29 @@ def main():
 
     # Initialize manager
     manager = AWXTemplateManager(CONFIG)
+
+    # Sync project to get latest playbooks from git
+    print(f"\nSyncing project {CONFIG['project_id']} to fetch latest playbooks...")
+    try:
+        sync_response = manager._api_call('POST', f'/projects/{CONFIG["project_id"]}/update/')
+        print(f"  ✓ Project sync initiated")
+
+        # Wait for sync to complete
+        import time
+        print("  Waiting for sync to complete...", end='', flush=True)
+        for i in range(10):
+            time.sleep(2)
+            project_response = manager._api_call('GET', f'/projects/{CONFIG["project_id"]}/')
+            status = project_response.json().get('status')
+            if status == 'successful':
+                print(" Done!")
+                break
+            print(".", end='', flush=True)
+        else:
+            print("\n  Warning: Sync may still be running, continuing anyway...")
+    except Exception as e:
+        print(f"  Warning: Could not sync project: {e}")
+        print("  Continuing anyway...")
 
     # Scan for playbooks
     playbooks = scan_playbooks(CONFIG['playbook_dir'])
