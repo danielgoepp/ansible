@@ -14,32 +14,6 @@
     msg: "No devices provided for upgrade (devices_to_upgrade is empty or undefined)"
   when: devices_to_upgrade is not defined or devices_to_upgrade | length == 0
 
-- name: Get ESPHome pod name
-  kubernetes.core.k8s_info:
-    api_version: v1
-    kind: Pod
-    namespace: "{{ esphome_namespace }}"
-    label_selectors:
-      - "app={{ esphome_deployment_name }}"
-    context: "{{ k3s_context }}"
-  register: esphome_pods
-
-- name: Validate ESPHome pod exists
-  fail:
-    msg: "ESPHome pod not found in namespace {{ esphome_namespace }}"
-  when: esphome_pods.resources | length == 0
-
-- name: Validate ESPHome pod is running
-  fail:
-    msg: "ESPHome pod is not running (status: {{ esphome_pods.resources[0].status.phase }})"
-  when:
-    - esphome_pods.resources | length > 0
-    - esphome_pods.resources[0].status.phase != "Running"
-
-- name: Set ESPHome pod name
-  set_fact:
-    esphome_pod_name: "{{ esphome_pods.resources[0].metadata.name }}"
-
 - name: Display upgrade plan header
   debug:
     msg: "{{ upgrade_description }} Upgrade Plan:"
