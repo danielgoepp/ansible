@@ -1,9 +1,0 @@
-- name: Backup server setup
-  hosts: "backup"
-  become: true
-  vars_files:
-    - ../group_vars/all/vault.yml
-
-  roles:
-    - common
-    - backup

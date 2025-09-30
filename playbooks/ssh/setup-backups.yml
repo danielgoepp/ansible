@@ -1,0 +1,13 @@
+- name: Backup server setup
+  hosts: "backup"
+  become: true
+
+  pre_tasks:
+    - name: Load vault variables when running locally
+      include_vars:
+        file: ../group_vars/all/vault.yml
+      when: lookup('env', 'AWX_HOST') | default('') == ''
+
+  roles:
+    - common
+    - backup

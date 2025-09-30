@@ -102,8 +102,15 @@ ansible-playbook playbooks/ops-upgrade-mongodb-operator-helm.yaml
 
 - Ansible 2.9+
 - SSH key authentication configured
-- Vault password file at `~/.ansible/.vault-pass`
+- Vault password file at `~/.ansible/.vault-pass` (for local execution)
 - Utility scripts directory (`../utility-scripts/`) must exist relative to this
   project
 - Kubernetes configuration directory (`../k3s-config/`) must exist relative to
   this project for manifest upgrade operations
+
+## AWX/Tower Compatibility
+
+Playbooks are designed to run both locally and on AWX/Ansible Tower. Vault
+variables are conditionally loaded using `pre_tasks` that check for the
+`AWX_HOST` environment variable, allowing AWX to use its native credential
+management while maintaining local vault file support.

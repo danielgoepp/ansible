@@ -194,6 +194,25 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
     # OR
 ```
 
+**Vault Loading Pattern for AWX Compatibility**: When playbooks need vault variables but must also run on AWX (where vault files are loaded differently), use conditional loading in `pre_tasks`:
+
+```yaml
+- name: My Playbook
+  hosts: somehost
+  become: true
+
+  pre_tasks:
+    - name: Load vault variables when running locally
+      include_vars:
+        file: ../group_vars/all/vault.yml
+      when: lookup('env', 'AWX_HOST') | default('') == ''
+
+  roles:
+    - somerole
+```
+
+This pattern checks for the `AWX_HOST` environment variable and only loads vault files when running locally, avoiding conflicts with AWX's built-in credential management.
+
 **Manifest Path Resolution**: The system uses a standardized pattern:
 `{k3s_config_base_path}/{service_name}/manifests/{service_name}-deployment-{context_suffix}.yaml`
 
