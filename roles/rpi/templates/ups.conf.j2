@@ -201,6 +201,6 @@ maxretry = 3
 #
 # To find out if your driver supports any extra settings, start it with
 # the -h option and/or read the driver's documentation.
-[{{ nut.ups_name }}]
-    driver = {{ nut.driver | default('usbhid-ups') }}
-    port = {{ nut.port | default('auto') }}
+[{{ rpi_nut.ups_name }}]
+    driver = {{ rpi_nut.driver | default('usbhid-ups') }}
+    port = {{ rpi_nut.port | default('auto') }}

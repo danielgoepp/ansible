@@ -3,7 +3,7 @@
 # These can be overridden in host_vars or group_vars
 
 # NUT (Network UPS Tools) configuration defaults
-nut:
+rpi_nut:
   ups_name: "{{ ansible_hostname }}-ups"
   driver: "usbhid-ups"
   port: "auto"
