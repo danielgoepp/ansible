@@ -3,6 +3,6 @@
 # This file imports all necessary group_vars for localhost-based playbooks
 
 # Import global configuration
-k3s_config_base_path: "/Users/dang/Documents/Development/k3s-config"
+k3s_config_base_path: "{{ playbook_dir }}/../k3s-config"
 k3s_default_context: "k3s-prod"
 scripts_base_path: "/Users/dang/Documents/Development/utility-scripts"

@@ -8,41 +8,17 @@
     homeassistant_contexts:
       - name: "morgspi"
         context: "k3s-morgspi"
-        manifest_path: "/Users/dang/Documents/Development/k3s-config/homeassistant/manifests/homeassistant-deployment-morgspi.yaml"
-      - name: "mudderpi" 
+        manifest_path: "{{ playbook_dir }}/../../k3s-config/homeassistant/manifests/homeassistant-morgspi.yaml"
+      - name: "mudderpi"
         context: "k3s-mudderpi"
-        manifest_path: "/Users/dang/Documents/Development/k3s-config/homeassistant/manifests/homeassistant-deployment-mudderpi.yaml"
+        manifest_path: "{{ playbook_dir }}/../../k3s-config/homeassistant/manifests/homeassistant-mudderpi.yaml"
       - name: "prod"
         context: "k3s-prod"
-        manifest_path: "/Users/dang/Documents/Development/k3s-config/homeassistant/manifests/homeassistant-deployment-prod.yaml"
+        manifest_path: "{{ playbook_dir }}/../../k3s-config/homeassistant/manifests/homeassistant-prod.yaml"
   tasks:
-    - name: Prompt for target instance when not specified
-      pause:
-        prompt: |
-          
-          Available Home Assistant instances:
-          {% for ctx in homeassistant_contexts %}  {{ loop.index }}. {{ ctx.name }} ({{ ctx.context }})
-          {% endfor %}  {{ homeassistant_contexts | length + 1 }}. all - Upgrade all instances
-          
-          Which instance would you like to upgrade? Enter number or name (default: all)
-      register: instance_choice
-      when: target_instance is not defined
-
-    - name: Set target_instance from user choice
+    - name: Set default target_instance if not specified
       set_fact:
-        target_instance: "{{ parsed_choice }}"
-      vars:
-        user_input: "{{ instance_choice.user_input | default('all') | trim }}"
-        # Parse numeric choice to instance name
-        parsed_choice: >-
-          {%- if user_input == 'all' or user_input == (homeassistant_contexts | length + 1) | string -%}
-            all
-          {%- elif user_input | int > 0 and user_input | int <= homeassistant_contexts | length -%}
-            {{ homeassistant_contexts[user_input | int - 1].name }}
-          {%- else -%}
-            {{ user_input }}
-          {%- endif -%}
-      when: target_instance is not defined
+        target_instance: "{{ target_instance | default('all') }}"
 
     - name: Set filtered contexts based on target selection
       set_fact:

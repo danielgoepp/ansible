@@ -6,7 +6,7 @@
     helm_release_name: "fluent-bit"
     helm_chart_name: "fluent/fluent-bit"
     helm_namespace: "fluent-bit"
-    helm_values_file: "/Users/dang/Documents/Development/k3s-config/fluent-bit/helm/fluent-bit-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../k3s-config/fluent-bit/helm/fluent-bit-values-prod.yaml"
     k8s_context: "k3s-prod"
   tasks:
     - name: Update Helm repositories

@@ -10,12 +10,12 @@
         service_namespace: "{{ service_namespace | default(service_name) }}"
         deployment_name: "{{ deployment_name | default(service_name) }}"
         app_label: "{{ app_label | default(service_name) }}"
-        base_path: "/Users/dang/Documents/Development/k3s-config"
+        base_path: "{{ playbook_dir }}/../../k3s-config"
         field_manager: "ansible-{{ service_name }}-upgrade"
 
     - name: Set computed paths
       set_fact:
-        default_manifest_path: "{{ base_path }}/{{ service_name }}/manifests/{{ service_name }}-deployment-{{ context_suffix }}.yaml"
+        default_manifest_path: "{{ base_path }}/{{ service_name }}/manifests/{{ service_name }}-{{ context_suffix }}.yaml"
     - name: Display upgrade parameters
       debug:
         msg:

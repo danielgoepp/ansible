@@ -6,7 +6,7 @@
     helm_release_name: "metallb"
     helm_chart_name: "metallb/metallb"
     helm_namespace: "metallb-system"
-    helm_values_file: "/Users/dang/Documents/Development/k3s-config/metallb/helm/metallb-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../k3s-config/metallb/helm/metallb-values-prod.yaml"
     k8s_context: "k3s-prod"
   tasks:
     - name: Update Helm repositories

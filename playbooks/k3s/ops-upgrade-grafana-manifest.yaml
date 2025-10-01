@@ -4,7 +4,7 @@
   gather_facts: false
   vars:
     service_name: "grafana"
-    manifest_path: "/Users/dang/Documents/Development/k3s-config/grafana/manifests/grafana-deployment.yaml"
+    manifest_path: "{{ playbook_dir }}/../../k3s-config/grafana/manifests/grafana-deployment.yaml"
   tasks:
     - name: Run manifest upgrade tasks
       include_tasks: ../tasks/ops-upgrade-manifest.yaml

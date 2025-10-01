@@ -6,7 +6,7 @@
     helm_release_name: "vmoperator"
     helm_chart_name: "vm/victoria-metrics-operator"
     helm_namespace: "victoriametrics"
-    helm_values_file: "/Users/dang/Documents/Development/k3s-config/victoriametrics/helm/victoriametrics-values-prod-operator.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../k3s-config/victoriametrics/helm/victoriametrics-values-prod-operator.yaml"
     k8s_context: "k3s-prod"
   tasks:
     - name: Update Helm repositories

@@ -6,7 +6,7 @@
     helm_release_name: "cert-manager"
     helm_chart_name: "jetstack/cert-manager"
     helm_namespace: "cert-manager"
-    helm_values_file: "/Users/dang/Documents/Development/k3s-config/cert-manager/helm/cert-manager-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../k3s-config/cert-manager/helm/cert-manager-values-prod.yaml"
     k8s_context: "k3s-prod"
   tasks:
     - name: Update Helm repositories

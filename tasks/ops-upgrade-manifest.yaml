@@ -14,7 +14,7 @@
 
 - name: Set computed paths
   set_fact:
-    default_manifest_path: "{{ base_path }}/{{ service_name }}/manifests/{{ service_name }}-deployment-{{ context_suffix }}.yaml"
+    default_manifest_path: "{{ base_path }}/{{ service_name }}/manifests/{{ service_name }}-{{ context_suffix }}.yaml"
 
 - name: Display upgrade parameters
   debug:
