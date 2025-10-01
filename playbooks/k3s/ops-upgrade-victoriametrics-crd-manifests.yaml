@@ -102,8 +102,9 @@
         extended: true
 
     - name: Wait for manifest applications to complete
-      pause:
-        seconds: 10
+      ansible.builtin.wait_for:
+        timeout: 10
+      delegate_to: localhost
 
     - name: Wait for all deployments to be ready
       kubernetes.core.k8s_info:
