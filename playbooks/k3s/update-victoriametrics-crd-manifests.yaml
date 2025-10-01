@@ -1,0 +1,26 @@
+---
+- name: Upgrade VictoriaMetrics CRDs using local manifests
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../vars/common.yml
+  vars:
+    service_name: "victoriametrics"
+    # Flattened instances - one per manifest file
+    # Note: Each manifest may create multiple deployments, but we track by manifest
+    instances:
+      - name: "vmsingle-main"
+        context: "{{ k3s_default_context }}"
+        manifest_path: "{{ k3s_config_base_path }}/victoriametrics/manifests/victoriametrics-values-prod-vmsingle.yaml"
+        deployment_name: "vmsingle-vms-prod"  # Primary deployment for status check
+        service_namespace: "victoriametrics"
+        app_label: "vmsingle"
+      - name: "vmsingle-lt"
+        context: "{{ k3s_default_context }}"
+        manifest_path: "{{ k3s_config_base_path }}/victoriametrics/manifests/victoriametrics-values-prod-vmsingle-lt.yaml"
+        deployment_name: "vmsingle-vms-prod-lt"
+        service_namespace: "victoriametrics"
+        app_label: "vmsingle"
+  tasks:
+    - name: Run multi-instance manifest upgrade tasks
+      include_tasks: ../../tasks/common-update-manifest-multi.yaml
