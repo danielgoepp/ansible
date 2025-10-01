@@ -9,4 +9,4 @@
     manifest_path: "{{ playbook_dir }}/../../k3s-config/esphome/manifests/esphome-prod.yaml"
   tasks:
     - name: Run manifest upgrade tasks
-      include_tasks: ../../tasks/ops-upgrade-manifest.yaml
+      include_tasks: ../../tasks/common-update-manifest.yaml

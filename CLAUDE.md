@@ -60,18 +60,31 @@ ansible-playbook playbooks/ops-version-check.yaml -e version_check_action=app -e
 # ansible-playbook playbooks/ops-version-check.yaml
 ```
 
-### Manifest Upgrade Operations
+### Manifest Update Operations
 
 ```bash
 # Individual service playbooks (recommended approach - clean and simple)
-ansible-playbook playbooks/ops-upgrade-postfix-manifest.yaml
-ansible-playbook playbooks/ops-upgrade-grafana-manifest.yaml
-ansible-playbook playbooks/ops-upgrade-n8n-manifest.yaml
-ansible-playbook playbooks/ops-upgrade-telegraf-manifest.yaml
+# Located in playbooks/k3s/ directory
+ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml
+ansible-playbook playbooks/k3s/update-zigbee2mqtt-manifest.yaml
+ansible-playbook playbooks/k3s/update-esphome-manifest.yaml
+
+# Update specific instance (for multi-instance services)
+ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml -e target_instance=prod
+ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml -e target_instance=morgspi
+ansible-playbook playbooks/k3s/update-zigbee2mqtt-manifest.yaml -e target_instance=11
 
 # CRD manifest upgrades (for services with multiple CRD instances)
-ansible-playbook playbooks/ops-upgrade-mongodb-crd-manifests.yaml
-ansible-playbook playbooks/ops-upgrade-victoriametrics-crd-manifests.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-mongodb-crd-manifests.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-victoriametrics-crd-manifests.yaml
+
+# Other k3s service upgrades
+ansible-playbook playbooks/k3s/ops-upgrade-postfix-manifest.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-grafana-manifest.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-n8n-manifest.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-telegraf-manifest.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-cnpg-manifest.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-hertzbeat-manifest.yaml
 
 # Generic manifest upgrade (alternative approach - useful for ad-hoc services)
 ansible-playbook playbooks/ops-upgrade-manifest-generic.yaml -e service_name=postfix
@@ -79,29 +92,25 @@ ansible-playbook playbooks/ops-upgrade-manifest-generic.yaml -e service_name=gra
 
 # With custom parameters for non-standard deployments
 ansible-playbook playbooks/ops-upgrade-manifest-generic.yaml -e service_name=myservice -e k8s_context=k3s-dev -e context_suffix=dev
-
-# Legacy larger playbooks that haven't been converted yet
-ansible-playbook playbooks/ops-upgrade-cnpg-manifest.yaml
-ansible-playbook playbooks/ops-upgrade-hertzbeat-manifest.yaml
-ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml  # Multi-context, complex
 ```
 
 ### Helm Upgrade Operations
 
 ```bash
 # Upgrade individual helm charts (updates repo, shows before/after versions)
-ansible-playbook playbooks/ops-upgrade-alertmanager-helm.yaml
-ansible-playbook playbooks/ops-upgrade-cert-manager-helm.yaml
-ansible-playbook playbooks/ops-upgrade-fluent-bit-helm.yaml
-ansible-playbook playbooks/ops-upgrade-metallb-helm.yaml
-ansible-playbook playbooks/ops-upgrade-opensearch-helm.yaml
-ansible-playbook playbooks/ops-upgrade-pgadmin-helm.yaml
-ansible-playbook playbooks/ops-upgrade-traefik-helm.yaml
-ansible-playbook playbooks/ops-upgrade-weather-helm.yaml
+# Located in playbooks/k3s/ directory
+ansible-playbook playbooks/k3s/ops-upgrade-alertmanager-helm.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-cert-manager-helm.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-fluent-bit-helm.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-metallb-helm.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-opensearch-helm.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-pgadmin-helm.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-traefik-helm.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-weather-helm.yaml
 
 # Operator helm upgrades (upgrades the operators that manage CRDs)
-ansible-playbook playbooks/ops-upgrade-mongodb-operator-helm.yaml
-ansible-playbook playbooks/ops-upgrade-victoriametrics-operator-helm.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-mongodb-operator-helm.yaml
+ansible-playbook playbooks/k3s/ops-upgrade-victoriametrics-operator-helm.yaml
 ```
 
 ### ESPHome Operations
@@ -169,19 +178,30 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
 ### Repository Structure
 
 - **inventories/hosts.yml**: Main inventory with host groups (ubuntu, rpi, k3s_prod, pve, lxc)
-- **playbooks/**: Organized by purpose - setup-*.yaml for initial configuration, ops-*.yaml for operations
-- **tasks/**: Reusable task files, organized by scope (setup-global-*, setup-rpi-*)
+- **playbooks/**: Organized by purpose
+  - **setup-*.yaml**: Initial system configuration
+  - **ops-*.yaml**: Operational tasks (maintenance, testing)
+  - **k3s/**: K3s-specific playbooks (manifest updates, helm upgrades)
+- **tasks/**: Reusable task files
+  - **common-update-manifest.yaml**: Shared manifest update logic
+  - **setup-global-***: Global system setup tasks
+  - **setup-rpi-***: Raspberry Pi specific tasks
+  - **ops-upgrade-cluster-***: Cluster upgrade tasks
+- **k3s-config/**: Git submodule containing Kubernetes manifests
+- **vars/common.yml**: Common variables (k3s_config_base_path, contexts)
 - **group_vars/vault.yaml.secret**: Encrypted secrets using ansible-vault
 - **host_vars/**: Host-specific variables
 - **files/**: Static files and configuration templates
 
 ### Configuration Management
 
-- Vault password automatically loaded from `~/.ansible/.vault-pass`
-- SSH connection optimization with ControlMaster
-- Python3 interpreter specified globally
-- Host key checking disabled for lab environment
-- Utility scripts directory (`../utility-scripts/`) must exist relative to this project for cluster upgrade operations
+- **k3s-config submodule**: Kubernetes manifests managed as a separate Git repository
+- **Relative paths**: All playbooks use `{{ playbook_dir }}` for portable submodule references
+- **Vault password**: Automatically loaded from `~/.ansible/.vault-pass`
+- **SSH optimization**: ControlMaster enabled for connection reuse
+- **Python interpreter**: Set to `auto_silent` to suppress discovery warnings
+- **Host key checking**: Disabled for lab environment
+- **Utility scripts**: Directory (`../utility-scripts/`) must exist relative to this project for cluster upgrade operations
 
 **Variable Loading for Localhost Playbooks**: Due to Ansible's behavior with `ansible_connection: local`, localhost-based playbooks need to explicitly load variables. Use:
 
@@ -214,7 +234,7 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
 This pattern checks for the `AWX_HOST` environment variable and only loads vault files when running locally, avoiding conflicts with AWX's built-in credential management.
 
 **Manifest Path Resolution**: The system uses a standardized pattern:
-`{k3s_config_base_path}/{service_name}/manifests/{service_name}-deployment-{context_suffix}.yaml`
+`{k3s_config_base_path}/{service_name}/manifests/{service_name}-{context_suffix}.yaml`
 
 **Override Capability**: Configuration can be overridden per-playbook or via command line:
 
@@ -268,10 +288,17 @@ Playbooks typically have multiple plays:
 
 Recent manifest upgrade playbooks use a consolidated task-based approach:
 
-- **tasks/ops-upgrade-manifest.yaml**: Reusable task file containing all manifest upgrade logic
+- **tasks/common-update-manifest.yaml**: Reusable task file containing all manifest update logic
 - **Individual playbooks**: Simple wrappers that set `service_name` and include the task file
 - **Benefits**: Eliminates code duplication, consistent behavior, single place for bug fixes
-- **Pattern**: Most services follow standard `/k3s-config/{service}/manifests/{service}-deployment-{context}.yaml`
+- **Pattern**: Most services follow standard `/k3s-config/{service}/manifests/{service}-{context}.yaml`
+
+### Playbook Naming Conventions
+
+- **Manifest updates**: `update-{service}-manifest.yaml` for services that update K8s manifests (preferred for new playbooks)
+- **Operations**: `ops-{action}-{target}.yaml` for operational tasks (upgrades, maintenance, etc.)
+- **Setup**: `setup-{target}.yaml` for initial system configuration
+- **Location**: K3s-specific playbooks are located in `playbooks/k3s/` directory
 
 ### Cluster Upgrade Task Naming Convention
 

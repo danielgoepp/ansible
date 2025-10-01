@@ -1,0 +1,237 @@
+---
+- name: Upgrade Zigbee2MQTT using local manifest across multiple instances
+  hosts: localhost
+  gather_facts: false
+  vars:
+    zigbee2mqtt_namespace: "homeassistant"
+    zigbee2mqtt_instances:
+      - name: "11"
+        context: "k3s-prod"
+        deployment_name: "zigbee2mqtt-11"
+        manifest_path: "{{ playbook_dir }}/../../k3s-config/zigbee2mqtt/manifests/zigbee2mqtt-prod-11.yaml"
+      - name: "15"
+        context: "k3s-prod"
+        deployment_name: "zigbee2mqtt-15"
+        manifest_path: "{{ playbook_dir }}/../../k3s-config/zigbee2mqtt/manifests/zigbee2mqtt-prod-15.yaml"
+  tasks:
+    - name: Set default target_instance if not specified
+      set_fact:
+        target_instance: "{{ target_instance | default('all') }}"
+
+    - name: Set filtered instances based on target selection
+      set_fact:
+        filtered_instances: >-
+          {%- if target_instance == 'all' -%}
+            {{ zigbee2mqtt_instances }}
+          {%- else -%}
+            {{ zigbee2mqtt_instances | selectattr('name', 'equalto', target_instance) | list }}
+          {%- endif -%}
+
+    - name: Validate target instance exists
+      fail:
+        msg: "Instance '{{ target_instance }}' not found. Available instances: {{ zigbee2mqtt_instances | map(attribute='name') | list | join(', ') }}"
+      when:
+        - target_instance != 'all'
+        - filtered_instances | length == 0
+
+    - name: Display upgrade parameters
+      debug:
+        msg:
+          - "Zigbee2MQTT Upgrade Parameters:"
+          - "  Namespace: {{ zigbee2mqtt_namespace }}"
+          - "  Target: {{ target_instance | default('all') }}"
+          - "  Instances: {{ filtered_instances | map(attribute='name') | list | join(', ') }}"
+          - "  Manifest files:"
+          - "{% for inst in filtered_instances %}    {{ inst.name }}: {{ inst.manifest_path }}{% endfor %}"
+
+    - name: Verify manifest files exist
+      stat:
+        path: "{{ item.manifest_path }}"
+      register: manifest_file_check
+      loop: "{{ filtered_instances }}"
+      loop_control:
+        label: "{{ item.name }}"
+      failed_when: not manifest_file_check.stat.exists
+
+    - name: Get current Zigbee2MQTT deployment (before upgrade)
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ item.deployment_name }}"
+        namespace: "{{ zigbee2mqtt_namespace }}"
+        context: "{{ item.context }}"
+      register: zigbee2mqtt_current_deployments
+      loop: "{{ filtered_instances }}"
+      loop_control:
+        label: "{{ item.name }}"
+      ignore_errors: true
+
+    - name: Display current Zigbee2MQTT status for each instance
+      debug:
+        msg:
+          - "Current Zigbee2MQTT Deployment ({{ item.item.name }}):"
+          - "  Name: {{ item.resources[0].metadata.name | default('Not found') }}"
+          - "  Image: {{ item.resources[0].spec.template.spec.containers[0].image | default('Unknown') }}"
+          - "  Ready Replicas: {{ item.resources[0].status.readyReplicas | default(0) }}/{{ item.resources[0].status.replicas | default(0) }}"
+          - "  Status: {{ item.resources[0].status.conditions[-1].type | default('Unknown') if item.resources[0].status.conditions is defined else 'Unknown' }}"
+      loop: "{{ zigbee2mqtt_current_deployments.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.resources is defined and item.resources | length > 0
+
+    - name: Display status if Zigbee2MQTT deployment not found
+      debug:
+        msg: "Zigbee2MQTT deployment '{{ item.item.deployment_name }}' not found in namespace '{{ zigbee2mqtt_namespace }}' for instance '{{ item.item.name }}'"
+      loop: "{{ zigbee2mqtt_current_deployments.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.resources is not defined or item.resources | length == 0
+
+    - name: Validate Zigbee2MQTT manifests with kubectl (dry-run)
+      shell: kubectl apply -f "{{ item.manifest_path }}" --context="{{ item.context }}" --dry-run=server --validate=true
+      register: kubectl_validate_results
+      failed_when: kubectl_validate_results.rc != 0
+      loop: "{{ filtered_instances }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Apply Zigbee2MQTT manifest from local file (server-side)
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ item.manifest_path }}"
+        context: "{{ item.context }}"
+        server_side_apply:
+          field_manager: "ansible-zigbee2mqtt-upgrade"
+      register: zigbee2mqtt_apply_results
+      failed_when: zigbee2mqtt_apply_results.failed | default(false)
+      loop: "{{ filtered_instances }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Display Zigbee2MQTT manifest validation and application results
+      debug:
+        msg:
+          - "{{ item.item.name }} Zigbee2MQTT manifest validation and application:"
+          - "  Kubectl validation: {{ 'SUCCESS' if kubectl_validate_results.results[ansible_loop.index0].rc == 0 else 'FAILED' }}"
+          - "  Kubectl error: {{ kubectl_validate_results.results[ansible_loop.index0].stderr | default('None') }}"
+          - "  Ansible result: {{ 'SUCCESS' if not (item.failed | default(false)) else 'FAILED' }}"
+          - "  Changed: {{ item.changed }}"
+          - "  Error: {{ item.msg | default('None') }}"
+      loop: "{{ zigbee2mqtt_apply_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+        extended: true
+
+    - name: Wait for manifest application to complete
+      pause:
+        seconds: 5
+
+    - name: Check if deployment was restarted by manifest application
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ item.deployment_name }}"
+        namespace: "{{ zigbee2mqtt_namespace }}"
+        context: "{{ item.context }}"
+      register: zigbee2mqtt_post_apply_deployments
+      loop: "{{ filtered_instances }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Get current pods to check if restart is needed
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ zigbee2mqtt_namespace }}"
+        label_selectors:
+          - "app=zigbee2mqtt-{{ item.name }}"
+        context: "{{ item.context }}"
+      register: zigbee2mqtt_current_pods
+      loop: "{{ filtered_instances }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Force pod restart if manifest didn't trigger restart
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Pod
+        namespace: "{{ zigbee2mqtt_namespace }}"
+        label_selectors:
+          - "app=zigbee2mqtt-{{ item.name }}"
+        context: "{{ item.context }}"
+      loop: "{{ filtered_instances }}"
+      loop_control:
+        label: "{{ item.name }}"
+      vars:
+        apply_result: "{{ zigbee2mqtt_apply_results.results | selectattr('item.name', 'equalto', item.name) | first }}"
+        pod_result: "{{ zigbee2mqtt_current_pods.results | selectattr('item.name', 'equalto', item.name) | first }}"
+      when:
+        - pod_result.resources is defined
+        - pod_result.resources | length > 0
+        - not apply_result.changed
+      register: pod_deletion_results
+
+    - name: Display pod restart action for each instance
+      debug:
+        msg:
+          - "Pod restart status ({{ item.name }}):"
+          - "  Manifest caused restart: {{ (zigbee2mqtt_apply_results.results | selectattr('item.name', 'equalto', item.name) | first).changed }}"
+          - "  Manual pod deletion performed: {{ pod_deletion_results.changed | default(false) }}"
+      loop: "{{ filtered_instances }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Wait for Zigbee2MQTT deployment to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ item.deployment_name }}"
+        namespace: "{{ zigbee2mqtt_namespace }}"
+        context: "{{ item.context }}"
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 300
+      register: zigbee2mqtt_deployments_ready
+      loop: "{{ filtered_instances }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Get updated Zigbee2MQTT deployment (after upgrade)
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ item.deployment_name }}"
+        namespace: "{{ zigbee2mqtt_namespace }}"
+        context: "{{ item.context }}"
+      register: zigbee2mqtt_updated_deployments
+      loop: "{{ filtered_instances }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Display updated Zigbee2MQTT status for each instance
+      debug:
+        msg:
+          - "Updated Zigbee2MQTT Deployment ({{ item.item.name }}):"
+          - "  Name: {{ item.resources[0].metadata.name }}"
+          - "  Image: {{ item.resources[0].spec.template.spec.containers[0].image }}"
+          - "  Ready Replicas: {{ item.resources[0].status.readyReplicas }}/{{ item.resources[0].status.replicas }}"
+          - "  Status: {{ item.resources[0].status.conditions[-1].type }}"
+      loop: "{{ zigbee2mqtt_updated_deployments.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Display upgrade summary for each instance
+      debug:
+        msg:
+          - "Zigbee2MQTT upgrade completed for {{ current_deployment.item.name }}!"
+          - "Previous image: {{ (zigbee2mqtt_current_deployments.results | selectattr('item.name', 'equalto', current_deployment.item.name) | first).resources[0].spec.template.spec.containers[0].image | default('Unknown') }}"
+          - "Current image: {{ current_deployment.resources[0].spec.template.spec.containers[0].image }}"
+          - "Manifest applied: {{ (zigbee2mqtt_apply_results.results | selectattr('item.name', 'equalto', current_deployment.item.name) | first).changed }}"
+          - "Deployment ready: {{ (zigbee2mqtt_deployments_ready.results | selectattr('item.name', 'equalto', current_deployment.item.name) | first).resources[0].status.conditions[-1].status == 'True' }}"
+      loop: "{{ zigbee2mqtt_updated_deployments.results }}"
+      loop_control:
+        loop_var: current_deployment
+        label: "{{ current_deployment.item.name }}"
