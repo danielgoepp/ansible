@@ -1,0 +1,16 @@
+---
+- name: Upgrade MongoDB Community Operator using Helm
+  hosts: localhost
+  gather_facts: false
+  vars:
+    service_name: "mongodb-operator"
+    helm_release_name: "community-operator"
+    helm_chart_name: "mongodb/community-operator"
+    helm_repo_name: "mongodb"
+    helm_repo_url: "https://mongodb.github.io/helm-charts"
+    helm_namespace: "mongodb"
+    helm_values_file: "{{ playbook_dir }}/../../k3s-config/mongodb/helm/mongodb-operator-values-prod.yaml"
+    k8s_context: "k3s-prod"
+  tasks:
+    - name: Run helm upgrade tasks
+      include_tasks: ../../tasks/common-update-helm.yaml

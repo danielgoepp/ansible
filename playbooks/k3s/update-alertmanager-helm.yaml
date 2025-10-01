@@ -1,0 +1,16 @@
+---
+- name: Upgrade Alertmanager using Helm
+  hosts: localhost
+  gather_facts: false
+  vars:
+    service_name: "alertmanager"
+    helm_release_name: "alertmanager"
+    helm_chart_name: "prometheus-community/alertmanager"
+    helm_repo_name: "prometheus-community"
+    helm_repo_url: "https://prometheus-community.github.io/helm-charts"
+    helm_namespace: "alertmanager"
+    helm_values_file: "{{ playbook_dir }}/../../k3s-config/alertmanager/helm/alertmanager-values-prod.yaml"
+    k8s_context: "k3s-prod"
+  tasks:
+    - name: Run helm upgrade tasks
+      include_tasks: ../../tasks/common-update-helm.yaml

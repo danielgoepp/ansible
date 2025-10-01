@@ -1,0 +1,14 @@
+---
+- name: Upgrade Weather using Helm
+  hosts: localhost
+  gather_facts: false
+  vars:
+    service_name: "weather"
+    helm_release_name: "weather"
+    helm_chart_path: "{{ playbook_dir }}/../../k3s-config/weather/helm/weather"
+    helm_namespace: "weather"
+    helm_values_file: "{{ playbook_dir }}/../../k3s-config/weather/helm/weather-values-prod.yaml"
+    k8s_context: "k3s-prod"
+  tasks:
+    - name: Run helm upgrade tasks
+      include_tasks: ../../tasks/common-update-helm.yaml

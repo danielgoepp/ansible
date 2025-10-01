@@ -1,0 +1,16 @@
+---
+- name: Upgrade pgAdmin using Helm
+  hosts: localhost
+  gather_facts: false
+  vars:
+    service_name: "pgadmin"
+    helm_release_name: "pgadmin4"
+    helm_chart_name: "runix/pgadmin4"
+    helm_repo_name: "runix"
+    helm_repo_url: "https://helm.runix.net"
+    helm_namespace: "pgadmin"
+    helm_values_file: "{{ playbook_dir }}/../../k3s-config/pgadmin/helm/pgadmin-values-prod.yaml"
+    k8s_context: "k3s-prod"
+  tasks:
+    - name: Run helm upgrade tasks
+      include_tasks: ../../tasks/common-update-helm.yaml

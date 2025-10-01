@@ -1,0 +1,89 @@
+---
+# Generic helm upgrade tasks
+# Requires these variables to be set by the calling playbook:
+#   - service_name: Name of the service (for display)
+#   - helm_release_name: Helm release name
+#   - helm_namespace: Kubernetes namespace
+#   - k8s_context: Kubernetes context
+#   - helm_values_file: Path to values file (optional)
+# One of:
+#   - helm_chart_name: Chart reference (repo/chart) - requires helm_repo_name and helm_repo_url
+#   - helm_chart_path: Local chart path
+
+- name: Set default variables
+  set_fact:
+    service_title: "{{ service_name | title }}"
+    helm_wait_timeout: "{{ helm_wait_timeout | default('300s') }}"
+
+- name: Update Helm repository
+  kubernetes.core.helm_repository:
+    name: "{{ helm_repo_name }}"
+    repo_url: "{{ helm_repo_url }}"
+    state: present
+  when:
+    - helm_chart_name is defined
+    - helm_repo_name is defined
+    - helm_repo_url is defined
+
+- name: Get current {{ service_title }} version (before upgrade)
+  kubernetes.core.helm_info:
+    name: "{{ helm_release_name }}"
+    namespace: "{{ helm_namespace }}"
+    release_state: deployed
+    kube_context: "{{ k8s_context }}"
+  register: current_version
+  ignore_errors: true
+
+- name: Display current {{ service_title }} version
+  debug:
+    msg:
+      - "Current {{ service_title }} release:"
+      - "  Name: {{ current_version.status.name | default('Not installed') }}"
+      - "  Version: {{ current_version.status.chart | default('Unknown') }}"
+      - "  App Version: {{ current_version.status.app_version | default('Unknown') }}"
+      - "  Status: {{ current_version.status.status | default('Unknown') }}"
+  when: current_version.status is defined
+
+- name: Display installation status if not found
+  debug:
+    msg: "{{ service_title }} release '{{ helm_release_name }}' not found in namespace '{{ helm_namespace }}'"
+  when: current_version.status is not defined
+
+- name: Upgrade {{ service_title }} using Helm
+  kubernetes.core.helm:
+    name: "{{ helm_release_name }}"
+    chart_ref: "{{ helm_chart_name if helm_chart_name is defined else helm_chart_path }}"
+    namespace: "{{ helm_namespace }}"
+    values_files: "{{ [helm_values_file] if helm_values_file is defined else omit }}"
+    state: present
+    update_repo_cache: "{{ true if helm_chart_name is defined else false }}"
+    kube_context: "{{ k8s_context }}"
+    wait: true
+    wait_timeout: "{{ helm_wait_timeout }}"
+  register: upgrade_result
+
+- name: Get updated {{ service_title }} version (after upgrade)
+  kubernetes.core.helm_info:
+    name: "{{ helm_release_name }}"
+    namespace: "{{ helm_namespace }}"
+    release_state: deployed
+    kube_context: "{{ k8s_context }}"
+  register: updated_version
+
+- name: Display updated {{ service_title }} version
+  debug:
+    msg:
+      - "Updated {{ service_title }} release:"
+      - "  Name: {{ updated_version.status.name }}"
+      - "  Version: {{ updated_version.status.chart }}"
+      - "  App Version: {{ updated_version.status.app_version }}"
+      - "  Status: {{ updated_version.status.status }}"
+      - "  Revision: {{ updated_version.status.revision }}"
+
+- name: Display upgrade summary
+  debug:
+    msg:
+      - "{{ service_title }} upgrade completed successfully!"
+      - "{% if current_version.status is defined %}Previous version: {{ current_version.status.chart | default('Unknown') }}{% endif %}"
+      - "Current version: {{ updated_version.status.chart }}"
+      - "Upgrade performed: {{ upgrade_result.changed }}"

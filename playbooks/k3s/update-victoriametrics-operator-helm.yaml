@@ -1,0 +1,16 @@
+---
+- name: Upgrade VictoriaMetrics Operator using Helm
+  hosts: localhost
+  gather_facts: false
+  vars:
+    service_name: "victoriametrics-operator"
+    helm_release_name: "victoria-metrics-operator"
+    helm_chart_name: "vm/victoria-metrics-operator"
+    helm_repo_name: "vm"
+    helm_repo_url: "https://victoriametrics.github.io/helm-charts/"
+    helm_namespace: "victoriametrics"
+    helm_values_file: "{{ playbook_dir }}/../../k3s-config/victoriametrics/helm/victoriametrics-operator-values-prod.yaml"
+    k8s_context: "k3s-prod"
+  tasks:
+    - name: Run helm upgrade tasks
+      include_tasks: ../../tasks/common-update-helm.yaml
