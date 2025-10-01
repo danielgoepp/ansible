@@ -2,7 +2,6 @@
 - name: Setup UniFi Protect Let's Encrypt SSL certificates
   hosts: ui-protect
   become: true
-  gather_facts: false
 
   pre_tasks:
     - name: Load vault variables when running locally

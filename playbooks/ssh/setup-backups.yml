@@ -1,4 +1,5 @@
-- name: Backup server setup
+---
+- name: Setup backup server
   hosts: "backup"
   become: true
 

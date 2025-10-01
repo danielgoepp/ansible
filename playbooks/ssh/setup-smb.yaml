@@ -1,4 +1,5 @@
-- name: smb server install
+---
+- name: Setup smb server
   hosts: "smb"
   become: true
 

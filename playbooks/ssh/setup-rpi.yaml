@@ -1,4 +1,5 @@
-- name: Raspberry pi server install
+---
+- name: Setup raspberry pi servers
   hosts: "rpi"
   become: true
 
