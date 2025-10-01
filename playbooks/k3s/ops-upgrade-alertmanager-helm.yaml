@@ -6,7 +6,7 @@
     helm_release_name: "alertmanager"
     helm_chart_name: "prometheus-community/alertmanager"
     helm_namespace: "alertmanager"
-    helm_values_file: "/Users/dang/k3s-config/alertmanager/helm/alertmanager-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../k3s-config/alertmanager/helm/alertmanager-values-prod.yaml"
     k8s_context: "k3s-prod"
   tasks:
     - name: Update Helm repositories

@@ -240,11 +240,16 @@ This pattern checks for the `AWX_HOST` environment variable and only loads vault
 
 ```bash
 # Override base path for different environment
-ansible-playbook playbooks/ops-upgrade-grafana-manifest.yaml -e k3s_config_base_path="/path/to/dev/config"
+ansible-playbook playbooks/k3s/ops-upgrade-grafana-manifest.yaml -e k3s_config_base_path="/path/to/dev/config"
 
 # Override context for different cluster
-ansible-playbook playbooks/ops-upgrade-grafana-manifest.yaml -e k3s_default_context="k3s-dev"
+ansible-playbook playbooks/k3s/ops-upgrade-grafana-manifest.yaml -e k3s_default_context="k3s-dev"
 ```
+
+**Path Patterns for K3s Config References**:
+- **Manifest playbooks**: Use `{{ playbook_dir }}/../../k3s-config/{service}/manifests/{service}-{context}.yaml`
+- **Helm playbooks**: Use `{{ playbook_dir }}/../../k3s-config/{service}/helm/` for chart paths and values files
+- **Vars file**: Uses `{{ playbook_dir }}/../k3s-config` (one level up from vars directory)
 
 ### Host Organization
 
