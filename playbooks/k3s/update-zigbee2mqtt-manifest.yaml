@@ -3,15 +3,17 @@
   hosts: localhost
   gather_facts: false
   vars:
-    zigbee2mqtt_namespace: "homeassistant"
+    zigbee2mqtt_namespace: "zigbee2mqtt"
     zigbee2mqtt_instances:
       - name: "11"
         context: "k3s-prod"
-        deployment_name: "zigbee2mqtt-11"
+        deployment_name: "zigbee11"
+        app_label: "zigbee11"
         manifest_path: "{{ playbook_dir }}/../../k3s-config/zigbee2mqtt/manifests/zigbee2mqtt-prod-11.yaml"
       - name: "15"
         context: "k3s-prod"
-        deployment_name: "zigbee2mqtt-15"
+        deployment_name: "zigbee15"
+        app_label: "zigbee15"
         manifest_path: "{{ playbook_dir }}/../../k3s-config/zigbee2mqtt/manifests/zigbee2mqtt-prod-15.yaml"
   tasks:
     - name: Set default target_instance if not specified
@@ -144,7 +146,7 @@
         kind: Pod
         namespace: "{{ zigbee2mqtt_namespace }}"
         label_selectors:
-          - "app=zigbee2mqtt-{{ item.name }}"
+          - "app={{ item.app_label }}"
         context: "{{ item.context }}"
       register: zigbee2mqtt_current_pods
       loop: "{{ filtered_instances }}"
@@ -158,7 +160,7 @@
         kind: Pod
         namespace: "{{ zigbee2mqtt_namespace }}"
         label_selectors:
-          - "app=zigbee2mqtt-{{ item.name }}"
+          - "app={{ item.app_label }}"
         context: "{{ item.context }}"
       loop: "{{ filtered_instances }}"
       loop_control:
