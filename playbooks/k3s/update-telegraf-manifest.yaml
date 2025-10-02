@@ -10,7 +10,7 @@
     - name: Run manifest upgrade tasks for Telegraf VM
       include_tasks: ../../tasks/common-update-manifest.yaml
       vars:
-        manifest_path: "{{ playbook_dir }}/../../k3s-config/telegraf/manifests/telegraf-prod-vm.yaml"
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-prod-vm.yaml"
 
 - name: Upgrade Telegraf Graylog deployment using local manifest
   hosts: localhost
@@ -23,4 +23,4 @@
     - name: Run manifest upgrade tasks for Telegraf Graylog
       include_tasks: ../../tasks/common-update-manifest.yaml
       vars:
-        manifest_path: "{{ playbook_dir }}/../../k3s-config/telegraf/manifests/telegraf-prod-graylog.yaml"
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-prod-graylog.yaml"

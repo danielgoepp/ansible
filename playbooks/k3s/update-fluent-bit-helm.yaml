@@ -9,7 +9,7 @@
     helm_repo_name: "fluent"
     helm_repo_url: "https://fluent.github.io/helm-charts"
     helm_namespace: "fluent-bit"
-    helm_values_file: "{{ playbook_dir }}/../../k3s-config/fluent-bit/helm/fluent-bit-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/fluent-bit/helm/fluent-bit-values-prod.yaml"
     k8s_context: "k3s-prod"
   tasks:
     - name: Run helm upgrade tasks

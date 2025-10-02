@@ -187,11 +187,11 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
   - **setup-global-***: Global system setup tasks
   - **setup-rpi-***: Raspberry Pi specific tasks
   - **ops-upgrade-cluster-***: Cluster upgrade tasks
-- **k3s-config/**: Git submodule containing Kubernetes manifests
+- **files/k3s-config/**: Git submodule containing Kubernetes manifests
+- **files/**: Static files and configuration templates
 - **vars/common.yml**: Common variables (k3s_config_base_path, contexts)
 - **group_vars/vault.yaml.secret**: Encrypted secrets using ansible-vault
 - **host_vars/**: Host-specific variables
-- **files/**: Static files and configuration templates
 
 ### Configuration Management
 
@@ -247,9 +247,10 @@ ansible-playbook playbooks/k3s/ops-upgrade-grafana-manifest.yaml -e k3s_default_
 ```
 
 **Path Patterns for K3s Config References**:
-- **Manifest playbooks**: Use `{{ playbook_dir }}/../../k3s-config/{service}/manifests/{service}-{context}.yaml`
-- **Helm playbooks**: Use `{{ playbook_dir }}/../../k3s-config/{service}/helm/` for chart paths and values files
-- **Vars file**: Uses `{{ playbook_dir }}/../k3s-config` (one level up from vars directory)
+
+- **Manifest playbooks**: Use `{{ playbook_dir }}/../../files/k3s-config/{service}/manifests/{service}-{context}.yaml`
+- **Helm playbooks**: Use `{{ playbook_dir }}/../../files/k3s-config/{service}/helm/` for chart paths and values files
+- **Vars file**: Uses `{{ playbook_dir }}/../files/k3s-config` (one level up from vars directory)
 
 ### Host Organization
 

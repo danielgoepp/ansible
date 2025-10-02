@@ -3,7 +3,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    mongodb_cr_file: "{{ playbook_dir }}/../../k3s-config/mongodb/manifests/mongodb-cr-prod.yaml"
+    mongodb_cr_file: "{{ playbook_dir }}/../../files/k3s-config/mongodb/manifests/mongodb-cr-prod.yaml"
     k8s_context: "k3s-prod"
     mongodb_namespace: "mongodb"
     mongodb_name: "mongodb"

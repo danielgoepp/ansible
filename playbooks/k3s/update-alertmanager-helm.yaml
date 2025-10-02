@@ -9,7 +9,7 @@
     helm_repo_name: "prometheus-community"
     helm_repo_url: "https://prometheus-community.github.io/helm-charts"
     helm_namespace: "alertmanager"
-    helm_values_file: "{{ playbook_dir }}/../../k3s-config/alertmanager/helm/alertmanager-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/alertmanager/helm/alertmanager-values-prod.yaml"
     k8s_context: "k3s-prod"
   tasks:
     - name: Run helm upgrade tasks

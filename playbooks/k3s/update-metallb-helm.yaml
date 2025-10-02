@@ -9,7 +9,7 @@
     helm_repo_name: "metallb"
     helm_repo_url: "https://metallb.github.io/metallb"
     helm_namespace: "metallb-system"
-    helm_values_file: "{{ playbook_dir }}/../../k3s-config/metallb/helm/metallb-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/metallb/helm/metallb-values-prod.yaml"
     k8s_context: "k3s-prod"
   tasks:
     - name: Run helm upgrade tasks

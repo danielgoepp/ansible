@@ -4,7 +4,7 @@
   gather_facts: false
   vars:
     service_name: "hertzbeat"
-    manifest_path: "{{ playbook_dir }}/../../k3s-config/hertzbeat/manifests/hertzbeat-prod.yml"
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/hertzbeat/manifests/hertzbeat-prod.yml"
     k8s_context: "k3s-prod"
     service_namespace: "hertzbeat"
     deployment_name: "hertzbeat"
