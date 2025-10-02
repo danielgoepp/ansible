@@ -8,6 +8,13 @@
 - name: Apply common lxc base configuration
   hosts: "lxc"
   become: true
+
+  pre_tasks:
+    - name: Load vault variables when running locally
+      ansible.builtin.include_vars:
+        file: ../../group_vars/all/vault.yml
+      when: lookup('env', 'AWX_HOST') | default('') == ''
+
   roles:
     - common-lxc
 
@@ -47,7 +54,7 @@
         mode: '0755'
 
     - name: Configure oh-my-zsh for dang
-      ansible.builtin.import_tasks: ../roles/common/tasks/oh-my-zsh.yaml
+      ansible.builtin.import_tasks: ../../roles/common/tasks/oh-my-zsh.yaml
 
     - name: Setup user settings (git and vim)
-      ansible.builtin.import_tasks: ../roles/common/tasks/user.yaml
+      ansible.builtin.import_tasks: ../../roles/common/tasks/user.yaml

@@ -26,7 +26,7 @@
 - name: Add SSH public key for dang
   ansible.builtin.lineinfile:
     path: /home/dang/.ssh/authorized_keys
-    line: "{{ lookup('file', playbook_dir + '/../files/ssh/dang_id_rsa.pub.secret') }}"
+    line: "{{ lookup('file', inventory_dir + '/../files/ssh/dang_id_rsa.pub.secret') }}"
     create: true
     owner: dang
     group: dang
