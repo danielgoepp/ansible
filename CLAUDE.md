@@ -31,13 +31,13 @@ ansible ubuntu -m ping
 
 ```bash
 # Edit encrypted variables
-ansible-vault edit group_vars/vault.yaml.secret
+ansible-vault edit inventories/group_vars/all/vault.yml
 
 # View encrypted content
-ansible-vault view group_vars/vault.yaml.secret
+ansible-vault view inventories/group_vars/all/vault.yml
 
 # Encrypt new files
-ansible-vault encrypt group_vars/vault.yaml.secret
+ansible-vault encrypt inventories/group_vars/all/vault.yml
 ```
 
 ### Version Checking Operations
@@ -182,8 +182,8 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
   - **ops-upgrade-cluster-***: Cluster upgrade tasks
 - **files/k3s-config/**: Git submodule containing Kubernetes manifests
 - **files/**: Static files and configuration templates
-- **group_vars/all/common.yml**: Common variables (k3s_config_base_path, contexts) - automatically loaded for all hosts
-- **group_vars/all/vault.yml**: Encrypted secrets using ansible-vault - automatically loaded for all hosts
+- **inventories/group_vars/all/common.yml**: Common variables (k3s_config_base_path, contexts) - automatically loaded for all hosts
+- **inventories/group_vars/all/vault.yml**: Encrypted secrets using ansible-vault - automatically loaded for all hosts
 - **host_vars/**: Host-specific variables
 
 ### Configuration Management
@@ -196,27 +196,14 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
 - **Host key checking**: Disabled for lab environment
 - **Utility scripts**: Git submodule at `scripts/utility-scripts/` containing Python scripts for cluster upgrade operations
 
-**Vault Loading Pattern for AWX Compatibility**: When playbooks need vault variables but must also run on AWX (where vault files are loaded differently), use conditional loading in `pre_tasks`:
+**Vault Variable Auto-Loading**: Vault variables are automatically loaded from `inventories/group_vars/all/vault.yml` for all playbooks, regardless of their location in the directory structure. The vault file is placed next to the inventory file (`inventories/hosts.yml`), following Ansible best practices.
 
-```yaml
-- name: My Playbook
-  hosts: somehost
-  become: true
-
-  pre_tasks:
-    - name: Load vault variables when running locally
-      include_vars:
-        file: ../group_vars/all/vault.yml
-      when: lookup('env', 'AWX_HOST') | default('') == ''
-
-  roles:
-    - somerole
-```
-
-This pattern checks for the `AWX_HOST` environment variable and only loads vault files when running locally, avoiding conflicts with AWX's built-in credential management.
+**AWX Compatibility**: When running on AWX, vault variables are managed through AWX's credential system and do not need to be explicitly loaded.
 
 **Manifest Path Resolution**: The system uses a standardized pattern:
 `{k3s_config_base_path}/{service_name}/manifests/{service_name}-{context_suffix}.yaml`
+
+**Common Variables**: The `k3s_config_base_path` is defined in `inventories/group_vars/all/common.yml` and automatically available to all playbooks.
 
 **Override Capability**: Configuration can be overridden per-playbook or via command line:
 
@@ -232,7 +219,6 @@ ansible-playbook playbooks/k3s/ops-upgrade-grafana-manifest.yaml -e k3s_default_
 
 - **Manifest playbooks**: Use `{{ playbook_dir }}/../../files/k3s-config/{service}/manifests/{service}-{context}.yaml`
 - **Helm playbooks**: Use `{{ playbook_dir }}/../../files/k3s-config/{service}/helm/` for chart paths and values files
-- **Common variables**: `k3s_config_base_path` is defined in `group_vars/all/common.yml` and automatically available to all playbooks
 
 ### Host Organization
 

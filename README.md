@@ -86,11 +86,12 @@ ansible-playbook playbooks/ops-upgrade-mongodb-operator-helm.yaml
 ## Repository Structure
 
 ```text
-├── inventories/hosts.yml    # Host inventory and group definitions
+├── inventories/
+│   ├── hosts.yml           # Host inventory and group definitions
+│   └── group_vars/         # Group-specific variables (encrypted)
 ├── playbooks/              # Main execution playbooks
 ├── tasks/                  # Reusable task modules
 ├── files/                  # Static configuration files
-├── group_vars/             # Group-specific variables (encrypted)
 └── host_vars/              # Host-specific overrides
 ```
 

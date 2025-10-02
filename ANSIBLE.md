@@ -20,8 +20,12 @@ ansible/
 │   ├── setup-rpi-*.yaml       # Raspberry Pi specific tasks
 │   └── tasks-*.yaml           # Legacy task files
 ├── files/                 # Static files and encrypted secrets
-├── group_vars/           # Group-specific variables
-│   └── vault.yaml.secret # Encrypted secrets (ansible-vault)
+├── inventories/          # Inventory and group variables
+│   ├── hosts.yml         # Host inventory
+│   └── group_vars/       # Group-specific variables
+│       └── all/
+│           ├── common.yml    # Common variables
+│           └── vault.yml     # Encrypted secrets (ansible-vault)
 ├── host_vars/            # Host-specific variables
 ├── vars/                 # Additional variable files
 └── ansible.cfg           # Ansible configuration
@@ -118,9 +122,10 @@ when: ansible_hostname != 'adambalm'
 
 ### Vault Management
 
-- Secrets stored in `group_vars/vault.yaml.secret` (encrypted with ansible-vault)
+- Secrets stored in `inventories/group_vars/all/vault.yml` (encrypted with ansible-vault)
 - Vault password stored in `~/.ansible/.vault-pass` (default location)
 - SSH keys, passwords, and credentials all encrypted
+- Vault variables automatically loaded for all playbooks
 
 ### User Management
 
