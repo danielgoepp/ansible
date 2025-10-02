@@ -1,7 +1,11 @@
 ---
+- name: Set vimrc source path
+  ansible.builtin.set_fact:
+    vimrc_source: "{{ role_path | default(playbook_dir + '/../../roles/common') }}/files/vim/vimrc"
+
 - name: Copy .vimrc config
   ansible.builtin.copy:
-    src: vim/vimrc
+    src: "{{ vimrc_source }}"
     dest: "{{ ansible_env.HOME }}/.vimrc"
     mode: '0660'
 
