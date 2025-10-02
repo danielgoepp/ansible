@@ -1,24 +1,26 @@
-    - name: setup rsyslog on rpi
-      apt:
-        name:
-          - rsyslog
-        state: present
-        update_cache: true
-      when: inventory_hostname in groups['rpi']
-    - name: copy rsyslog.conf
-      copy:
-        src: ../files/rsyslog/rsyslog.conf
-        dest: /etc/rsyslog.conf
-        mode: 0644
-      notify:
-        - restart rsyslog
-      when: inventory_hostname in groups['rpi']
+---
+- name: Setup rsyslog on rpi
+  ansible.builtin.apt:
+    name:
+      - rsyslog
+    state: present
+    update_cache: true
+  when: inventory_hostname in groups['rpi']
 
-    - name: setup rsyslog on ubuntu and k3s
-      copy:
-        src: ../files/graylog/graylog.conf
-        dest: /etc/rsyslog.d/graylog.conf
-        mode: 0644
-      notify:
-        - restart rsyslog
-      when: inventory_hostname in groups['ubuntu'] or inventory_hostname in groups['k3s_prod']
+- name: Copy rsyslog.conf
+  ansible.builtin.copy:
+    src: rsyslog/rsyslog.conf
+    dest: /etc/rsyslog.conf
+    mode: '0644'
+  notify:
+    - Restart rsyslog
+  when: inventory_hostname in groups['rpi']
+
+- name: Setup rsyslog on ubuntu and k3s
+  ansible.builtin.copy:
+    src: graylog/graylog.conf
+    dest: /etc/rsyslog.d/graylog.conf
+    mode: '0644'
+  notify:
+    - Restart rsyslog
+  when: inventory_hostname in groups['ubuntu'] or inventory_hostname in groups['k3s_prod']

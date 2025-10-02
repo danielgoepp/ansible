@@ -1,16 +1,18 @@
-    - name: copy .vimrc config
-      copy:
-        src: ../files/vim/vimrc
-        dest: "{{ ansible_env.HOME }}/.vimrc"
-        mode: 0660
+---
+- name: Copy .vimrc config
+  ansible.builtin.copy:
+    src: vim/vimrc
+    dest: "{{ ansible_env.HOME }}/.vimrc"
+    mode: '0660'
 
-    - name: set git email
-      git_config:
-        name: user.email
-        scope: global
-        value: 'dan@goepp.com'
-    - name: set git name
-      git_config:
-        name: user.name
-        scope: global
-        value: 'Daniel Goepp'
+- name: Set git email
+  community.general.git_config:
+    name: user.email
+    scope: global
+    value: 'dan@goepp.com'
+
+- name: Set git name
+  community.general.git_config:
+    name: user.name
+    scope: global
+    value: 'Daniel Goepp'

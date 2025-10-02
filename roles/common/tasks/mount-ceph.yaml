@@ -1,85 +1,90 @@
+---
+- name: Copy ceph-vault secret
+  ansible.builtin.copy:
+    src: ceph/ceph-vault.secret
+    dest: "/etc/ceph/ceph-vault.secret"
+    decrypt: true
+    owner: root
+    group: root
+    mode: '0640'
+  when: ansible_hostname != 'adambalm'
 
-    - name: copy ceph-vault secret
-      ansible.builtin.copy:
-        src: ceph/ceph-vault.secret
-        dest: "/etc/ceph/ceph-vault.secret"
-        decrypt: true
-        owner: root
-        group: root
-        mode: '0640'
-      when: ansible_hostname != 'adambalm'
+- name: Create /mnt/k3s-prod-data
+  ansible.builtin.file:
+    path: /mnt/k3s-prod-data
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
 
-    - name: create /mnt/k3s-prod-data
-      file:
-        path: /mnt/k3s-prod-data
-        state: directory
-        owner: root
-        group: root
-        mode: 0755
-    - name: mount ceph /mnt/k3s-prod-data
-      mount:
-        src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/k3s-prod-data
-        path: /mnt/k3s-prod-data
-        state: mounted
-        fstype: ceph
-        opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+- name: Mount ceph /mnt/k3s-prod-data
+  ansible.posix.mount:
+    src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/k3s-prod-data
+    path: /mnt/k3s-prod-data
+    state: mounted
+    fstype: ceph
+    opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
 
-    - name: create /mnt/k3s-lab-data
-      file:
-        path: /mnt/k3s-lab-data
-        state: directory
-        owner: root
-        group: root
-        mode: 0755
-    - name: mount ceph /mnt/k3s-lab-data
-      mount:
-        src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/k3s-lab-data
-        path: /mnt/k3s-lab-data
-        state: mounted
-        fstype: ceph
-        opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+- name: Create /mnt/k3s-lab-data
+  ansible.builtin.file:
+    path: /mnt/k3s-lab-data
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
 
-    - name: create /mnt/homes
-      file:
-        path: /mnt/homes
-        state: directory
-        owner: root
-        group: root
-        mode: 0755
-    - name: mount ceph /mnt/homes
-      mount:
-        src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/homes
-        path: /mnt/homes
-        state: mounted
-        fstype: ceph
-        opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+- name: Mount ceph /mnt/k3s-lab-data
+  ansible.posix.mount:
+    src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/k3s-lab-data
+    path: /mnt/k3s-lab-data
+    state: mounted
+    fstype: ceph
+    opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
 
-    - name: create /mnt/kopia-ssd
-      file:
-        path: /mnt/kopia-ssd
-        state: directory
-        owner: root
-        group: root
-        mode: 0755
-    - name: mount ceph /mnt/kopia-ssd
-      mount:
-        src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/kopia-ssd
-        path: /mnt/kopia-ssd
-        state: mounted
-        fstype: ceph
-        opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+- name: Create /mnt/homes
+  ansible.builtin.file:
+    path: /mnt/homes
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
 
-    - name: create /mnt/backups
-      file:
-        path: /mnt/backups
-        state: directory
-        owner: root
-        group: root
-        mode: 0755
-    - name: mount ceph /mnt/backups
-      mount:
-        src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/backups
-        path: /mnt/backups
-        state: mounted
-        fstype: ceph
-        opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+- name: Mount ceph /mnt/homes
+  ansible.posix.mount:
+    src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/homes
+    path: /mnt/homes
+    state: mounted
+    fstype: ceph
+    opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+
+- name: Create /mnt/kopia-ssd
+  ansible.builtin.file:
+    path: /mnt/kopia-ssd
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Mount ceph /mnt/kopia-ssd
+  ansible.posix.mount:
+    src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/kopia-ssd
+    path: /mnt/kopia-ssd
+    state: mounted
+    fstype: ceph
+    opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+
+- name: Create /mnt/backups
+  ansible.builtin.file:
+    path: /mnt/backups
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Mount ceph /mnt/backups
+  ansible.posix.mount:
+    src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/backups
+    path: /mnt/backups
+    state: mounted
+    fstype: ceph
+    opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev

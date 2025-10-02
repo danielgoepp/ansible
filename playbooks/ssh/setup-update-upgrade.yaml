@@ -8,7 +8,6 @@
       ansible.builtin.fail:
         msg: "You must specify a target_host variable. Use -e target_host=hostname"
       when: target_host is not defined
-      run_once: true
       delegate_to: localhost
 
   tasks:

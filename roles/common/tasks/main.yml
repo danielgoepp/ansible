@@ -9,7 +9,7 @@
     mode: '0755'
 
 - name: Set timezone to America/New_York
-  ansible.builtin.timezone:
+  community.general.timezone:
     name: America/New_York
 
 - name: Install default packages
