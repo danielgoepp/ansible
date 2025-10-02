@@ -6,7 +6,7 @@
 export AWX_URL="https://awx-prod.goepp.net"
 
 # API Token (create via AWX UI: User > Tokens)
-export AWX_TOKEN="h0GHiTqqmJYcbT0Vt29oshfQtE3meS"
+export AWX_TOKEN="********************************"
 
 # Project ID (find via: awx projects list or AWX UI)
 export AWX_PROJECT_ID="9"
