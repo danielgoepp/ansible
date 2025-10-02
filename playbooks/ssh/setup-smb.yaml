@@ -2,7 +2,5 @@
 - name: Setup smb server
   hosts: "smb"
   become: true
-
-
   roles:
     - samba

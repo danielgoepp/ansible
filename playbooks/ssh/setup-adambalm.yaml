@@ -2,7 +2,5 @@
 - name: Setup adambalm GPU server for AI modeling
   hosts: "adambalm"
   become: true
-
-
   roles:
     - llm

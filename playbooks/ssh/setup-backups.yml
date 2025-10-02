@@ -2,7 +2,5 @@
 - name: Setup backup server
   hosts: "backup"
   become: true
-
-
   roles:
     - backup

@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Commit Policy
+
+**IMPORTANT**: Never create git commits without explicitly asking the user first. Always present changes and wait for user approval before committing.
+
 ## Commands
 
 ### Core Ansible Operations
