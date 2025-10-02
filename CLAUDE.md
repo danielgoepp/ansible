@@ -44,20 +44,20 @@ ansible-vault encrypt group_vars/vault.yaml.secret
 
 ```bash
 # List all applications tracked by version-checker
-ansible-playbook playbooks/ops-version-check.yaml -e version_check_action=list
+ansible-playbook playbooks/version-check.yaml -e version_check_action=list
 
 # Check all application versions and update status
-ansible-playbook playbooks/ops-version-check.yaml -e version_check_action=check-all
+ansible-playbook playbooks/version-check.yaml -e version_check_action=check-all
 
 # Show version summary with status counts
-ansible-playbook playbooks/ops-version-check.yaml -e version_check_action=summary
+ansible-playbook playbooks/version-check.yaml -e version_check_action=summary
 
 # Check specific application (all instances)
-ansible-playbook playbooks/ops-version-check.yaml -e version_check_action=app -e app_name="home assistant"
-ansible-playbook playbooks/ops-version-check.yaml -e version_check_action=app -e app_name="k3s"
+ansible-playbook playbooks/version-check.yaml -e version_check_action=app -e app_name="home assistant"
+ansible-playbook playbooks/version-check.yaml -e version_check_action=app -e app_name="k3s"
 
 # Run system info only (original functionality - commented out in current version)
-# ansible-playbook playbooks/ops-version-check.yaml
+# ansible-playbook playbooks/version-check.yaml
 ```
 
 ### Manifest Update Operations
