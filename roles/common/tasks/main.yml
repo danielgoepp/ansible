@@ -1,0 +1,53 @@
+---
+# Main tasks for common role
+# Base configuration applied to all servers
+
+- name: Create ansible tmp directory for root
+  ansible.builtin.file:
+    path: /root/.ansible/tmp
+    state: directory
+    mode: '0755'
+
+- name: Set timezone to America/New_York
+  ansible.builtin.timezone:
+    name: America/New_York
+
+- name: Install default packages
+  ansible.builtin.include_tasks: packages.yaml
+
+- name: Change root shell to zsh
+  ansible.builtin.user:
+    name: root
+    shell: /usr/bin/zsh
+
+- name: Change dang user shell to zsh
+  ansible.builtin.user:
+    name: dang
+    shell: /usr/bin/zsh
+
+- name: Configure oh-my-zsh
+  ansible.builtin.include_tasks: oh-my-zsh.yaml
+
+- name: Mount SMB shares
+  ansible.builtin.include_tasks: mount-smb.yaml
+  when: inventory_hostname in groups['k3s_prod']
+
+- name: Mount Ceph shares
+  ansible.builtin.include_tasks: mount-ceph.yaml
+  when: ansible_hostname != 'adambalm' and ansible_hostname != 'ui-network'
+
+- name: Configure rsyslog
+  ansible.builtin.include_tasks: rsyslog.yaml
+
+- name: Manage /etc/hosts entries
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    block: |
+      {% for line in lookup('file', 'hosts', errors='ignore').splitlines() %}
+      {% if line.strip() and not line.strip().startswith('#') %}
+      {{ line.strip() }}
+      {% endif %}
+      {% endfor %}
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Infrastructure hosts"
+    backup: true
+  when: lookup('file', 'hosts', errors='ignore') | length > 0

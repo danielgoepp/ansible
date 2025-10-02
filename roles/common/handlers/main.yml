@@ -1,0 +1,7 @@
+---
+# Handlers for common role
+
+- name: Restart rsyslog
+  ansible.builtin.systemd:
+    name: rsyslog
+    state: restarted
