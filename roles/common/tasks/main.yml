@@ -38,16 +38,3 @@
 
 - name: Configure rsyslog
   ansible.builtin.include_tasks: rsyslog.yaml
-
-- name: Manage /etc/hosts entries
-  ansible.builtin.blockinfile:
-    path: /etc/hosts
-    block: |
-      {% for line in lookup('file', 'hosts', errors='ignore').splitlines() %}
-      {% if line.strip() and not line.strip().startswith('#') %}
-      {{ line.strip() }}
-      {% endif %}
-      {% endfor %}
-    marker: "# {mark} ANSIBLE MANAGED BLOCK - Infrastructure hosts"
-    backup: true
-  when: lookup('file', 'hosts', errors='ignore') | length > 0
