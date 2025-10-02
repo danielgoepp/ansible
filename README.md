@@ -18,14 +18,14 @@ as I get a chance to clean it up.
 
 ```bash
 # List all tracked applications
-ansible-playbook playbooks/ops-version-check.yaml -e version_check_action=list
+ansible-playbook playbooks/version-check.yaml -e version_check_action=list
 
 # Check specific application versions
-ansible-playbook playbooks/ops-version-check.yaml \
+ansible-playbook playbooks/version-check.yaml \
   -e version_check_action=app -e app_name="home assistant"
 
 # Full version check across all services
-ansible-playbook playbooks/ops-version-check.yaml \
+ansible-playbook playbooks/version-check.yaml \
   -e version_check_action=check-all
 ```
 
@@ -37,17 +37,13 @@ ansible-playbook playbooks/ops-upgrade-postfix-manifest.yaml
 ansible-playbook playbooks/ops-upgrade-grafana-manifest.yaml
 
 # Multi-context service upgrades (Home Assistant example)
-ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml
+ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml
 
 # Target specific Home Assistant instance
-ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml \
+ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml \
   -e target_instance=prod
-ansible-playbook playbooks/ops-upgrade-homeassistant-manifest.yaml \
+ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml \
   -e target_instance=morgspi
-
-# Generic manifest upgrade for ad-hoc services
-ansible-playbook playbooks/ops-upgrade-manifest-generic.yaml \
-  -e service_name=myservice
 ```
 
 ### Helm Chart Upgrades

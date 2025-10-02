@@ -85,13 +85,6 @@ ansible-playbook playbooks/k3s/ops-upgrade-n8n-manifest.yaml
 ansible-playbook playbooks/k3s/ops-upgrade-telegraf-manifest.yaml
 ansible-playbook playbooks/k3s/ops-upgrade-cnpg-manifest.yaml
 ansible-playbook playbooks/k3s/ops-upgrade-hertzbeat-manifest.yaml
-
-# Generic manifest upgrade (alternative approach - useful for ad-hoc services)
-ansible-playbook playbooks/ops-upgrade-manifest-generic.yaml -e service_name=postfix
-ansible-playbook playbooks/ops-upgrade-manifest-generic.yaml -e service_name=grafana
-
-# With custom parameters for non-standard deployments
-ansible-playbook playbooks/ops-upgrade-manifest-generic.yaml -e service_name=myservice -e k8s_context=k3s-dev -e context_suffix=dev
 ```
 
 ### Helm Upgrade Operations

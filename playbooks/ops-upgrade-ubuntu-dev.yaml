@@ -1,8 +1,0 @@
-- name: Upgrade dev Ubuntu server
-  hosts: dev
-  become: true
-  gather_facts: true
-
-  tasks:
-    - name: Include apt upgrade tasks
-      include_tasks: ../tasks/ops-upgrade-apt.yaml

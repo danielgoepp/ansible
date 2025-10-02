@@ -1,8 +1,0 @@
-- name: System Upgrade and Reboot
-  hosts: "rpi"
-  gather_facts: true
-  become: true
-  tasks:
-
-    - name: Include ops upgrade tasks
-      include_tasks: ../tasks/ops-upgrade-apt.yaml

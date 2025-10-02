@@ -1,8 +1,0 @@
-- name: Upgrade adambalm Ubuntu server
-  hosts: adambalm
-  become: true
-  gather_facts: true
-
-  tasks:
-    - name: Include apt upgrade tasks
-      include_tasks: ../tasks/ops-upgrade-apt.yaml
