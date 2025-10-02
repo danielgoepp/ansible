@@ -2,8 +2,6 @@
 - name: Upgrade n8n using local manifest
   hosts: localhost
   gather_facts: false
-  vars_files:
-    - ../../vars/common.yml
   vars:
     service_name: "n8n"
   tasks:

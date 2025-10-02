@@ -11,3 +11,13 @@ rpi_nut:
     username: "upsmon"
     password: "password"
     role: "master"
+
+# Wyoming Satellite configuration defaults
+wyoming_satellite_uri: "tcp://0.0.0.0:10700"
+wyoming_satellite_mic_command: "arecord -D plughw:CARD=seeed2micvoicec,DEV=0 -r 16000 -c 1 -f S16_LE -t raw"
+wyoming_satellite_snd_command: "aplay -D plughw:CARD=seeed2micvoicec,DEV=0 -r 22050 -c 1 -f S16_LE -t raw"
+wyoming_satellite_debug: false
+# Optional wake word configuration (uncomment and set in host_vars as needed)
+# wyoming_satellite_wake_command: "arecord -D plughw:CARD=1,DEV=0 -r 16000 -c 1 -f S16_LE -t raw"
+# wyoming_satellite_wake_uri: "tcp://homeassistant.local:10400"
+# wyoming_satellite_wake_word_name: "ok_nabu"

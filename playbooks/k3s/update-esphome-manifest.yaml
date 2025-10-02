@@ -2,8 +2,6 @@
 - name: Update ESPHome using local manifest
   hosts: localhost
   gather_facts: false
-  vars_files:
-    - ../../vars/common.yml
   vars:
     service_name: "esphome"
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/esphome/manifests/esphome-prod.yaml"

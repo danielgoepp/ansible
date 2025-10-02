@@ -2,8 +2,6 @@
 - name: Upgrade VictoriaMetrics CRDs using local manifests
   hosts: localhost
   gather_facts: false
-  vars_files:
-    - ../../vars/common.yml
   vars:
     service_name: "victoriametrics"
     # Flattened instances - one per manifest file

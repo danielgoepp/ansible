@@ -189,8 +189,8 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
   - **ops-upgrade-cluster-***: Cluster upgrade tasks
 - **files/k3s-config/**: Git submodule containing Kubernetes manifests
 - **files/**: Static files and configuration templates
-- **vars/common.yml**: Common variables (k3s_config_base_path, contexts)
-- **group_vars/vault.yaml.secret**: Encrypted secrets using ansible-vault
+- **group_vars/all/common.yml**: Common variables (k3s_config_base_path, contexts) - automatically loaded for all hosts
+- **group_vars/all/vault.yml**: Encrypted secrets using ansible-vault - automatically loaded for all hosts
 - **host_vars/**: Host-specific variables
 
 ### Configuration Management
@@ -202,17 +202,6 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
 - **Python interpreter**: Set to `auto_silent` to suppress discovery warnings
 - **Host key checking**: Disabled for lab environment
 - **Utility scripts**: Git submodule at `scripts/utility-scripts/` containing Python scripts for cluster upgrade operations
-
-**Variable Loading for Localhost Playbooks**: Due to Ansible's behavior with `ansible_connection: local`, localhost-based playbooks need to explicitly load variables. Use:
-
-```yaml
-- name: My Localhost Playbook
-  hosts: localhost
-  gather_facts: false
-  vars_files:
-    - ../vars/common.yml  # Recommended: Contains all global vars
-    # OR
-```
 
 **Vault Loading Pattern for AWX Compatibility**: When playbooks need vault variables but must also run on AWX (where vault files are loaded differently), use conditional loading in `pre_tasks`:
 
@@ -250,7 +239,7 @@ ansible-playbook playbooks/k3s/ops-upgrade-grafana-manifest.yaml -e k3s_default_
 
 - **Manifest playbooks**: Use `{{ playbook_dir }}/../../files/k3s-config/{service}/manifests/{service}-{context}.yaml`
 - **Helm playbooks**: Use `{{ playbook_dir }}/../../files/k3s-config/{service}/helm/` for chart paths and values files
-- **Vars file**: Uses `{{ playbook_dir }}/../files/k3s-config` (one level up from vars directory)
+- **Common variables**: `k3s_config_base_path` is defined in `group_vars/all/common.yml` and automatically available to all playbooks
 
 ### Host Organization
 
