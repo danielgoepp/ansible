@@ -5,4 +5,4 @@
 # Import global configuration
 k3s_config_base_path: "{{ playbook_dir }}/../files/k3s-config"
 k3s_default_context: "k3s-prod"
-scripts_base_path: "/Users/dang/Documents/Development/utility-scripts"
+scripts_base_path: "{{ playbook_dir }}/../scripts/utility-scripts"

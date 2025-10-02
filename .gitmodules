@@ -1,3 +1,6 @@
 [submodule "k3s-config"]
 	path = files/k3s-config
 	url = https://github.com/danielgoepp/k3s-config
+[submodule "scripts/utility-scripts"]
+	path = scripts/utility-scripts
+	url = https://github.com/danielgoepp/utility-scripts

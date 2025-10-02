@@ -103,10 +103,9 @@ ansible-playbook playbooks/ops-upgrade-mongodb-operator-helm.yaml
 - Ansible 2.9+
 - SSH key authentication configured
 - Vault password file at `~/.ansible/.vault-pass` (for local execution)
-- Utility scripts directory (`../utility-scripts/`) must exist relative to this
-  project
-- Kubernetes configuration directory (`../k3s-config/`) must exist relative to
-  this project for manifest upgrade operations
+- Git submodules initialized:
+  - `scripts/utility-scripts/` - Python utility scripts for cluster operations
+  - `files/k3s-config/` - Kubernetes manifest configurations
 
 ## AWX/Tower Compatibility
 

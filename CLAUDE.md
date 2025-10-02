@@ -201,7 +201,7 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
 - **SSH optimization**: ControlMaster enabled for connection reuse
 - **Python interpreter**: Set to `auto_silent` to suppress discovery warnings
 - **Host key checking**: Disabled for lab environment
-- **Utility scripts**: Directory (`../utility-scripts/`) must exist relative to this project for cluster upgrade operations
+- **Utility scripts**: Git submodule at `scripts/utility-scripts/` containing Python scripts for cluster upgrade operations
 
 **Variable Loading for Localhost Playbooks**: Due to Ansible's behavior with `ansible_connection: local`, localhost-based playbooks need to explicitly load variables. Use:
 
