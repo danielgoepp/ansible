@@ -1,12 +1,12 @@
 
     - name: copy ceph-vault secret
-      copy:
-        src: ../files/ceph/ceph-vault.secret
+      ansible.builtin.copy:
+        src: ceph/ceph-vault.secret
         dest: "/etc/ceph/ceph-vault.secret"
-        decrypt: yes
+        decrypt: true
         owner: root
         group: root
-        mode: 0640
+        mode: '0640'
       when: ansible_hostname != 'adambalm'
 
     - name: create /mnt/k3s-prod-data

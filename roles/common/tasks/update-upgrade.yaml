@@ -1,4 +1,7 @@
 ---
+# System updates and maintenance
+# This should only be run when explicitly requested
+
 - name: Upgrade all packages to latest
   ansible.builtin.apt:
     upgrade: dist

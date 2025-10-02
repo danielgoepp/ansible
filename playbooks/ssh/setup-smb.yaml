@@ -3,5 +3,11 @@
   hosts: "smb"
   become: true
 
+  pre_tasks:
+    - name: Load vault variables when running locally
+      ansible.builtin.include_vars:
+        file: ../group_vars/all/vault.yml
+      when: lookup('env', 'AWX_HOST') | default('') == ''
+
   roles:
     - samba

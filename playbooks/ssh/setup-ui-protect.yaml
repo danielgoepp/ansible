@@ -1,6 +1,6 @@
 ---
 - name: Setup UniFi Protect Let's Encrypt SSL certificates
-  hosts: ui-protect
+  hosts: "ui-protect"
   become: true
 
   pre_tasks:
