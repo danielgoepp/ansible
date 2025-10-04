@@ -1,6 +1,6 @@
 ---
 # Generic multi-instance manifest upgrade tasks
-# Loops through instances and calls common-update-manifest.yaml for each
+# Loops through instances and calls k3s-update-manifest.yaml for each
 #
 # Required variables:
 #   - service_name: Name of the service (for display)
@@ -44,7 +44,7 @@
       - "  Total: {{ filtered_instances | length }}"
 
 - name: Upgrade {{ service_name | title }} instance {{ item.name }}
-  include_tasks: common-update-manifest.yaml
+  include_tasks: k3s-update-manifest.yaml
   vars:
     k8s_context: "{{ item.context | default(k3s_default_context) }}"
     manifest_path: "{{ item.manifest_path }}"

@@ -112,15 +112,18 @@
     state: absent
     api_version: v1
     kind: Pod
-    name: "{{ item.metadata.name }}"
+    name: "{{ pod_item.metadata.name }}"
     namespace: "{{ service_namespace }}"
     context: "{{ k8s_context }}"
   loop: "{{ current_pods.resources }}"
-  when: 
+  loop_control:
+    loop_var: pod_item
+    label: "{{ pod_item.metadata.name }}"
+  when:
     - current_pods.resources is defined
     - current_pods.resources | length > 0
     - not apply_result.changed
-    - item.metadata.deletionTimestamp is not defined
+    - pod_item.metadata.deletionTimestamp is not defined
   register: pod_deletion_result
   no_log: true
 

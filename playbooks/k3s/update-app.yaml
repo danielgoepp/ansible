@@ -1,0 +1,63 @@
+---
+- name: Update K3s Application
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Validate app_name is provided
+      fail:
+        msg: "app_name is required. Use -e app_name=<application>"
+      when: app_name is not defined or app_name == ''
+
+    - name: Set default target_instance if not provided
+      set_fact:
+        target_instance: "{{ target_instance | default('all') }}"
+
+    - name: Validate application exists in configuration
+      fail:
+        msg: "Application '{{ app_name }}' not found. Available applications: {{ k3s_applications.keys() | list | join(', ') }}"
+      when: app_name not in k3s_applications
+
+    - name: Set application configuration
+      set_fact:
+        app_config: "{{ k3s_applications[app_name] }}"
+        service_name: "{{ app_name }}"
+
+    - name: Display update information
+      debug:
+        msg:
+          - "Application: {{ app_name }}"
+          - "Deployment Method: {{ app_config.deployment_method }}"
+          - "Target Instance: {{ target_instance }}"
+
+    # Helm deployment path
+    - name: Update application using Helm
+      include_tasks: ../../tasks/k3s-update-helm.yaml
+      vars:
+        helm_release_name: "{{ app_config.helm_release_name }}"
+        helm_chart_name: "{{ app_config.helm_chart_name | default(omit) }}"
+        helm_chart_path: "{{ app_config.helm_chart_path | default(omit) }}"
+        helm_repo_name: "{{ app_config.helm_repo_name | default(omit) }}"
+        helm_repo_url: "{{ app_config.helm_repo_url | default(omit) }}"
+        helm_namespace: "{{ app_config.helm_namespace }}"
+        helm_values_file: "{{ app_config.helm_values_file }}"
+        k8s_context: "{{ app_config.k8s_context }}"
+      when: app_config.deployment_method == 'helm'
+
+    # Single manifest deployment path
+    - name: Update application using manifest
+      include_tasks: ../../tasks/k3s-update-manifest.yaml
+      vars:
+        manifest_path: "{{ app_config.manifest_path }}"
+        k8s_context: "{{ app_config.k8s_context | default(k3s_default_context) }}"
+        service_namespace: "{{ app_config.service_namespace | default(service_name) }}"
+        deployment_name: "{{ app_config.deployment_name | default(service_name) }}"
+        app_label: "{{ app_config.app_label | default(service_name) }}"
+      when: app_config.deployment_method == 'manifest'
+
+    # Multi-instance manifest deployment path
+    - name: Update application using multi-instance manifests
+      include_tasks: ../../tasks/k3s-update-manifest-multi.yaml
+      vars:
+        instances: "{{ app_config.instances }}"
+      when: app_config.deployment_method == 'manifest-multi'

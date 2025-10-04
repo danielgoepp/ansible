@@ -64,50 +64,54 @@ ansible-playbook playbooks/version-check.yaml -e version_check_action=app -e app
 # ansible-playbook playbooks/version-check.yaml
 ```
 
-### Manifest Update Operations
+### K3s Application Update Operations
 
 ```bash
-# Individual service playbooks (recommended approach - clean and simple)
-# Located in playbooks/k3s/ directory
-ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml
-ansible-playbook playbooks/k3s/update-zigbee2mqtt-manifest.yaml
-ansible-playbook playbooks/k3s/update-esphome-manifest.yaml
+# Unified update playbook - dynamically routes to appropriate deployment method
+# Application configurations are defined in inventories/group_vars/all/k3s_applications.yml
 
-# Update specific instance (for multi-instance services)
-ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml -e target_instance=prod
-ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml -e target_instance=morgspi
-ansible-playbook playbooks/k3s/update-zigbee2mqtt-manifest.yaml -e target_instance=11
+# Update any application (manifest or helm)
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=<application>
 
-# CRD manifest upgrades (for services with multiple CRD instances)
-ansible-playbook playbooks/k3s/ops-upgrade-mongodb-crd-manifests.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-victoriametrics-crd-manifests.yaml
+# Examples - Single instance applications
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=grafana          # manifest
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=alertmanager     # helm
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=traefik          # helm
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=n8n              # manifest
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=postfix          # manifest
 
-# Other k3s service upgrades
-ansible-playbook playbooks/k3s/ops-upgrade-postfix-manifest.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-grafana-manifest.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-n8n-manifest.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-telegraf-manifest.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-cnpg-manifest.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-hertzbeat-manifest.yaml
-```
+# Examples - Multi-instance applications (updates all instances by default)
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=homeassistant
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=zigbee2mqtt
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=victoriametrics
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=telegraf
 
-### Helm Upgrade Operations
+# Update specific instance only (for multi-instance apps)
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=homeassistant -e target_instance=prod
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=homeassistant -e target_instance=morgspi
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=zigbee2mqtt -e target_instance=11
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=telegraf -e target_instance=vm
 
-```bash
-# Upgrade individual helm charts (updates repo, shows before/after versions)
-# Located in playbooks/k3s/ directory
-ansible-playbook playbooks/k3s/ops-upgrade-alertmanager-helm.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-cert-manager-helm.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-fluent-bit-helm.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-metallb-helm.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-opensearch-helm.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-pgadmin-helm.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-traefik-helm.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-weather-helm.yaml
-
-# Operator helm upgrades (upgrades the operators that manage CRDs)
-ansible-playbook playbooks/k3s/ops-upgrade-mongodb-operator-helm.yaml
-ansible-playbook playbooks/k3s/ops-upgrade-victoriametrics-operator-helm.yaml
+# Available applications:
+# - alertmanager (helm)
+# - cert-manager (helm)
+# - esphome (manifest)
+# - fluent-bit (helm)
+# - grafana (manifest)
+# - hertzbeat (manifest)
+# - homeassistant (manifest-multi: morgspi, mudderpi, prod)
+# - metallb (helm)
+# - mongodb-operator (helm)
+# - n8n (manifest)
+# - opensearch (helm)
+# - pgadmin (helm)
+# - postfix (manifest)
+# - telegraf (manifest-multi: vm, graylog)
+# - traefik (helm)
+# - victoriametrics (manifest-multi: vmsingle-main, vmsingle-lt)
+# - victoriametrics-operator (helm)
+# - weather (helm)
+# - zigbee2mqtt (manifest-multi: 11, 15)
 ```
 
 ### ESPHome Operations
@@ -264,19 +268,23 @@ Playbooks typically have multiple plays:
 
 ### Task-Based Architecture
 
-Recent manifest upgrade playbooks use a consolidated task-based approach:
+K3s application updates use a unified, configuration-driven approach:
 
-- **tasks/common-update-manifest.yaml**: Reusable task file containing all manifest update logic
-- **Individual playbooks**: Simple wrappers that set `service_name` and include the task file
-- **Benefits**: Eliminates code duplication, consistent behavior, single place for bug fixes
-- **Pattern**: Most services follow standard `/k3s-config/{service}/manifests/{service}-{context}.yaml`
+- **inventories/group_vars/all/k3s_applications.yml**: Centralized application configuration defining all K3s applications, their deployment methods (helm, manifest, manifest-multi), and deployment-specific parameters
+- **playbooks/k3s/update-app.yaml**: Unified playbook that loads application config and routes to appropriate task file based on deployment method
+- **tasks/k3s-update-manifest.yaml**: Reusable task file for single manifest deployments
+- **tasks/k3s-update-manifest-multi.yaml**: Reusable task file for multi-instance manifest deployments
+- **tasks/k3s-update-helm.yaml**: Reusable task file for Helm deployments
+- **Benefits**: Single playbook for all updates, eliminates code duplication, consistent behavior, configuration-driven, easy to add new applications
+- **Pattern**: Applications are referenced by name (`app_name=<application>`), configuration is automatically loaded and used
 
 ### Playbook Naming Conventions
 
-- **Manifest updates**: `update-{service}-manifest.yaml` for services that update K8s manifests (preferred for new playbooks)
+- **K3s application updates**: Use `playbooks/k3s/update-app.yaml` with `-e app_name=<application>` (unified approach)
 - **Operations**: `ops-{action}-{target}.yaml` for operational tasks (upgrades, maintenance, etc.)
 - **Setup**: `setup-{target}.yaml` for initial system configuration
 - **Location**: K3s-specific playbooks are located in `playbooks/k3s/` directory
+- **Legacy**: Individual `update-{service}-manifest.yaml` and `update-{service}-helm.yaml` files exist but are superseded by the unified approach
 
 ### Cluster Upgrade Task Naming Convention
 
