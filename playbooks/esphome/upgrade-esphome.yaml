@@ -15,7 +15,7 @@
 
   tasks:
     - name: Discover ESPHome devices
-      include_tasks: ../../tasks/ops-esphome-discover-devices.yaml
+      include_tasks: ../../tasks/esphome-discover-devices.yaml
 
     # Priority 1: Filter by specific target_device if provided
     - name: Filter devices for target device
@@ -62,6 +62,6 @@
         - devices_to_upgrade | length == 0
 
     - name: Run ESPHome upgrade
-      include_tasks: ../../tasks/ops-esphome-upgrade-devices.yaml
+      include_tasks: ../../tasks/esphome-upgrade-devices.yaml
       vars:
         upgrade_description: "ESPHome {{ filter_description }}"
