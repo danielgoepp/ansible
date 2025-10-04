@@ -6,6 +6,11 @@
 # Note: Paths use playbook_dir which resolves relative to the calling playbook
 # The unified playbook is at playbooks/k3s/update-app.yaml, so paths are relative to that location
 
+# Common configuration variables
+k3s_config_base_path: "{{ playbook_dir }}/../files/k3s-config"
+k3s_default_context: "k3s-prod"
+scripts_base_path: "{{ playbook_dir }}/../scripts/utility-scripts"
+
 k3s_applications:
   alertmanager:
     deployment_method: helm

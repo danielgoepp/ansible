@@ -4,6 +4,9 @@
   gather_facts: false
 
   tasks:
+    - name: Load K3s applications configuration
+      include_vars:
+        file: "{{ playbook_dir }}/../../inventories/group_vars/all/k3s_applications.yml"
     - name: Validate app_name is provided
       fail:
         msg: "app_name is required. Use -e app_name=<application>"
