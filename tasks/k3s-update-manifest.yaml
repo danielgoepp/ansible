@@ -97,7 +97,7 @@
     context: "{{ k8s_context }}"
   register: post_apply_deployment
 
-- name: Get current pods to check if restart is needed
+- name: Get current pods to check if restart is needed (primary deployment)
   kubernetes.core.k8s_info:
     api_version: v1
     kind: Pod
@@ -107,7 +107,7 @@
     context: "{{ k8s_context }}"
   register: current_pods
 
-- name: Force pod restart if manifest didn't trigger restart
+- name: Force pod restart if manifest didn't trigger restart (primary deployment)
   kubernetes.core.k8s:
     state: absent
     api_version: v1
@@ -127,14 +127,50 @@
   register: pod_deletion_result
   no_log: true
 
+- name: Get current pods for additional deployments
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ service_namespace }}"
+    label_selectors:
+      - "app.kubernetes.io/name={{ additional_deploy_item.app_label }}"
+    context: "{{ k8s_context }}"
+  loop: "{{ additional_deployments | default([]) }}"
+  loop_control:
+    loop_var: additional_deploy_item
+    label: "{{ additional_deploy_item.name }}"
+  register: additional_pods
+  no_log: true
+
+- name: Force pod restart for additional deployments if needed
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Pod
+    name: "{{ pod_item.metadata.name }}"
+    namespace: "{{ service_namespace }}"
+    context: "{{ k8s_context }}"
+  loop: "{{ additional_pods.results | map(attribute='resources') | flatten }}"
+  loop_control:
+    loop_var: pod_item
+    label: "{{ pod_item.metadata.name }}"
+  when:
+    - additional_deployments is defined
+    - additional_deployments | length > 0
+    - not apply_result.changed
+    - pod_item.metadata.deletionTimestamp is not defined
+  register: additional_pod_deletion_result
+  no_log: true
+
 - name: Display pod restart action
   debug:
-    msg: 
+    msg:
       - "Pod restart status:"
       - "  Manifest caused restart: {{ apply_result.changed }}"
-      - "  Manual pod deletion performed: {{ pod_deletion_result.changed | default(false) }}"
+      - "  Manual pod deletion performed (primary): {{ pod_deletion_result.changed | default(false) }}"
+      - "  Manual pod deletion performed (additional): {{ additional_pod_deletion_result.changed | default(false) }}"
 
-- name: Wait for deployment to be ready
+- name: Wait for deployment to be ready (primary)
   kubernetes.core.k8s_info:
     api_version: apps/v1
     kind: Deployment
@@ -147,6 +183,27 @@
       status: "True"
     wait_timeout: 300
   register: deployment_ready
+
+- name: Wait for additional deployments to be ready
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ additional_deploy_item.name }}"
+    namespace: "{{ service_namespace }}"
+    context: "{{ k8s_context }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 300
+  loop: "{{ additional_deployments | default([]) }}"
+  loop_control:
+    loop_var: additional_deploy_item
+    label: "{{ additional_deploy_item.name }}"
+  register: additional_deployments_ready
+  when:
+    - additional_deployments is defined
+    - additional_deployments | length > 0
 
 - name: Get updated deployment (after upgrade)
   kubernetes.core.k8s_info:
@@ -171,6 +228,15 @@
     previous_image: "{{ current_deployment.resources[0].spec.template.spec.containers[0].image | default('Unknown') }}"
     current_image: "{{ updated_deployment.resources[0].spec.template.spec.containers[0].image }}"
 
+- name: Build additional deployments summary
+  set_fact:
+    additional_summary: >-
+      {%- if additional_deployments is defined and additional_deployments | length > 0 -%}
+      Additional deployments: {{ additional_deployments | map(attribute='name') | list | join(', ') }}
+      {%- else -%}
+      No additional deployments
+      {%- endif -%}
+
 - name: Display upgrade summary
   debug:
     msg:
@@ -178,5 +244,7 @@
       - "Previous image: {{ previous_image }}"
       - "Current image: {{ current_image }}"
       - "Manifest applied: {{ apply_result.changed }}"
-      - "Pod restart triggered: {{ apply_result.changed or (pod_deletion_result.changed | default(false)) }}"
-      - "Deployment ready: {{ deployment_ready.resources[0].status.conditions[-1].status == 'True' }}"
+      - "Pod restart triggered (primary): {{ apply_result.changed or (pod_deletion_result.changed | default(false)) }}"
+      - "Pod restart triggered (additional): {{ additional_pod_deletion_result.changed | default(false) }}"
+      - "Deployment ready (primary): {{ deployment_ready.resources[0].status.conditions[-1].status == 'True' }}"
+      - "{{ additional_summary }}"

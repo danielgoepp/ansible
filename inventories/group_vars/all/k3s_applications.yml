@@ -151,12 +151,15 @@ k3s_applications:
   victoriametrics:
     deployment_method: manifest-multi
     instances:
-      - name: vmsingle-main
+      - name: vmsingle
         context: "{{ k3s_default_context }}"
         manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-prod-vmsingle.yaml"
         deployment_name: vmsingle-vms-prod
         service_namespace: victoriametrics
         app_label: vmsingle
+        additional_deployments:
+          - name: vmagent-vma-prod
+            app_label: vmagent
       - name: vmsingle-lt
         context: "{{ k3s_default_context }}"
         manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-prod-vmsingle-lt.yaml"
