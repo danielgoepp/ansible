@@ -7,6 +7,12 @@
     - name: Load K3s applications configuration
       include_vars:
         file: "{{ playbook_dir }}/../../inventories/group_vars/all/k3s_applications.yml"
+
+    - name: Set path variables based on playbook location
+      set_fact:
+        k3s_config_base_path: "{{ playbook_dir }}/../../files/k3s-config"
+        scripts_base_path: "{{ playbook_dir }}/../../scripts/utility-scripts"
+
     - name: Validate app_name is provided
       fail:
         msg: "app_name is required. Use -e app_name=<application>"
