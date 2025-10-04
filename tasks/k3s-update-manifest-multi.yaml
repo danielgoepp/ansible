@@ -43,7 +43,7 @@
       - "  Instances: {{ filtered_instances | map(attribute='name') | list | join(', ') }}"
       - "  Total: {{ filtered_instances | length }}"
 
-- name: Upgrade {{ service_name | title }} instance {{ item.name }}
+- name: Upgrade {{ service_name | title }} instances
   include_tasks: k3s-update-manifest.yaml
   vars:
     k8s_context: "{{ item.context | default(k3s_default_context) }}"
