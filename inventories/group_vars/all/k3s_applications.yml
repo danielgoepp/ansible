@@ -153,13 +153,13 @@ k3s_applications:
     instances:
       - name: vmsingle-main
         context: "{{ k3s_default_context }}"
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-values-prod-vmsingle.yaml"
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-prod-vmsingle.yaml"
         deployment_name: vmsingle-vms-prod
         service_namespace: victoriametrics
         app_label: vmsingle
       - name: vmsingle-lt
         context: "{{ k3s_default_context }}"
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-values-prod-vmsingle-lt.yaml"
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-prod-vmsingle-lt.yaml"
         deployment_name: vmsingle-vms-prod-lt
         service_namespace: victoriametrics
         app_label: vmsingle
