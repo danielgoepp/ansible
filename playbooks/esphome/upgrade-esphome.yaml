@@ -1,0 +1,67 @@
+---
+- name: Upgrade ESPHome devices
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # ESPHome configuration
+    esphome_namespace: "esphome"
+    esphome_deployment_name: "esphome"
+    k3s_context: "k3s-prod"  # Default context, can be overridden
+
+    # Options
+    esphome_no_logs: true
+    esphome_clean_build: true
+    esphome_timeout: 600  # 10 minutes
+
+  tasks:
+    - name: Discover ESPHome devices
+      include_tasks: ../../tasks/ops-esphome-discover-devices.yaml
+
+    # Priority 1: Filter by specific target_device if provided
+    - name: Filter devices for target device
+      set_fact:
+        devices_to_upgrade: "{{ esphome_devices | selectattr('name', 'equalto', target_device) | list }}"
+        filter_description: "device '{{ target_device }}'"
+      when: target_device is defined
+
+    # Priority 2: Filter by target_pattern if provided and target_device is not
+    - name: Filter devices by pattern
+      set_fact:
+        devices_to_upgrade: "{{ esphome_devices | selectattr('name', 'search', target_pattern) | list }}"
+        filter_description: "pattern '{{ target_pattern }}'"
+      when:
+        - target_device is not defined
+        - target_pattern is defined
+
+    # Priority 3: Use all devices if neither target_device nor target_pattern is provided
+    - name: Use all devices if no filter specified
+      set_fact:
+        devices_to_upgrade: "{{ esphome_devices }}"
+        filter_description: "all devices"
+      when:
+        - target_device is not defined
+        - target_pattern is not defined
+
+    - name: Validate target device exists
+      fail:
+        msg: |
+          Target device '{{ target_device }}' not found in ESPHome.
+          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
+      when:
+        - target_device is defined
+        - devices_to_upgrade | length == 0
+
+    - name: Validate pattern match found devices
+      fail:
+        msg: |
+          No devices found matching {{ filter_description }}.
+          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
+      when:
+        - target_pattern is defined
+        - target_device is not defined
+        - devices_to_upgrade | length == 0
+
+    - name: Run ESPHome upgrade
+      include_tasks: ../../tasks/ops-esphome-upgrade-devices.yaml
+      vars:
+        upgrade_description: "ESPHome {{ filter_description }}"
