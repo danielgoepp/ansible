@@ -1,0 +1,128 @@
+---
+# CNPG Cluster manifest upgrade tasks
+# Specialized task for CloudNative PostgreSQL Cluster resources
+
+- name: Set default variables
+  set_fact:
+    k8s_context: "{{ k8s_context | default(k3s_default_context) }}"
+    service_namespace: "{{ service_namespace | default(service_name) }}"
+    cluster_name: "{{ cluster_name | default(service_name + '-prod') }}"
+    base_path: "{{ k3s_config_base_path }}"
+    field_manager: "ansible-{{ service_name }}-cnpg-upgrade"
+
+- name: Display upgrade parameters
+  debug:
+    msg:
+      - "{{ service_name | title }} CNPG Cluster Upgrade Parameters:"
+      - "  Service: {{ service_name }}"
+      - "  Manifest Path: {{ manifest_path }}"
+      - "  Kubernetes Context: {{ k8s_context }}"
+      - "  Namespace: {{ service_namespace }}"
+      - "  Cluster Name: {{ cluster_name }}"
+
+- name: Verify manifest file exists
+  stat:
+    path: "{{ manifest_path }}"
+  register: manifest_file
+  failed_when: not manifest_file.stat.exists
+
+- name: Get current CNPG cluster (before upgrade)
+  kubernetes.core.k8s_info:
+    api_version: postgresql.cnpg.io/v1
+    kind: Cluster
+    name: "{{ cluster_name }}"
+    namespace: "{{ service_namespace }}"
+    context: "{{ k8s_context }}"
+  register: current_cluster
+  ignore_errors: true
+
+- name: Display current CNPG cluster status
+  debug:
+    msg:
+      - "Current {{ service_name | title }} CNPG Cluster:"
+      - "  Name: {{ current_cluster.resources[0].metadata.name | default('Not found') }}"
+      - "  Image: {{ current_cluster.resources[0].spec.imageName | default('Unknown') }}"
+      - "  Instances: {{ current_cluster.resources[0].spec.instances | default(0) }}"
+      - "  Phase: {{ current_cluster.resources[0].status.phase | default('Unknown') }}"
+  when: current_cluster.resources is defined and current_cluster.resources | length > 0
+
+- name: Display status if CNPG cluster not found
+  debug:
+    msg: "{{ service_name | title }} CNPG cluster '{{ cluster_name }}' not found in namespace '{{ service_namespace }}'"
+  when: current_cluster.resources is not defined or current_cluster.resources | length == 0
+
+- name: Validate manifest with kubectl (dry-run)
+  shell: kubectl apply -f "{{ manifest_path }}" --context="{{ k8s_context }}" --dry-run=server --validate=true
+  register: kubectl_validate_result
+  failed_when: kubectl_validate_result.rc != 0
+
+- name: Apply manifest from local file (server-side)
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ manifest_path }}"
+    context: "{{ k8s_context }}"
+    server_side_apply:
+      field_manager: "{{ field_manager }}"
+  register: apply_result
+  failed_when: apply_result.failed | default(false)
+
+- name: Display manifest validation and application result
+  debug:
+    msg:
+      - "{{ service_name | title }} manifest validation and application:"
+      - "  Kubectl validation: {{ 'SUCCESS' if kubectl_validate_result.rc == 0 else 'FAILED' }}"
+      - "  Kubectl error: {{ kubectl_validate_result.stderr | default('None') }}"
+      - "  Ansible result: {{ 'SUCCESS' if not (apply_result.failed | default(false)) else 'FAILED' }}"
+      - "  Changed: {{ apply_result.changed }}"
+      - "  Error: {{ apply_result.msg | default('None') }}"
+
+- name: Wait for manifest application to complete
+  ansible.builtin.wait_for:
+    timeout: 5
+  delegate_to: localhost
+
+- name: Wait for CNPG cluster to be ready
+  kubernetes.core.k8s_info:
+    api_version: postgresql.cnpg.io/v1
+    kind: Cluster
+    name: "{{ cluster_name }}"
+    namespace: "{{ service_namespace }}"
+    context: "{{ k8s_context }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 600
+  register: cluster_ready
+
+- name: Get updated CNPG cluster (after upgrade)
+  kubernetes.core.k8s_info:
+    api_version: postgresql.cnpg.io/v1
+    kind: Cluster
+    name: "{{ cluster_name }}"
+    namespace: "{{ service_namespace }}"
+    context: "{{ k8s_context }}"
+  register: updated_cluster
+
+- name: Display updated CNPG cluster status
+  debug:
+    msg:
+      - "Updated {{ service_name | title }} CNPG Cluster:"
+      - "  Name: {{ updated_cluster.resources[0].metadata.name }}"
+      - "  Image: {{ updated_cluster.resources[0].spec.imageName }}"
+      - "  Instances: {{ updated_cluster.resources[0].spec.instances }}"
+      - "  Phase: {{ updated_cluster.resources[0].status.phase }}"
+
+- name: Extract version information
+  set_fact:
+    previous_image: "{{ current_cluster.resources[0].spec.imageName | default('Unknown') }}"
+    current_image: "{{ updated_cluster.resources[0].spec.imageName }}"
+
+- name: Display upgrade summary
+  debug:
+    msg:
+      - "{{ service_name | title }} CNPG cluster upgrade completed successfully!"
+      - "Previous image: {{ previous_image }}"
+      - "Current image: {{ current_image }}"
+      - "Manifest applied: {{ apply_result.changed }}"
+      - "Cluster ready: {{ cluster_ready.resources[0].status.phase == 'Cluster in healthy state' }}"

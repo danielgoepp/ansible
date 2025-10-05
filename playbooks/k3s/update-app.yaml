@@ -70,3 +70,10 @@
       vars:
         instances: "{{ app_config.instances }}"
       when: app_config.deployment_method == 'manifest-multi'
+
+    # Multi-instance CNPG cluster deployment path
+    - name: Update application using multi-instance CNPG clusters
+      include_tasks: ../../tasks/k3s-update-manifest-multi-cnpg.yaml
+      vars:
+        instances: "{{ app_config.instances }}"
+      when: app_config.deployment_method == 'manifest-multi-cnpg'

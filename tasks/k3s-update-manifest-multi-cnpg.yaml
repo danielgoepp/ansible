@@ -1,0 +1,54 @@
+---
+# Generic multi-instance CNPG cluster upgrade tasks
+# Loops through instances and calls k3s-update-manifest-cnpg.yaml for each
+#
+# Required variables:
+#   - service_name: Name of the service (for display)
+#   - instances: List of instances with fields:
+#       - name: Instance identifier
+#       - manifest_path: Path to manifest file
+#       - context: Kubernetes context (optional, defaults to k3s_default_context)
+#       - cluster_name: CNPG Cluster name (optional, defaults to service_name-prod)
+#       - service_namespace: Namespace (optional, defaults to service_name)
+#
+# Optional variables:
+#   - target_instance: Specific instance to upgrade, or "all" (default)
+
+- name: Set default target_instance if not specified
+  set_fact:
+    target_instance: "{{ target_instance | default('all') }}"
+
+- name: Set filtered instances based on target selection
+  set_fact:
+    filtered_instances: >-
+      {%- if target_instance == 'all' -%}
+        {{ instances }}
+      {%- else -%}
+        {{ instances | selectattr('name', 'equalto', target_instance) | list }}
+      {%- endif -%}
+
+- name: Validate target instance exists
+  fail:
+    msg: "Instance '{{ target_instance }}' not found. Available instances: {{ instances | map(attribute='name') | list | join(', ') }}"
+  when:
+    - target_instance != 'all'
+    - filtered_instances | length == 0
+
+- name: Display upgrade parameters
+  debug:
+    msg:
+      - "{{ service_name | title }} CNPG Multi-Instance Upgrade Parameters:"
+      - "  Target: {{ target_instance }}"
+      - "  Instances: {{ filtered_instances | map(attribute='name') | list | join(', ') }}"
+      - "  Total: {{ filtered_instances | length }}"
+
+- name: Upgrade {{ service_name | title }} CNPG instances
+  include_tasks: k3s-update-manifest-cnpg.yaml
+  vars:
+    k8s_context: "{{ item.context | default(k3s_default_context) }}"
+    manifest_path: "{{ item.manifest_path }}"
+    cluster_name: "{{ item.cluster_name | default(service_name + '-prod') }}"
+    service_namespace: "{{ item.service_namespace | default(service_name) }}"
+  loop: "{{ filtered_instances }}"
+  loop_control:
+    label: "{{ item.name }}"

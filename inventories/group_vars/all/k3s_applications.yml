@@ -32,6 +32,25 @@ k3s_applications:
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cert-manager/helm/cert-manager-values-prod.yaml"
     k8s_context: k3s-prod
 
+  cnpg:
+    deployment_method: manifest-multi-cnpg
+    instances:
+      - name: grafana
+        context: k3s-prod
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-prod-grafana.yml"
+        cluster_name: grafana-prod
+        service_namespace: cnpg-grafana
+      - name: homeassistant
+        context: k3s-prod
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-prod-homeassistant.yml"
+        cluster_name: homeassistant-prod
+        service_namespace: cnpg-homeassistant
+      - name: hertzbeat
+        context: k3s-prod
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-prod-hertzbeat.yml"
+        cluster_name: hertzbeat-prod
+        service_namespace: cnpg-hertzbeat
+
   esphome:
     deployment_method: manifest
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/esphome/manifests/esphome-prod.yaml"
