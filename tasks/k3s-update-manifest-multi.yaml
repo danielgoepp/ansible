@@ -51,7 +51,6 @@
     deployment_name: "{{ item.deployment_name | default(service_name) }}"
     service_namespace: "{{ item.service_namespace | default(service_name) }}"
     app_label: "{{ item.app_label | default(service_name) }}"
-    additional_deployments: "{{ item.additional_deployments | default([]) }}"
   loop: "{{ filtered_instances }}"
   loop_control:
     label: "{{ item.name }}"

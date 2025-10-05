@@ -157,15 +157,18 @@ k3s_applications:
         deployment_name: vmsingle-vms-prod
         service_namespace: victoriametrics
         app_label: vmsingle
-        additional_deployments:
-          - name: vmagent-vma-prod
-            app_label: vmagent
       - name: vmsingle-lt
         context: "{{ k3s_default_context }}"
         manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-prod-vmsingle-lt.yaml"
         deployment_name: vmsingle-vms-prod-lt
         service_namespace: victoriametrics
         app_label: vmsingle
+      - name: vmagent
+        context: "{{ k3s_default_context }}"
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-prod-vmagent.yaml"
+        deployment_name: vmagent-vma-prod
+        service_namespace: victoriametrics
+        app_label: vmagent
 
   victoriametrics-operator:
     deployment_method: helm
