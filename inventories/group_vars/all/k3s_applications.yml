@@ -32,6 +32,16 @@ k3s_applications:
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cert-manager/helm/cert-manager-values-prod.yaml"
     k8s_context: k3s-prod
 
+  cnpg-operator:
+    deployment_method: helm
+    helm_release_name: cloudnative-pg
+    helm_chart_name: cnpg/cloudnative-pg
+    helm_repo_name: cnpg
+    helm_repo_url: https://cloudnative-pg.github.io/charts
+    helm_namespace: cnpg-system
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cnpg/helm/cnpg-operator-values-prod.yaml"
+    k8s_context: k3s-prod
+
   cnpg:
     deployment_method: manifest-multi-cnpg
     instances:

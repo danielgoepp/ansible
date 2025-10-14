@@ -1,0 +1,14 @@
+---
+# CNPG Operator Upgrade Playbook
+# This playbook uses the unified update framework
+# Configuration: inventories/group_vars/all/k3s_applications.yml
+#
+# Usage:
+#   ansible-playbook playbooks/k3s/update-cnpg-operator.yaml
+#
+# Note: This is a wrapper that calls the unified update-app.yaml playbook
+
+- name: Update CNPG Operator using unified framework
+  import_playbook: update-app.yaml
+  vars:
+    app_name: cnpg-operator
