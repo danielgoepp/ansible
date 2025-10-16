@@ -22,3 +22,12 @@
     owner: ed
     group: ed
     mode: '0700'
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart Ollama service
+  ansible.builtin.systemd:
+    name: ollama
+    state: restarted

@@ -165,6 +165,33 @@ ansible-playbook playbooks/ops-esphome-ota.yaml -e esphome_dashboard_url=https:/
 ansible-playbook playbooks/ops-esphome-ota.yaml -e esphome_timeout=900
 ```
 
+### LLM Operations
+
+```bash
+# Initial setup of adambalm (includes NVIDIA drivers, Docker, Python AI/ML packages, Ollama)
+# Ollama is installed by default, Open WebUI and Portainer are optional
+ansible-playbook playbooks/ssh/setup-adambalm.yaml
+
+# Install Open WebUI and Portainer during initial setup (optional)
+ansible-playbook playbooks/ssh/setup-adambalm.yaml -e llm_install_openwebui=true -e llm_install_portainer=true
+
+# Upgrade Ollama only on adambalm
+ansible-playbook playbooks/ssh/upgrade-llm-ollama.yaml
+
+# Override Ollama configuration during upgrade
+ansible-playbook playbooks/ssh/upgrade-llm-ollama.yaml -e ollama_bind_address=127.0.0.1
+ansible-playbook playbooks/ssh/upgrade-llm-ollama.yaml -e ollama_max_loaded_models=2
+
+# Upgrade Open WebUI Docker container
+ansible-playbook playbooks/ssh/upgrade-llm-openwebui.yaml
+
+# Override Open WebUI configuration during upgrade
+ansible-playbook playbooks/ssh/upgrade-llm-openwebui.yaml -e openwebui_port=8080
+
+# Upgrade Portainer Docker container
+ansible-playbook playbooks/ssh/upgrade-llm-portainer.yaml
+```
+
 ### Additional Operations
 
 ```bash
@@ -180,9 +207,17 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
 
 - **inventories/hosts.yml**: Main inventory with host groups (ubuntu, rpi, k3s_prod, pve, lxc)
 - **playbooks/**: Organized by purpose
+  - **ssh/**: SSH-accessible host playbooks (setup, upgrades)
   - **setup-*.yaml**: Initial system configuration
   - **ops-*.yaml**: Operational tasks (maintenance, testing)
   - **k3s/**: K3s-specific playbooks (manifest updates, helm upgrades)
+- **roles/**: Ansible roles for modular configuration
+  - **llm/**: LLM role for GPU server setup (NVIDIA drivers, Docker, Python AI/ML packages, Ollama, Open WebUI, Portainer)
+    - **tasks/ollama.yml**: Ollama installation and upgrade tasks (idempotent)
+    - **tasks/openwebui.yml**: Open WebUI Docker container deployment and upgrade tasks
+    - **tasks/portainer.yml**: Portainer Docker container deployment and upgrade tasks
+    - **templates/ollama-override.conf.j2**: Systemd service override for Ollama configuration
+    - **defaults/main.yml**: Configurable variables (ollama_*, openwebui_*, portainer_*, llm_install_*)
 - **tasks/**: Reusable task files
   - **common-update-manifest.yaml**: Shared manifest update logic
   - **setup-global-***: Global system setup tasks
@@ -280,6 +315,9 @@ K3s application updates use a unified, configuration-driven approach:
 
 ### Playbook Naming Conventions
 
+- **SSH playbooks**: `{action}-{context}-{instance}.yaml` format in `playbooks/ssh/` directory
+  - Examples: `setup-adambalm.yaml`, `upgrade-llm-ollama.yaml`, `upgrade-llm-openwebui.yaml`, `upgrade-llm-portainer.yaml`, `setup-rpi.yaml`
+  - Initial configuration and upgrades for individual hosts or services
 - **K3s application updates**: Use `playbooks/k3s/update-app.yaml` with `-e app_name=<application>` (unified approach)
 - **Operations**: `ops-{action}-{target}.yaml` for operational tasks (upgrades, maintenance, etc.)
 - **Setup**: `setup-{target}.yaml` for initial system configuration

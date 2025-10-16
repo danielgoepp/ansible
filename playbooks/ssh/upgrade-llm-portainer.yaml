@@ -1,0 +1,15 @@
+---
+# This playbook upgrades Portainer on adambalm using the LLM role
+# The LLM role handles both initial installation and upgrades
+# For initial setup, use playbooks/ssh/setup-adambalm.yaml which includes the full LLM role
+
+- name: Upgrade Portainer on adambalm
+  hosts: adambalm
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Include Portainer tasks from LLM role
+      ansible.builtin.include_role:
+        name: llm
+        tasks_from: portainer

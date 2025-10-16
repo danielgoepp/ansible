@@ -1,0 +1,28 @@
+---
+# Default variables for LLM role
+
+# Control which components to install during initial setup
+# These are optional and default to false - use upgrade playbooks for selective updates
+llm_install_openwebui: true
+llm_install_portainer: true
+
+# Ollama configuration
+ollama_bind_address: "0.0.0.0"
+ollama_port: 11434
+ollama_max_loaded_models: 1
+ollama_num_parallel: 1
+ollama_origins: "*"
+
+# Open WebUI configuration
+openwebui_container_name: "open-webui"
+openwebui_image: "ghcr.io/open-webui/open-webui:main"
+openwebui_port: 3000
+openwebui_ollama_url: "http://10.1.11.18:11434"
+openwebui_volume: "open-webui"
+
+# Portainer configuration
+portainer_container_name: "portainer"
+portainer_image: "portainer/portainer-ce:latest"
+portainer_http_port: 8000
+portainer_https_port: 9443
+portainer_volume: "portainer_data"

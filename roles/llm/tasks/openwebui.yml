@@ -1,0 +1,50 @@
+---
+# Open WebUI Docker container installation and upgrade tasks
+# Handles both initial installation and upgrades
+
+- name: Stop existing Open WebUI container
+  community.docker.docker_container:
+    name: "{{ openwebui_container_name }}"
+    state: stopped
+  ignore_errors: true
+
+- name: Remove existing Open WebUI container
+  community.docker.docker_container:
+    name: "{{ openwebui_container_name }}"
+    state: absent
+  ignore_errors: true
+
+- name: Pull latest Open WebUI image
+  community.docker.docker_image:
+    name: "{{ openwebui_image }}"
+    source: pull
+    force_source: true
+    force_tag: true
+
+- name: Start new Open WebUI container
+  community.docker.docker_container:
+    name: "{{ openwebui_container_name }}"
+    image: "{{ openwebui_image }}"
+    state: started
+    restart_policy: always
+    ports:
+      - "{{ openwebui_port }}:8080"
+    env:
+      OLLAMA_BASE_URL: "{{ openwebui_ollama_url }}"
+    etc_hosts:
+      host.docker.internal: host-gateway
+    volumes:
+      - "{{ openwebui_volume }}:/app/backend/data"
+
+- name: Wait for Open WebUI to be ready
+  ansible.builtin.uri:
+    url: "http://localhost:{{ openwebui_port }}/health"
+    method: GET
+    status_code: [200]
+  retries: 60
+  delay: 3
+  delegate_to: "{{ inventory_hostname }}"
+
+- name: Display Open WebUI URL
+  ansible.builtin.debug:
+    msg: "Open WebUI is ready at http://{{ inventory_hostname }}:{{ openwebui_port }}"

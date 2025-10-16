@@ -91,3 +91,17 @@
   notify:
     - Set password for user ed
     - Create .ssh directory for user ed
+
+# Install and configure Ollama
+- name: Include Ollama installation and configuration tasks
+  ansible.builtin.include_tasks: ollama.yml
+
+# Install and configure Open WebUI (optional, controlled by variable)
+- name: Include Open WebUI installation and configuration tasks
+  ansible.builtin.include_tasks: openwebui.yml
+  when: llm_install_openwebui | default(false)
+
+# Install and configure Portainer (optional, controlled by variable)
+- name: Include Portainer installation and configuration tasks
+  ansible.builtin.include_tasks: portainer.yml
+  when: llm_install_portainer | default(false)

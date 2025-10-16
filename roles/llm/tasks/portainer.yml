@@ -1,0 +1,49 @@
+---
+# Portainer Docker container installation and upgrade tasks
+# Handles both initial installation and upgrades
+
+- name: Stop existing Portainer container
+  community.docker.docker_container:
+    name: "{{ portainer_container_name }}"
+    state: stopped
+  ignore_errors: true
+
+- name: Remove existing Portainer container
+  community.docker.docker_container:
+    name: "{{ portainer_container_name }}"
+    state: absent
+  ignore_errors: true
+
+- name: Pull latest Portainer CE image
+  community.docker.docker_image:
+    name: "{{ portainer_image }}"
+    source: pull
+    force_source: true
+    force_tag: true
+
+- name: Start new Portainer container
+  community.docker.docker_container:
+    name: "{{ portainer_container_name }}"
+    image: "{{ portainer_image }}"
+    state: started
+    restart_policy: always
+    ports:
+      - "{{ portainer_http_port }}:8000"
+      - "{{ portainer_https_port }}:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "{{ portainer_volume }}:/data"
+
+- name: Wait for Portainer to be ready
+  ansible.builtin.uri:
+    url: "https://localhost:{{ portainer_https_port }}"
+    method: GET
+    validate_certs: false
+    status_code: [200, 302]
+  retries: 30
+  delay: 2
+  delegate_to: "{{ inventory_hostname }}"
+
+- name: Display Portainer URL
+  ansible.builtin.debug:
+    msg: "Portainer is ready at https://{{ inventory_hostname }}:{{ portainer_https_port }}"
