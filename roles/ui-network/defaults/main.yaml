@@ -1,0 +1,22 @@
+---
+# Default variables for ui-network role
+
+# Let's Encrypt configuration
+ui_network_email: "dan@goepp.com"
+ui_network_fqdn: "ui-network.goepp.net"
+ui_network_server_ip: "10.1.254.10"
+ui_network_external_dns: "10.1.254.1"
+
+# Script configuration
+ui_network_script_url: "https://get.glennr.nl/unifi/extra/unifi-easy-encrypt.sh"
+ui_network_script_path: "/usr/local/bin/unifi-easy-encrypt.sh"
+
+# Cloudflare credentials
+ui_network_cloudflare_credentials_path: "/root/cloudflare.ini"
+
+# Cron schedule (2 AM every Saturday)
+ui_network_cron_minute: "0"
+ui_network_cron_hour: "2"
+ui_network_cron_day: "*"
+ui_network_cron_month: "*"
+ui_network_cron_weekday: "6"

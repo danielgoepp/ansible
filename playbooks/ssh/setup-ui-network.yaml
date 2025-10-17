@@ -1,0 +1,7 @@
+---
+- name: UniFi Network server setup
+  hosts: "ui-network"
+  become: true
+
+  roles:
+    - ui-network
