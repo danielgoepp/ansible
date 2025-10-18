@@ -52,8 +52,17 @@
     user: root
     state: present
 
+- name: Set SSH public key variable
+  ansible.builtin.set_fact:
+    ui_network_ssh_public_key: "{{ awx_ssh_public_key | default(ssh_public_key | default('')) }}"
+
+- name: Validate SSH public key is provided
+  ansible.builtin.fail:
+    msg: "SSH public key is required but not provided. Ensure ssh_public_key is defined in vault or AWX credentials."
+  when: ui_network_ssh_public_key == ''
+
 - name: Add backup server SSH public key for root
   ansible.builtin.authorized_key:
     user: root
-    key: "{{ lookup('file', inventory_dir + '/../files/ssh/dang_id_rsa.pub.secret') }}"
+    key: "{{ ui_network_ssh_public_key }}"
     comment: "backup server access"

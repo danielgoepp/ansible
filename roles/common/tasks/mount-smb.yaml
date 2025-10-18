@@ -1,9 +1,23 @@
 ---
-- name: Copy smb cifs credentials
+- name: Set CIFS credentials variables
+  ansible.builtin.set_fact:
+    cifs_user: "{{ awx_cifs_username | default(cifs_username | default('')) }}"
+    cifs_pass: "{{ awx_cifs_password | default(cifs_password | default('')) }}"
+  when: ansible_hostname != 'adambalm'
+
+- name: Validate CIFS credentials are provided
+  ansible.builtin.fail:
+    msg: "CIFS credentials are required but not provided. Ensure cifs_username and cifs_password are defined in vault or AWX credentials."
+  when:
+    - ansible_hostname != 'adambalm'
+    - cifs_user == '' or cifs_pass == ''
+
+- name: Create CIFS credentials file
   ansible.builtin.copy:
-    src: smb/smb_cifs_credentials.secret
+    content: |
+      username={{ cifs_user }}
+      password={{ cifs_pass }}
     dest: /etc/smb_cifs_credentials
-    decrypt: true
     owner: root
     group: root
     mode: '0600'

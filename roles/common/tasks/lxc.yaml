@@ -27,10 +27,22 @@
     mode: '0440'
   when: inventory_hostname in groups['lxc']
 
+- name: Set SSH public key variable
+  ansible.builtin.set_fact:
+    lxc_ssh_public_key: "{{ awx_ssh_public_key | default(ssh_public_key | default('')) }}"
+  when: inventory_hostname in groups['lxc']
+
+- name: Validate SSH public key is provided
+  ansible.builtin.fail:
+    msg: "SSH public key is required but not provided. Ensure ssh_public_key is defined in vault or AWX credentials."
+  when:
+    - inventory_hostname in groups['lxc']
+    - lxc_ssh_public_key == ''
+
 - name: Add SSH public key for dang
   ansible.builtin.lineinfile:
     path: /home/dang/.ssh/authorized_keys
-    line: "{{ lookup('file', inventory_dir + '/../files/ssh/dang_id_rsa.pub.secret') }}"
+    line: "{{ lxc_ssh_public_key }}"
     create: true
     owner: dang
     group: dang
