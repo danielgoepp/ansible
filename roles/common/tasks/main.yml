@@ -19,23 +19,23 @@
 
 - name: Install default packages
   ansible.builtin.include_tasks: packages.yaml
-  when: inventory_hostname not in groups['pve'] and inventory_hostname not in groups['lxc']
+  when: inventory_hostname not in groups['pve']
 
 - name: Change root shell to zsh
   ansible.builtin.user:
     name: root
     shell: /usr/bin/zsh
-  when: inventory_hostname not in groups['pve'] and inventory_hostname not in groups['lxc']
+  when: inventory_hostname not in groups['pve']
 
 - name: Change dang user shell to zsh
   ansible.builtin.user:
     name: dang
     shell: /usr/bin/zsh
-  when: inventory_hostname not in groups['pve'] and inventory_hostname not in groups['lxc']
+  when: inventory_hostname not in groups['pve']
 
 - name: Configure oh-my-zsh
   ansible.builtin.include_tasks: oh-my-zsh.yaml
-  when: inventory_hostname not in groups['pve'] and inventory_hostname not in groups['lxc']
+  when: inventory_hostname not in groups['pve']
 
 - name: Mount SMB shares
   ansible.builtin.include_tasks: mount-smb.yaml
@@ -46,8 +46,7 @@
   when: >
     ansible_hostname != 'adambalm' and
     ansible_hostname != 'ui-network' and
-    inventory_hostname not in groups['pve'] and
-    inventory_hostname not in groups['lxc']
+    inventory_hostname not in groups['pve']
 
 - name: Configure rsyslog
   ansible.builtin.include_tasks: rsyslog.yaml
