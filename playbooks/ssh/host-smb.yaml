@@ -1,0 +1,16 @@
+---
+# Configure and manage Samba/SMB file server
+#
+# Usage:
+#   Configure SMB server:
+#     ansible-playbook playbooks/ssh/host-smb.yaml
+#
+#   Include system updates (apt update && apt dist-upgrade):
+#     ansible-playbook playbooks/ssh/host-smb.yaml -e apt_dist_upgrade=true
+
+- name: Configure SMB server
+  hosts: "smb"
+  become: true
+  roles:
+    - common
+    - samba

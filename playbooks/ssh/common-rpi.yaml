@@ -1,0 +1,26 @@
+---
+# Configure and manage all Raspberry Pi servers
+#
+# Usage:
+#   Configure all Raspberry Pi servers:
+#     ansible-playbook playbooks/ssh/common-rpi.yaml
+#
+#   Configure specific Raspberry Pi:
+#     ansible-playbook playbooks/ssh/common-rpi.yaml -l morgspi
+#     ansible-playbook playbooks/ssh/common-rpi.yaml -l mudderpi
+#
+#   Include system updates (apt update && apt dist-upgrade):
+#     ansible-playbook playbooks/ssh/common-rpi.yaml -e apt_dist_upgrade=true
+#     ansible-playbook playbooks/ssh/common-rpi.yaml -l morgspi -e apt_dist_upgrade=true
+#
+# Services are defined per-host in inventories/hosts.yml:
+#   - nut: Network UPS Tools monitoring
+#   - homeassistant: Home Assistant backup cron jobs
+#   - wyoming: Wyoming satellite voice assistant
+
+- name: Configure Raspberry Pi servers
+  hosts: "rpi"
+  become: true
+  roles:
+    - common
+    - rpi

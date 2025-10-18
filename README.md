@@ -29,30 +29,35 @@ ansible-playbook playbooks/version-check.yaml \
   -e version_check_action=check-all
 ```
 
-### Manifest Upgrades
+### Host and Group Configuration
 
 ```bash
-# Individual service upgrades (recommended)
-ansible-playbook playbooks/ops-upgrade-postfix-manifest.yaml
-ansible-playbook playbooks/ops-upgrade-grafana-manifest.yaml
+# Configure host groups (common role)
+ansible-playbook playbooks/ssh/common-ubuntu.yaml
+ansible-playbook playbooks/ssh/common-k3s-prod.yaml
+ansible-playbook playbooks/ssh/common-rpi.yaml
 
-# Multi-context service upgrades (Home Assistant example)
-ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml
+# Configure specific individual hosts
+ansible-playbook playbooks/ssh/host-adambalm.yaml
+ansible-playbook playbooks/ssh/host-backup.yaml
+ansible-playbook playbooks/ssh/host-smb.yaml
 
-# Target specific Home Assistant instance
-ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml \
-  -e target_instance=prod
-ansible-playbook playbooks/k3s/update-homeassistant-manifest.yaml \
-  -e target_instance=morgspi
+# Include system updates
+ansible-playbook playbooks/ssh/common-ubuntu.yaml -e apt_dist_upgrade=true
+ansible-playbook playbooks/ssh/host-backup.yaml -e apt_dist_upgrade=true
 ```
 
-### Helm Chart Upgrades
+### K3s Application Updates
 
 ```bash
-# Individual helm chart upgrades
-ansible-playbook playbooks/ops-upgrade-traefik-helm.yaml
-ansible-playbook playbooks/ops-upgrade-cert-manager-helm.yaml
-ansible-playbook playbooks/ops-upgrade-mongodb-operator-helm.yaml
+# Unified update playbook for all K3s applications
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=grafana
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=homeassistant
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=traefik
+
+# Update specific instance of multi-instance apps
+ansible-playbook playbooks/k3s/update-app.yaml \
+  -e app_name=homeassistant -e target_instance=prod
 ```
 
 ## Infrastructure Overview
@@ -66,15 +71,13 @@ ansible-playbook playbooks/ops-upgrade-mongodb-operator-helm.yaml
 
 ## Key Features
 
-- **Service-based configuration**: Hosts define their roles via `services`
-  variables
-- **Consolidated upgrade architecture**: Task-based approach for manifest
-  upgrades
+- **Clear playbook naming**: `common-*` for groups, `host-*` for specific servers
+- **Service-based configuration**: Hosts define their roles via `services` variables
+- **Unified update architecture**: Single playbook for all K3s application updates
+- **Optional system updates**: Add `-e apt_dist_upgrade=true` to any playbook using common role
 - **Version tracking**: Automated version checking across all applications
 - **Secure secret management**: ansible-vault encrypted credentials
-- **Automated storage mounting**: SMB media shares and Ceph distributed
-  storage
-- **Multi-play structure**: System and user-level configuration separation
+- **Automated storage mounting**: SMB media shares and Ceph distributed storage
 
 ## Documentation
 

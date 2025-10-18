@@ -2,7 +2,7 @@
 - name: Copy .vimrc config
   ansible.builtin.copy:
     src: "{{ role_path }}/files/vim/vimrc"
-    dest: "{{ ansible_env.HOME }}/.vimrc"
+    dest: "~/.vimrc"
     mode: '0660'
 
 - name: Set git email

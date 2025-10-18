@@ -1,0 +1,16 @@
+---
+# Configure and manage UniFi Network controller
+#
+# Usage:
+#   Configure UniFi Network server:
+#     ansible-playbook playbooks/ssh/host-ui-network.yaml
+#
+#   Include system updates (apt update && apt dist-upgrade):
+#     ansible-playbook playbooks/ssh/host-ui-network.yaml -e apt_dist_upgrade=true
+
+- name: Configure UniFi Network server
+  hosts: "ui-network"
+  become: true
+  roles:
+    - common
+    - ui-network

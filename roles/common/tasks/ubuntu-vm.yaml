@@ -1,0 +1,29 @@
+---
+- name: Install extra virtual packages for ubuntu VMs
+  ansible.builtin.apt:
+    name:
+      - linux-image-extra-virtual
+    state: present
+    update_cache: true
+  when:
+    - ansible_virtualization_type != "NA"
+    - inventory_hostname in groups['k3s_prod'] or inventory_hostname in groups['ubuntu']
+    - inventory_hostname not in groups.get('smb', [])
+
+- name: Stop and disable multipathd service
+  ansible.builtin.systemd:
+    name: multipathd.service
+    state: stopped
+    enabled: false
+  when:
+    - inventory_hostname in groups['k3s_prod'] or inventory_hostname in groups['ubuntu']
+    - inventory_hostname not in groups.get('smb', [])
+
+- name: Stop and disable multipathd socket
+  ansible.builtin.systemd:
+    name: multipathd.socket
+    state: stopped
+    enabled: false
+  when:
+    - inventory_hostname in groups['k3s_prod'] or inventory_hostname in groups['ubuntu']
+    - inventory_hostname not in groups.get('smb', [])

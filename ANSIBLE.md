@@ -56,20 +56,26 @@ voicepi-greatroom:
 
 ## Key Playbooks
 
-### System Setup
+### Group Playbooks (`common-*`)
 
-- **`setup-global.yaml`** - Base system configuration for all non-Proxmox hosts
-  - Timezone, packages, user shells, oh-my-zsh
-  - SMB and Ceph mounts (conditional)
-  - Rsyslog configuration
-  - Virtual machine specific packages
-- **`setup-lxc-prep.yaml`** - LXC container preparation
-  - Global configuration tasks
-  - Ceph mounts
-  - User creation and SSH key setup
-- **`setup-rpi.yaml`** - Raspberry Pi specific setup
-  - Package upgrades with automatic reboot detection
-  - Service-specific tasks (NUT, Home Assistant, Wyoming satellites)
+Apply common configuration to host groups:
+
+- **`ssh/common-ubuntu.yaml`** - Ubuntu servers group
+- **`ssh/common-k3s-prod.yaml`** - K3s production cluster nodes
+- **`ssh/common-pve.yaml`** - Proxmox VE hypervisors
+- **`ssh/common-lxc.yaml`** - LXC containers
+- **`ssh/common-rpi.yaml`** - Raspberry Pi servers (includes service-based configuration)
+
+### Host Playbooks (`host-*`)
+
+Configure specific individual servers:
+
+- **`ssh/host-adambalm.yaml`** - GPU server for AI/ML workloads (common + optional llm)
+- **`ssh/host-backup.yaml`** - Backup server (common + backup)
+- **`ssh/host-dev.yaml`** - Development server (common only)
+- **`ssh/host-smb.yaml`** - SMB/Samba file server (common + samba)
+- **`ssh/host-ui-network.yaml`** - UniFi Network controller (common + ui-network)
+- **`ssh/host-ui-protect.yaml`** - UniFi Protect (ui-protect)
 
 ### Task Organization
 

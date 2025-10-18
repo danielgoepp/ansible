@@ -1,0 +1,20 @@
+---
+- name: Create ansible tmp directory for dang
+  ansible.builtin.file:
+    path: /home/dang/.ansible/tmp
+    state: directory
+    mode: '0755'
+    owner: dang
+    group: dang
+  become: true
+  become_user: dang
+
+- name: Configure oh-my-zsh for dang
+  ansible.builtin.import_tasks: oh-my-zsh.yaml
+  become: true
+  become_user: dang
+
+- name: Setup user settings (git and vim)
+  ansible.builtin.import_tasks: user.yaml
+  become: true
+  become_user: dang

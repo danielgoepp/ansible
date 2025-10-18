@@ -1,6 +1,0 @@
----
-- name: Setup raspberry pi servers
-  hosts: "rpi"
-  become: true
-  roles:
-    - rpi

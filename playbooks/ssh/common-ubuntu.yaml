@@ -1,0 +1,20 @@
+---
+# Configure and manage all Ubuntu servers
+#
+# Usage:
+#   Configure all Ubuntu servers:
+#     ansible-playbook playbooks/ssh/common-ubuntu.yaml
+#
+#   Configure specific Ubuntu server:
+#     ansible-playbook playbooks/ssh/common-ubuntu.yaml -l ui-network
+#     ansible-playbook playbooks/ssh/common-ubuntu.yaml -l backup
+#
+#   Include system updates (apt update && apt dist-upgrade):
+#     ansible-playbook playbooks/ssh/common-ubuntu.yaml -e apt_dist_upgrade=true
+#     ansible-playbook playbooks/ssh/common-ubuntu.yaml -l ui-network -e apt_dist_upgrade=true
+
+- name: Configure Ubuntu servers
+  hosts: "ubuntu"
+  become: true
+  roles:
+    - common

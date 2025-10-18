@@ -1,0 +1,16 @@
+---
+# Configure and manage all Proxmox VE hypervisor hosts
+#
+# Usage:
+#   Configure all Proxmox nodes:
+#     ansible-playbook playbooks/ssh/common-pve.yaml
+#
+#   Configure specific Proxmox node:
+#     ansible-playbook playbooks/ssh/common-pve.yaml -l pve11
+#     ansible-playbook playbooks/ssh/common-pve.yaml -l pve12
+
+- name: Configure Proxmox VE servers
+  hosts: "pve"
+  become: true
+  roles:
+    - common

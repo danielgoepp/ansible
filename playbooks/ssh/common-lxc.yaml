@@ -1,0 +1,19 @@
+---
+# Configure and manage all LXC containers
+#
+# Usage:
+#   Configure all LXC containers:
+#     ansible-playbook playbooks/ssh/common-lxc.yaml
+#
+#   Configure specific LXC container:
+#     ansible-playbook playbooks/ssh/common-lxc.yaml -l smb
+#
+#   Include system updates (apt update && apt dist-upgrade):
+#     ansible-playbook playbooks/ssh/common-lxc.yaml -e apt_dist_upgrade=true
+#     ansible-playbook playbooks/ssh/common-lxc.yaml -l smb -e apt_dist_upgrade=true
+
+- name: Configure LXC containers
+  hosts: "lxc"
+  become: true
+  roles:
+    - common

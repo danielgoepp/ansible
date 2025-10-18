@@ -1,0 +1,13 @@
+---
+# Configure and manage UniFi Protect SSL certificates
+# Manages Let's Encrypt SSL certificates for UniFi Protect
+#
+# Usage:
+#   Configure UniFi Protect SSL:
+#     ansible-playbook playbooks/ssh/host-ui-protect.yaml
+
+- name: Configure UniFi Protect SSL certificates
+  hosts: "ui-protect"
+  become: true
+  roles:
+    - ui-protect

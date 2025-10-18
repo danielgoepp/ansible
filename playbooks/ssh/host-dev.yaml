@@ -1,0 +1,15 @@
+---
+# Configure and manage development server
+#
+# Usage:
+#   Configure dev server:
+#     ansible-playbook playbooks/ssh/host-dev.yaml
+#
+#   Include system updates (apt update && apt dist-upgrade):
+#     ansible-playbook playbooks/ssh/host-dev.yaml -e apt_dist_upgrade=true
+
+- name: Configure development server
+  hosts: "dev"
+  become: true
+  roles:
+    - common

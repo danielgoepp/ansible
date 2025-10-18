@@ -12,17 +12,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Run playbooks (most common commands)
-ansible-playbook playbooks/setup-global.yaml
-ansible-playbook playbooks/setup-rpi.yaml
-ansible-playbook playbooks/setup-lxc-prep.yaml
+ansible-playbook playbooks/ssh/common-ubuntu.yaml
+ansible-playbook playbooks/ssh/common-rpi.yaml
+ansible-playbook playbooks/ssh/common-k3s-prod.yaml
 ansible-playbook playbooks/ops-upgrade-cluster.yaml
 
+# Run playbooks with system updates (apt update && apt dist-upgrade)
+ansible-playbook playbooks/ssh/common-ubuntu.yaml -e apt_dist_upgrade=true
+ansible-playbook playbooks/ssh/common-k3s-prod.yaml -e apt_dist_upgrade=true
+ansible-playbook playbooks/ssh/common-lxc.yaml -e apt_dist_upgrade=true
+ansible-playbook playbooks/ssh/common-rpi.yaml -e apt_dist_upgrade=true
+
 # Target specific hosts or groups
-ansible-playbook playbooks/setup-global.yaml -l ubuntu
-ansible-playbook playbooks/setup-rpi.yaml -l morgspi,mudderpi
+ansible-playbook playbooks/ssh/common-ubuntu.yaml -l ui-network
+ansible-playbook playbooks/ssh/common-rpi.yaml -l morgspi,mudderpi
+
+# Update specific host with system updates
+ansible-playbook playbooks/ssh/common-ubuntu.yaml -l ui-network -e apt_dist_upgrade=true
 
 # Check syntax and validate
-ansible-playbook playbooks/setup-global.yaml --syntax-check
+ansible-playbook playbooks/ssh/common-ubuntu.yaml --syntax-check
 ansible-inventory --list
 ansible-inventory --graph
 
@@ -168,28 +177,21 @@ ansible-playbook playbooks/ops-esphome-ota.yaml -e esphome_timeout=900
 ### LLM Operations
 
 ```bash
-# Initial setup of adambalm (includes NVIDIA drivers, Docker, Python AI/ML packages, Ollama)
-# Ollama is installed by default, Open WebUI and Portainer are optional
-ansible-playbook playbooks/ssh/setup-adambalm.yaml
+# Configure base system only (common role)
+ansible-playbook playbooks/ssh/host-adambalm.yaml
 
-# Install Open WebUI and Portainer during initial setup (optional)
-ansible-playbook playbooks/ssh/setup-adambalm.yaml -e llm_install_openwebui=true -e llm_install_portainer=true
+# Initial setup or upgrade all LLM components (NVIDIA drivers, Docker, Python AI/ML packages, Ollama, Open WebUI, Portainer)
+ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_all=true
 
-# Upgrade Ollama only on adambalm
-ansible-playbook playbooks/ssh/upgrade-llm-ollama.yaml
+# Upgrade specific component only
+ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=ollama
+ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=openwebui
+ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=portainer
 
-# Override Ollama configuration during upgrade
-ansible-playbook playbooks/ssh/upgrade-llm-ollama.yaml -e ollama_bind_address=127.0.0.1
-ansible-playbook playbooks/ssh/upgrade-llm-ollama.yaml -e ollama_max_loaded_models=2
-
-# Upgrade Open WebUI Docker container
-ansible-playbook playbooks/ssh/upgrade-llm-openwebui.yaml
-
-# Override Open WebUI configuration during upgrade
-ansible-playbook playbooks/ssh/upgrade-llm-openwebui.yaml -e openwebui_port=8080
-
-# Upgrade Portainer Docker container
-ansible-playbook playbooks/ssh/upgrade-llm-portainer.yaml
+# Override configuration during upgrade
+ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=ollama -e ollama_bind_address=127.0.0.1
+ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=ollama -e ollama_max_loaded_models=2
+ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=openwebui -e openwebui_port=8080
 ```
 
 ### Additional Operations
@@ -207,10 +209,11 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
 
 - **inventories/hosts.yml**: Main inventory with host groups (ubuntu, rpi, k3s_prod, pve, lxc)
 - **playbooks/**: Organized by purpose
-  - **ssh/**: SSH-accessible host playbooks (setup, upgrades)
-  - **setup-*.yaml**: Initial system configuration
-  - **ops-*.yaml**: Operational tasks (maintenance, testing)
-  - **k3s/**: K3s-specific playbooks (manifest updates, helm upgrades)
+  - **ssh/**: SSH-accessible host playbooks for configuration management
+    - **{target}.yaml**: Host/group configuration (idempotent, handles both setup and updates)
+    - All playbooks support optional system updates via `-e apt_dist_upgrade=true`
+  - **ops-*.yaml**: Operational tasks (cluster upgrades, maintenance, testing)
+  - **k3s/**: K3s-specific playbooks (application updates)
 - **roles/**: Ansible roles for modular configuration
   - **llm/**: LLM role for GPU server setup (NVIDIA drivers, Docker, Python AI/ML packages, Ollama, Open WebUI, Portainer)
     - **tasks/ollama.yml**: Ollama installation and upgrade tasks (idempotent)
@@ -290,7 +293,6 @@ Tasks use conditionals like `when: "'nut' in (services | default([]))"` to run s
 
 - **SMB mounts**: Media storage available to k3s_prod hosts at `/mnt/smb_media`
 - **Ceph mounts**: Production Kubernetes data, homes, and backups for k3s_prod hosts
-- **Host entries**: Infrastructure hosts from `files/linux/hosts` are automatically added to `/etc/hosts`
 - **Security exclusion**: The `adambalm` host is excluded from sensitive operations
 
 ### Multi-Play Structure
@@ -315,14 +317,20 @@ K3s application updates use a unified, configuration-driven approach:
 
 ### Playbook Naming Conventions
 
-- **SSH playbooks**: `{action}-{context}-{instance}.yaml` format in `playbooks/ssh/` directory
-  - Examples: `setup-adambalm.yaml`, `upgrade-llm-ollama.yaml`, `upgrade-llm-openwebui.yaml`, `upgrade-llm-portainer.yaml`, `setup-rpi.yaml`
-  - Initial configuration and upgrades for individual hosts or services
+- **SSH playbooks**: Two types with clear naming
+  - **Group playbooks** (`common-*`): Apply common role to host groups
+    - Examples: `common-ubuntu.yaml`, `common-rpi.yaml`, `common-k3s-prod.yaml`, `common-pve.yaml`, `common-lxc.yaml`
+  - **Host playbooks** (`host-*`): Configure specific individual servers
+    - Examples: `host-adambalm.yaml`, `host-backup.yaml`, `host-dev.yaml`, `host-smb.yaml`, `host-ui-network.yaml`
+  - All playbooks are idempotent (handle both initial setup and ongoing management)
+  - Variables for selective operations:
+    - `apt_dist_upgrade=true`: Run apt update/dist-upgrade (available on all playbooks using common role)
+    - `llm_upgrade_component=<component>`: Upgrade specific LLM component (host-adambalm only)
+    - `llm_upgrade_all=true`: Upgrade all LLM components (host-adambalm only)
+  - All playbooks include usage headers with invocation examples
 - **K3s application updates**: Use `playbooks/k3s/update-app.yaml` with `-e app_name=<application>` (unified approach)
-- **Operations**: `ops-{action}-{target}.yaml` for operational tasks (upgrades, maintenance, etc.)
-- **Setup**: `setup-{target}.yaml` for initial system configuration
+- **Operations**: `ops-{action}-{target}.yaml` for operational tasks (cluster upgrades, maintenance, etc.)
 - **Location**: K3s-specific playbooks are located in `playbooks/k3s/` directory
-- **Legacy**: Individual `update-{service}-manifest.yaml` and `update-{service}-helm.yaml` files exist but are superseded by the unified approach
 
 ### Cluster Upgrade Task Naming Convention
 

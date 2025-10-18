@@ -1,0 +1,39 @@
+---
+# Configure and manage adambalm GPU server for AI/ML workloads
+#
+# Usage:
+#   Configure base system (common role only):
+#     ansible-playbook playbooks/ssh/host-adambalm.yaml
+#
+#   Initial setup or upgrade all LLM components (NVIDIA, Docker, Python, Ollama, Open WebUI, Portainer):
+#     ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_all=true
+#
+#   Upgrade specific LLM component only:
+#     ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=ollama
+#     ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=openwebui
+#     ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=portainer
+
+- name: Configure adambalm GPU server
+  hosts: "adambalm"
+  become: true
+  gather_facts: true
+
+  tasks:
+    # Configure base system (common role) - only when not doing LLM upgrades
+    - name: Run common role
+      when: llm_upgrade_all is not defined and llm_upgrade_component is not defined
+      ansible.builtin.include_role:
+        name: common
+
+    # Upgrade specific LLM component only
+    - name: Upgrade specific LLM component
+      when: llm_upgrade_component is defined
+      ansible.builtin.include_role:
+        name: llm
+        tasks_from: "{{ llm_upgrade_component }}"
+
+    # Upgrade all LLM components - runs entire LLM role (NVIDIA, Docker, Python, Ollama, Open WebUI, Portainer)
+    - name: Run LLM role
+      when: llm_upgrade_all is defined and llm_upgrade_all | bool
+      ansible.builtin.include_role:
+        name: llm

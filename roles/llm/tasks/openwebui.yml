@@ -38,11 +38,13 @@
 
 - name: Wait for Open WebUI to be ready
   ansible.builtin.uri:
-    url: "http://localhost:{{ openwebui_port }}/health"
+    url: "http://localhost:{{ openwebui_port }}/"
     method: GET
     status_code: [200]
   retries: 60
   delay: 3
+  register: openwebui_health
+  until: openwebui_health.status == 200
   delegate_to: "{{ inventory_hostname }}"
 
 - name: Display Open WebUI URL

@@ -1,0 +1,20 @@
+---
+# Configure and manage all k3s production cluster nodes
+#
+# Usage:
+#   Configure all k3s nodes:
+#     ansible-playbook playbooks/ssh/common-k3s-prod.yaml
+#
+#   Configure specific k3s node:
+#     ansible-playbook playbooks/ssh/common-k3s-prod.yaml -l k3s-prod-11
+#     ansible-playbook playbooks/ssh/common-k3s-prod.yaml -l k3s-prod-12
+#
+#   Include system updates (apt update && apt dist-upgrade):
+#     ansible-playbook playbooks/ssh/common-k3s-prod.yaml -e apt_dist_upgrade=true
+#     ansible-playbook playbooks/ssh/common-k3s-prod.yaml -l k3s-prod-11 -e apt_dist_upgrade=true
+
+- name: Configure k3s production servers
+  hosts: "k3s_prod"
+  become: true
+  roles:
+    - common

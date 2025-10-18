@@ -1,6 +1,0 @@
----
-- name: Setup UniFi Protect Let's Encrypt SSL certificates
-  hosts: "ui-protect"
-  become: true
-  roles:
-    - ui-protect

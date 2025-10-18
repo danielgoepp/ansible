@@ -3,18 +3,21 @@
   ansible.builtin.user:
     name: dang
     state: present
+  when: inventory_hostname in groups['lxc']
 
 - name: Set password for user 'dang'
   ansible.builtin.user:
     name: dang
     password: "{{ vault_dang_password | password_hash('sha512') }}"
     update_password: on_create
+  when: inventory_hostname in groups['lxc']
 
 - name: Add dang to sudoers
   ansible.builtin.user:
     name: dang
     groups: sudo
     append: true
+  when: inventory_hostname in groups['lxc']
 
 - name: Allow sudo group to sudo without password
   ansible.builtin.lineinfile:
@@ -22,6 +25,7 @@
     line: '%sudo ALL=(ALL) NOPASSWD:ALL'
     create: true
     mode: '0440'
+  when: inventory_hostname in groups['lxc']
 
 - name: Add SSH public key for dang
   ansible.builtin.lineinfile:
@@ -31,3 +35,4 @@
     owner: dang
     group: dang
     mode: '0600'
+  when: inventory_hostname in groups['lxc']

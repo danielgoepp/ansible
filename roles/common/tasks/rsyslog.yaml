@@ -1,11 +1,11 @@
 ---
-- name: Setup rsyslog on rpi
+- name: Setup rsyslog on rpi and pve
   ansible.builtin.apt:
     name:
       - rsyslog
     state: present
     update_cache: true
-  when: inventory_hostname in groups['rpi']
+  when: inventory_hostname in groups['rpi'] or inventory_hostname in groups['pve']
 
 - name: Copy rsyslog.conf
   ansible.builtin.copy:
@@ -14,7 +14,7 @@
     mode: '0644'
   notify:
     - Restart rsyslog
-  when: inventory_hostname in groups['rpi']
+  when: inventory_hostname in groups['rpi'] or inventory_hostname in groups['pve']
 
 - name: Setup rsyslog on ubuntu and k3s
   ansible.builtin.copy:

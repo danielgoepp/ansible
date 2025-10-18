@@ -2,6 +2,11 @@
 # Main tasks for common role
 # Base configuration applied to all servers
 
+# Optional: Run apt dist-upgrade if apt_dist_upgrade is true
+- name: Run system updates and upgrades
+  ansible.builtin.include_tasks: apt-dist-upgrade.yaml
+  when: apt_dist_upgrade | default(false)
+
 - name: Create ansible tmp directory for root
   ansible.builtin.file:
     path: /root/.ansible/tmp
@@ -14,19 +19,23 @@
 
 - name: Install default packages
   ansible.builtin.include_tasks: packages.yaml
+  when: inventory_hostname not in groups['pve'] and inventory_hostname not in groups['lxc']
 
 - name: Change root shell to zsh
   ansible.builtin.user:
     name: root
     shell: /usr/bin/zsh
+  when: inventory_hostname not in groups['pve'] and inventory_hostname not in groups['lxc']
 
 - name: Change dang user shell to zsh
   ansible.builtin.user:
     name: dang
     shell: /usr/bin/zsh
+  when: inventory_hostname not in groups['pve'] and inventory_hostname not in groups['lxc']
 
 - name: Configure oh-my-zsh
   ansible.builtin.include_tasks: oh-my-zsh.yaml
+  when: inventory_hostname not in groups['pve'] and inventory_hostname not in groups['lxc']
 
 - name: Mount SMB shares
   ansible.builtin.include_tasks: mount-smb.yaml
@@ -34,7 +43,27 @@
 
 - name: Mount Ceph shares
   ansible.builtin.include_tasks: mount-ceph.yaml
-  when: ansible_hostname != 'adambalm' and ansible_hostname != 'ui-network'
+  when: >
+    ansible_hostname != 'adambalm' and
+    ansible_hostname != 'ui-network' and
+    inventory_hostname not in groups['pve'] and
+    inventory_hostname not in groups['lxc']
 
 - name: Configure rsyslog
   ansible.builtin.include_tasks: rsyslog.yaml
+
+- name: Configure pve-specific settings
+  ansible.builtin.include_tasks: pve.yaml
+  when: inventory_hostname in groups['pve']
+
+- name: Configure lxc-specific settings
+  ansible.builtin.include_tasks: lxc.yaml
+  when: inventory_hostname in groups['lxc']
+
+- name: Configure ubuntu VM-specific settings
+  ansible.builtin.include_tasks: ubuntu-vm.yaml
+  when: (inventory_hostname in groups['k3s_prod'] or inventory_hostname in groups['ubuntu'])
+
+- name: Configure dang user settings
+  ansible.builtin.include_tasks: dang-user.yaml
+  when: inventory_hostname not in groups['pve']

@@ -1,0 +1,16 @@
+---
+# Configure and manage backup server
+#
+# Usage:
+#   Configure backup server:
+#     ansible-playbook playbooks/ssh/host-backup.yaml
+#
+#   Include system updates (apt update && apt dist-upgrade):
+#     ansible-playbook playbooks/ssh/host-backup.yaml -e apt_dist_upgrade=true
+
+- name: Configure backup server
+  hosts: "backup"
+  become: true
+  roles:
+    - common
+    - backup
