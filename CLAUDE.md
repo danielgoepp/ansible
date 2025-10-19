@@ -8,199 +8,86 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-### Core Ansible Operations
+This repository supports three primary operation types:
+
+1. **SSH Operations**: Configure and update hosts via SSH
+2. **ESPHome Operations**: Update ESPHome devices
+3. **K3s Operations**: Update Kubernetes applications
+
+### SSH Host Operations
+
+Update and configure hosts via SSH.
 
 ```bash
-# Run playbooks (most common commands)
-ansible-playbook playbooks/ssh/common-ubuntu.yaml
-ansible-playbook playbooks/ssh/common-rpi.yaml
-ansible-playbook playbooks/ssh/common-k3s-prod.yaml
-ansible-playbook playbooks/ops-upgrade-cluster.yaml
+# Run group playbooks (apply common role to host groups)
+ansible-playbook playbooks/ssh/common-<group>.yaml
 
-# Run playbooks with system updates (apt update && apt dist-upgrade)
-ansible-playbook playbooks/ssh/common-ubuntu.yaml -e apt_dist_upgrade=true
-ansible-playbook playbooks/ssh/common-k3s-prod.yaml -e apt_dist_upgrade=true
-ansible-playbook playbooks/ssh/common-lxc.yaml -e apt_dist_upgrade=true
-ansible-playbook playbooks/ssh/common-rpi.yaml -e apt_dist_upgrade=true
+# Run host playbooks (configure specific servers)
+ansible-playbook playbooks/ssh/host-<hostname>.yaml
+
+# Run with system updates (apt update && apt dist-upgrade)
+ansible-playbook playbooks/ssh/common-<group>.yaml -e apt_dist_upgrade=true
 
 # Target specific hosts or groups
-ansible-playbook playbooks/ssh/common-ubuntu.yaml -l ui-network
-ansible-playbook playbooks/ssh/common-rpi.yaml -l morgspi,mudderpi
+ansible-playbook playbooks/ssh/common-<group>.yaml -l <hostname>
+ansible-playbook playbooks/ssh/common-<group>.yaml -l <host1>,<host2>
 
-# Update specific host with system updates
-ansible-playbook playbooks/ssh/common-ubuntu.yaml -l ui-network -e apt_dist_upgrade=true
+# LLM host upgrades (NVIDIA drivers, Docker, Ollama, Open WebUI, Portainer)
+ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_all=true
+ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_component=<component>
 
-# Check syntax and validate
-ansible-playbook playbooks/ssh/common-ubuntu.yaml --syntax-check
-ansible-inventory --list
-ansible-inventory --graph
-
-# Test connectivity
-ansible all -m ping
-ansible ubuntu -m ping
+# Discovery commands
+ls playbooks/ssh/          # List all SSH playbooks
+ansible-inventory --graph  # View host organization
 ```
 
-### Vault Operations
+### ESPHome Device Operations
+
+Update ESPHome firmware on IoT devices.
 
 ```bash
-# Edit encrypted variables
-ansible-vault edit inventories/group_vars/all/vault.yml
-
-# View encrypted content
-ansible-vault view inventories/group_vars/all/vault.yml
-
-# Encrypt new files
-ansible-vault encrypt inventories/group_vars/all/vault.yml
+# Two-step container shell upgrade (recommended)
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml                                 # Upgrade all devices
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_device=<device-name>  # Specific device
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e esphome_clean_build=false    # Skip build cache cleanup
 ```
 
-### Version Checking Operations
+### K3s Application Operations
+
+Update Kubernetes applications (Helm charts and manifests).
 
 ```bash
-# List all applications tracked by version-checker
-ansible-playbook playbooks/version-check.yaml -e version_check_action=list
-
-# Check all application versions and update status
-ansible-playbook playbooks/version-check.yaml -e version_check_action=check-all
-
-# Show version summary with status counts
-ansible-playbook playbooks/version-check.yaml -e version_check_action=summary
-
-# Check specific application (all instances)
-ansible-playbook playbooks/version-check.yaml -e version_check_action=app -e app_name="home assistant"
-ansible-playbook playbooks/version-check.yaml -e version_check_action=app -e app_name="k3s"
-
-# Run system info only (original functionality - commented out in current version)
-# ansible-playbook playbooks/version-check.yaml
-```
-
-### K3s Application Update Operations
-
-```bash
-# Unified update playbook - dynamically routes to appropriate deployment method
-# Application configurations are defined in inventories/group_vars/all/k3s_applications.yml
-
-# Update any application (manifest or helm)
+# Unified update playbook (routes to appropriate deployment method)
 ansible-playbook playbooks/k3s/update-app.yaml -e app_name=<application>
 
-# Examples - Single instance applications
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=grafana          # manifest
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=alertmanager     # helm
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=traefik          # helm
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=n8n              # manifest
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=postfix          # manifest
+# Update specific instance (for multi-instance apps)
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=<application> -e target_instance=<instance>
 
-# Examples - Multi-instance applications (updates all instances by default)
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=homeassistant
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=zigbee2mqtt
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=victoriametrics
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=telegraf
-
-# Update specific instance only (for multi-instance apps)
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=homeassistant -e target_instance=prod
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=homeassistant -e target_instance=morgspi
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=zigbee2mqtt -e target_instance=11
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=telegraf -e target_instance=vm
-
-# Available applications:
-# - alertmanager (helm)
-# - cert-manager (helm)
-# - esphome (manifest)
-# - fluent-bit (helm)
-# - grafana (manifest)
-# - hertzbeat (manifest)
-# - homeassistant (manifest-multi: morgspi, mudderpi, prod)
-# - metallb (helm)
-# - mongodb-operator (helm)
-# - n8n (manifest)
-# - opensearch (helm)
-# - pgadmin (helm)
-# - postfix (manifest)
-# - telegraf (manifest-multi: vm, graylog)
-# - traefik (helm)
-# - victoriametrics (manifest-multi: vmsingle-main, vmsingle-lt)
-# - victoriametrics-operator (helm)
-# - weather (helm)
-# - zigbee2mqtt (manifest-multi: 11, 15)
+# Discovery commands
+cat inventories/group_vars/all/k3s_applications.yml  # List available applications
+ls playbooks/k3s/                                     # List K3s playbooks
 ```
 
-### ESPHome Operations
+### Supporting Operations
 
 ```bash
-# Container Shell Upgrade (Two-step process for reliability)
+# Vault operations
+ansible-vault edit inventories/group_vars/all/vault.yml
+ansible-vault view inventories/group_vars/all/vault.yml
+ansible-vault encrypt inventories/group_vars/all/vault.yml
 
-# Step 1: Discover all devices and update group_vars/esphome.yml
-ansible-playbook playbooks/ops-esphome-discover.yaml
+# Inventory and connectivity
+ansible-inventory --list
+ansible-inventory --graph
+ansible all -m ping
+ansible <group> -m ping
 
-# Step 2: Upgrade all configured devices
-ansible-playbook playbooks/ops-upgrade-esphome.yaml
+# Validation
+ansible-playbook <playbook>.yaml --syntax-check
 
-# Upgrade specific device only
-ansible-playbook playbooks/ops-upgrade-esphome.yaml -e target_device=ble-proxy-greatroom
-
-# Upgrade Konnected devices only
-ansible-playbook playbooks/ops-upgrade-esphome-konnected.yaml
-
-# Skip build cache cleanup (cleanup is enabled by default)
-ansible-playbook playbooks/ops-upgrade-esphome.yaml -e esphome_clean_build=false
-ansible-playbook playbooks/ops-upgrade-esphome-konnected.yaml -e esphome_clean_build=false
-
-# Use different k3s context
-ansible-playbook playbooks/ops-esphome-discover.yaml -e k3s_context=k3s-morgspi
-ansible-playbook playbooks/ops-upgrade-esphome.yaml -e k3s_context=k3s-morgspi
-
-# Customize namespace and deployment name
-ansible-playbook playbooks/ops-upgrade-esphome.yaml -e esphome_namespace=homeassistant -e esphome_deployment_name=esphome
-
-# Dashboard Remote Install (Legacy - uses dashboard API)
-# Trigger remote install for all configured devices (equivalent to clicking "Install" in GUI)
-ansible-playbook playbooks/ops-esphome-ota.yaml
-
-# Install specific device by name and IP
-ansible-playbook playbooks/ops-esphome-ota.yaml -e device_name=sensor-garage -e device_ip=192.168.1.100
-
-# Install specific device with custom config name
-ansible-playbook playbooks/ops-esphome-ota.yaml -e device_name=my-sensor -e device_config=custom-sensor -e device_ip=192.168.1.101
-
-# Validate/compile only (equivalent to "Validate" button)
-ansible-playbook playbooks/ops-esphome-ota.yaml -e esphome_compile_only=true
-
-# Run install without waiting for completion (fire and forget)
-ansible-playbook playbooks/ops-esphome-ota.yaml -e esphome_wait_for_completion=false
-
-# Use custom dashboard URL
-ansible-playbook playbooks/ops-esphome-ota.yaml -e esphome_dashboard_url=https://esphome.your-domain.com
-
-# Set custom timeout (default 10 minutes)
-ansible-playbook playbooks/ops-esphome-ota.yaml -e esphome_timeout=900
-```
-
-### LLM Operations
-
-```bash
-# Configure base system only (common role)
-ansible-playbook playbooks/ssh/host-adambalm.yaml
-
-# Initial setup or upgrade all LLM components (NVIDIA drivers, Docker, Python AI/ML packages, Ollama, Open WebUI, Portainer)
-ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_all=true
-
-# Upgrade specific component only
-ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=ollama
-ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=openwebui
-ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=portainer
-
-# Override configuration during upgrade
-ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=ollama -e ollama_bind_address=127.0.0.1
-ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=ollama -e ollama_max_loaded_models=2
-ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=openwebui -e openwebui_port=8080
-```
-
-### Additional Operations
-
-```bash
-# Cluster maintenance and testing
-ansible-playbook playbooks/ops-proxmox-maintenance-on.yaml
-ansible-playbook playbooks/ops-test-alerts.yaml
-ansible-playbook playbooks/ops-test-ceph-noout.yaml
+# Operational playbooks (cluster upgrades, maintenance, testing)
+ls playbooks/ops-*.yaml
+ansible-playbook playbooks/ops-<operation>.yaml
 ```
 
 ## Architecture
@@ -208,12 +95,16 @@ ansible-playbook playbooks/ops-test-ceph-noout.yaml
 ### Repository Structure
 
 - **inventories/hosts.yml**: Main inventory with host groups (ubuntu, rpi, k3s_prod, pve, lxc)
-- **playbooks/**: Organized by purpose
-  - **ssh/**: SSH-accessible host playbooks for configuration management
-    - **{target}.yaml**: Host/group configuration (idempotent, handles both setup and updates)
-    - All playbooks support optional system updates via `-e apt_dist_upgrade=true`
-  - **ops-*.yaml**: Operational tasks (cluster upgrades, maintenance, testing)
-  - **k3s/**: K3s-specific playbooks (application updates)
+- **playbooks/**: Organized by operation type (matching the three primary operation types)
+  - **ssh/**: SSH-based host configuration and updates
+    - **common-{group}.yaml**: Group playbooks (apply common role to host groups)
+    - **host-{hostname}.yaml**: Host-specific playbooks
+    - All playbooks are idempotent and support optional system updates via `-e apt_dist_upgrade=true`
+  - **esphome/**: ESPHome device firmware updates
+    - **upgrade-esphome.yaml**: Main upgrade playbook for ESPHome devices
+  - **k3s/**: Kubernetes application updates
+    - **update-app.yaml**: Unified update playbook (routes to appropriate deployment method)
+  - **ops-*.yaml**: Additional operational tasks (cluster upgrades, maintenance, testing)
 - **roles/**: Ansible roles for modular configuration
   - **llm/**: LLM role for GPU server setup (NVIDIA drivers, Docker, Python AI/ML packages, Ollama, Open WebUI, Portainer)
     - **tasks/ollama.yml**: Ollama installation and upgrade tasks (idempotent)
@@ -266,15 +157,56 @@ ansible-playbook playbooks/k3s/ops-upgrade-grafana-manifest.yaml -e k3s_default_
 - **Manifest playbooks**: Use `{{ playbook_dir }}/../../files/k3s-config/{service}/manifests/{service}-{context}.yaml`
 - **Helm playbooks**: Use `{{ playbook_dir }}/../../files/k3s-config/{service}/helm/` for chart paths and values files
 
+### Secret Management
+
+**Preferred Pattern**: All secrets should follow the AWX-friendly pattern that works seamlessly with both local Ansible and AWX.
+
+**Implementation Pattern**:
+
+1. Store secrets in `inventories/group_vars/all/vault.yml` with descriptive names (e.g., `vault_proxmox_api_token_id`, `vault_proxmox_api_token_secret`)
+1. In playbooks/roles, use `set_fact` to check for AWX variables first, then fall back to vault variables:
+
+```yaml
+- name: Set credentials from AWX or vault
+  ansible.builtin.set_fact:
+    proxmox_api_token_id: "{{ awx_proxmox_api_token_id | default(vault_proxmox_api_token_id | default('')) }}"
+    proxmox_api_token_secret: "{{ awx_proxmox_api_token_secret | default(vault_proxmox_api_token_secret | default('')) }}"
+```
+
+1. Use the fact variables in your tasks:
+
+```yaml
+- name: List virtual machines
+  community.general.proxmox_vm_info:
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+```
+
+**Benefits**:
+
+- **Local Ansible**: Uses vault variables automatically
+- **AWX**: Credentials injected as `awx_*` variables take precedence
+- **Consistent**: Same pattern across all secrets
+- **Flexible**: Easy to override for testing
+
+**Examples in Codebase**:
+
+- [roles/backup/tasks/main.yml](roles/backup/tasks/main.yml) - OPNsense, Jira, and SSH credentials
+- [roles/common/tasks/mount-smb.yaml](roles/common/tasks/mount-smb.yaml) - CIFS credentials
+- [roles/ui-network/tasks/main.yaml](roles/ui-network/tasks/main.yaml) - SSH public key
+- [playbooks/ops-proxmox-maintenance-on.yaml](playbooks/ops-proxmox-maintenance-on.yaml) - Proxmox API credentials
+
 ### Host Organization
 
-The infrastructure is organized into logical groups:
+The infrastructure is organized into logical groups defined in `inventories/hosts.yml`:
 
-- **ubuntu**: Ubuntu servers (ui-network, backup, dev, adambalm, smb)
+- **ubuntu**: Ubuntu servers
 - **rpi**: Raspberry Pi devices with service-specific roles
 - **k3s_prod**: Kubernetes production cluster nodes
 - **pve**: Proxmox VE hypervisor hosts
 - **lxc**: LXC containers
+
+Use `ansible-inventory --graph` to view the current host organization.
 
 ### Service-Based Configuration
 
@@ -293,7 +225,7 @@ Tasks use conditionals like `when: "'nut' in (services | default([]))"` to run s
 
 - **SMB mounts**: Media storage available to k3s_prod hosts at `/mnt/smb_media`
 - **Ceph mounts**: Production Kubernetes data, homes, and backups for k3s_prod hosts
-- **Security exclusion**: The `adambalm` host is excluded from sensitive operations
+- **Security exclusions**: Certain hosts may be excluded from sensitive operations (check host_vars)
 
 ### Multi-Play Structure
 
@@ -317,35 +249,35 @@ K3s application updates use a unified, configuration-driven approach:
 
 ### Playbook Naming Conventions
 
-- **SSH playbooks**: Two types with clear naming
-  - **Group playbooks** (`common-*`): Apply common role to host groups
-    - Examples: `common-ubuntu.yaml`, `common-rpi.yaml`, `common-k3s-prod.yaml`, `common-pve.yaml`, `common-lxc.yaml`
-  - **Host playbooks** (`host-*`): Configure specific individual servers
-    - Examples: `host-adambalm.yaml`, `host-backup.yaml`, `host-dev.yaml`, `host-smb.yaml`, `host-ui-network.yaml`
+- **SSH playbooks** (`playbooks/ssh/`): Two types with clear naming
+  - **Group playbooks** (`common-{group}.yaml`): Apply common role to host groups
+  - **Host playbooks** (`host-{hostname}.yaml`): Configure specific individual servers
   - All playbooks are idempotent (handle both initial setup and ongoing management)
-  - Variables for selective operations:
+  - Common variables for selective operations:
     - `apt_dist_upgrade=true`: Run apt update/dist-upgrade (available on all playbooks using common role)
-    - `llm_upgrade_component=<component>`: Upgrade specific LLM component (host-adambalm only)
-    - `llm_upgrade_all=true`: Upgrade all LLM components (host-adambalm only)
+    - Role-specific upgrade variables may be available (check playbook headers)
   - All playbooks include usage headers with invocation examples
-- **K3s application updates**: Use `playbooks/k3s/update-app.yaml` with `-e app_name=<application>` (unified approach)
-- **Operations**: `ops-{action}-{target}.yaml` for operational tasks (cluster upgrades, maintenance, etc.)
-- **Location**: K3s-specific playbooks are located in `playbooks/k3s/` directory
+- **K3s application updates** (`playbooks/k3s/`): Use `update-app.yaml` with `-e app_name=<application>` (unified, configuration-driven approach)
+- **Operations** (`playbooks/ops-*.yaml`): Operational tasks following `ops-{action}-{target}.yaml` pattern
+- Use `ls playbooks/` and `ls playbooks/ssh/` to discover available playbooks
 
 ### Cluster Upgrade Task Naming Convention
 
-All cluster upgrade task files use the prefix `ops-upgrade-cluster-` for consistency:
+All cluster upgrade task files use the prefix `ops-upgrade-cluster-` for consistency and are located in the `tasks/` directory.
 
-- **tasks/ops-upgrade-cluster-alerts.yaml**: Alert management (mute/unmute monitoring)
-- **tasks/ops-upgrade-cluster-ceph-noout.yaml**: Ceph noout flag management
-- **tasks/ops-upgrade-cluster-cnpg-maintenance.yaml**: CloudNativePG maintenance mode
-- **tasks/ops-upgrade-cluster-drain.yaml**: Node draining and uncordoning operations
-- **tasks/ops-upgrade-cluster-health.yaml**: Cluster and node health validation
-- **tasks/ops-upgrade-cluster-k3s.yaml**: K3s node lifecycle operations (drain, shutdown, startup, uncordon, validate)
-- **tasks/ops-upgrade-cluster-paired.yaml**: Orchestrates paired PVE+K3s node upgrades
-- **tasks/ops-upgrade-cluster-proxmox.yaml**: Proxmox node upgrade operations
-- **tasks/ops-upgrade-cluster-vm.yaml**: VM/LXC operations (migrate, shutdown, startup)
-- **Future additions**: Always prefix new cluster upgrade task files with `ops-upgrade-cluster-`
+**Pattern**: `tasks/ops-upgrade-cluster-{component}.yaml`
+
+**Task Categories**:
+
+- Alert and monitoring management
+- Ceph storage operations
+- Database maintenance mode
+- Node lifecycle (drain, shutdown, startup, uncordon)
+- Health validation
+- VM/LXC operations
+- Orchestration tasks
+
+Use `ls tasks/ops-upgrade-cluster-*.yaml` to see all cluster upgrade tasks.
 
 ### Modular Architecture
 
