@@ -4,36 +4,41 @@
   gather_facts: false
   tasks:
 
-  # - name: List all existing virtual machines on node
-  #   community.general.proxmox_vm_info:
-  #     api_user: root@pam
-  #     api_token_id: "{{ vault_proxmox_api_token_id }}"
-  #     api_token_secret: "{{ vault_proxmox_api_token_secret }}"
-  #     api_host: pve11
-  #     node: pve11
-  #   register: vm_info
+  - name: Set Proxmox API credentials from AWX or vault
+    ansible.builtin.set_fact:
+      proxmox_api_token_id: "{{ awx_proxmox_api_token_id | default(vault_proxmox_api_token_id | default('')) }}"
+      proxmox_api_token_secret: "{{ awx_proxmox_api_token_secret | default(vault_proxmox_api_token_secret | default('')) }}"
 
-  # - name: Output VM information
-  #   debug:
-  #     var: vm_info
-
-  # - name: Display VM information
-  #   debug:
-  #     msg: "VM ID: {{ item.vmid }} - Name: {{ item.name }} - Status: {{ item.status }}"
-  #   loop: "{{ vm_info.proxmox_vms }}"
-
-  - name: Migrate dev VM
-    community.general.proxmox_kvm:
+  - name: List all existing virtual machines on node
+    community.general.proxmox_vm_info:
       api_user: root@pam
-      api_token_id: "{{ vault_proxmox_api_token_id }}"
-      api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+      api_token_id: "{{ proxmox_api_token_id }}"
+      api_token_secret: "{{ proxmox_api_token_secret }}"
       api_host: pve11
-      args: --with-local-disks
-      name: dev
       node: pve11
-      migrate: true
+    register: vm_info
+
+  - name: Output VM information
+    debug:
+      var: vm_info
+
+  - name: Display VM information
+    debug:
+      msg: "VM ID: {{ item.vmid }} - Name: {{ item.name }} - Status: {{ item.status }}"
+    loop: "{{ vm_info.proxmox_vms }}"
+
+  # - name: Migrate dev VM
+  #   community.general.proxmox_kvm:
+  #     api_user: root@pam
+  #     api_token_id: "{{ proxmox_api_token_id }}"
+  #     api_token_secret: "{{ proxmox_api_token_secret }}"
+  #     api_host: pve11
+  #     args: --with-local-disks
+  #     name: dev
+  #     node: pve11
+  #     migrate: true
+  #     timeout: 10
       # vmid: 105
-      timeout: 10
     # register: migration_result
     
   # - name: Display migration result
@@ -68,8 +73,8 @@
   # - name: Stop VMs
   #   proxmox_kvm:
   #     api_user: root@pam
-  #     api_token_id: "{{ vault_proxmox_api_token_id }}"
-  #     api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+  #     api_token_id: "{{ proxmox_api_token_id }}"
+  #     api_token_secret: "{{ proxmox_api_token_secret }}"
   #     api_host: pve11
   #     vmid: "{{ item }}"
   #     state: stopped
@@ -80,8 +85,8 @@
   # - name: Start VMs
   #   proxmox_kvm:
   #     api_user: root@pam
-  #     api_token_id: "{{ vault_proxmox_api_token_id }}"
-  #     api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+  #     api_token_id: "{{ proxmox_api_token_id }}"
+  #     api_token_secret: "{{ proxmox_api_token_secret }}"
   #     api_host: pve11
   #     vmid: "{{ item }}"
   #     state: started
