@@ -57,6 +57,8 @@
     - name: Update application using manifest
       include_tasks: ../../tasks/k3s-update-manifest.yaml
       vars:
+        service_name: "{{ service_name }}"
+        k3s_config_base_path: "{{ k3s_config_base_path }}"
         manifest_path: "{{ app_config.manifest_path }}"
         k8s_context: "{{ app_config.k8s_context | default(k3s_default_context) }}"
         service_namespace: "{{ app_config.service_namespace | default(service_name) }}"
