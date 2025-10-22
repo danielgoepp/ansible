@@ -14,23 +14,17 @@ k3s_default_context: "k3s-prod"
 k3s_applications:
   alertmanager:
     deployment_method: helm
-    helm_release_name: alertmanager
     helm_chart_name: prometheus-community/alertmanager
     helm_repo_name: prometheus-community
     helm_repo_url: https://prometheus-community.github.io/helm-charts
-    helm_namespace: alertmanager
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/alertmanager/helm/alertmanager-values-prod.yaml"
-    k8s_context: k3s-prod
 
   cert-manager:
     deployment_method: helm
-    helm_release_name: cert-manager
     helm_chart_name: jetstack/cert-manager
     helm_repo_name: jetstack
     helm_repo_url: https://charts.jetstack.io
-    helm_namespace: cert-manager
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cert-manager/helm/cert-manager-values-prod.yaml"
-    k8s_context: k3s-prod
 
   cnpg-operator:
     deployment_method: helm
@@ -40,7 +34,6 @@ k3s_applications:
     helm_repo_url: https://cloudnative-pg.github.io/charts
     helm_namespace: cnpg-system
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cnpg/helm/cnpg-operator-values-prod.yaml"
-    k8s_context: k3s-prod
 
   cnpg:
     deployment_method: manifest-multi-cnpg
@@ -63,26 +56,19 @@ k3s_applications:
 
   esphome:
     deployment_method: manifest
-    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/esphome/manifests/esphome-prod.yaml"
 
   fluent-bit:
     deployment_method: helm
-    helm_release_name: fluent-bit
     helm_chart_name: fluent/fluent-bit
     helm_repo_name: fluent
     helm_repo_url: https://fluent.github.io/helm-charts
-    helm_namespace: fluent-bit
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/fluent-bit/helm/fluent-bit-values-prod.yaml"
-    k8s_context: k3s-prod
 
   grafana:
     deployment_method: manifest
-    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/grafana/manifests/grafana-deployment.yaml"
 
   hertzbeat:
     deployment_method: manifest
-    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/hertzbeat/manifests/hertzbeat-prod.yml"
-    k8s_context: k3s-prod
     service_namespace: hertzbeat
     deployment_name: hertzbeat
     app_label: hertzbeat
@@ -111,13 +97,11 @@ k3s_applications:
 
   metallb:
     deployment_method: helm
-    helm_release_name: metallb
     helm_chart_name: metallb/metallb
     helm_repo_name: metallb
     helm_repo_url: https://metallb.github.io/metallb
     helm_namespace: metallb-system
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/metallb/helm/metallb-values-prod.yaml"
-    k8s_context: k3s-prod
 
   mongodb-operator:
     deployment_method: helm
@@ -127,20 +111,16 @@ k3s_applications:
     helm_repo_url: https://mongodb.github.io/helm-charts
     helm_namespace: mongodb
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/mongodb/helm/mongodb-operator-values-prod.yaml"
-    k8s_context: k3s-prod
 
   n8n:
     deployment_method: manifest
 
   opensearch:
     deployment_method: helm
-    helm_release_name: opensearch
     helm_chart_name: opensearch/opensearch
     helm_repo_name: opensearch
     helm_repo_url: https://opensearch-project.github.io/helm-charts/
-    helm_namespace: opensearch
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/opensearch/helm/opensearch-values-prod.yaml"
-    k8s_context: k3s-prod
 
   pgadmin:
     deployment_method: helm
@@ -148,9 +128,7 @@ k3s_applications:
     helm_chart_name: runix/pgadmin4
     helm_repo_name: runix
     helm_repo_url: https://helm.runix.net
-    helm_namespace: pgadmin
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/pgadmin/helm/pgadmin-values-prod.yaml"
-    k8s_context: k3s-prod
 
   postfix:
     deployment_method: manifest
@@ -169,13 +147,10 @@ k3s_applications:
 
   traefik:
     deployment_method: helm
-    helm_release_name: traefik
     helm_chart_name: traefik/traefik
     helm_repo_name: traefik
     helm_repo_url: https://traefik.github.io/charts
-    helm_namespace: traefik
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/traefik/helm/traefik-values-prod.yaml"
-    k8s_context: k3s-prod
 
   victoriametrics:
     deployment_method: manifest-multi
@@ -207,15 +182,11 @@ k3s_applications:
     helm_repo_url: https://victoriametrics.github.io/helm-charts/
     helm_namespace: victoriametrics
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/helm/victoriametrics-operator-values-prod.yaml"
-    k8s_context: k3s-prod
 
   weather:
     deployment_method: helm
-    helm_release_name: weather
     helm_chart_path: "{{ playbook_dir }}/../../files/k3s-config/weather/helm/weather"
-    helm_namespace: weather
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/weather/helm/weather-values-prod.yaml"
-    k8s_context: k3s-prod
 
   zigbee2mqtt:
     deployment_method: manifest-multi
