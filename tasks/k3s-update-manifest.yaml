@@ -5,12 +5,11 @@
 - name: Set default variables
   set_fact:
     context_suffix: "{{ context_suffix | default('prod') }}"
-    base_path: "{{ k3s_config_base_path }}"
     field_manager: "ansible-{{ service_name }}-upgrade"
 
 - name: Set computed paths
   set_fact:
-    default_manifest_path: "{{ base_path }}/{{ service_name }}/manifests/{{ service_name }}-{{ context_suffix }}.yaml"
+    default_manifest_path: "{{ k3s_config_base_path }}/{{ service_name }}/manifests/{{ service_name }}-{{ context_suffix }}.yaml"
 
 - name: Display upgrade parameters
   debug:
