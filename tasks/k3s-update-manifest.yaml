@@ -4,11 +4,7 @@
 
 - name: Set default variables
   set_fact:
-    k8s_context: "{{ k8s_context | default(k3s_default_context) }}"
     context_suffix: "{{ context_suffix | default('prod') }}"
-    service_namespace: "{{ service_namespace | default(service_name) }}"
-    deployment_name: "{{ deployment_name | default(service_name) }}"
-    app_label: "{{ app_label | default(service_name) }}"
     base_path: "{{ k3s_config_base_path }}"
     field_manager: "ansible-{{ service_name }}-upgrade"
 
