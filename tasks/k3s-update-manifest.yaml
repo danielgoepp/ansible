@@ -53,11 +53,6 @@
     msg: "{{ service_name | title }} deployment '{{ deployment_name }}' not found in namespace '{{ service_namespace }}'"
   when: current_deployment.resources is not defined or current_deployment.resources | length == 0
 
-- name: Validate manifest with kubectl (dry-run)
-  shell: kubectl apply -f "{{ manifest_path | default(default_manifest_path) }}" --context="{{ k8s_context }}" --dry-run=server --validate=true
-  register: kubectl_validate_result
-  failed_when: kubectl_validate_result.rc != 0
-
 - name: Apply manifest from local file (server-side)
   kubernetes.core.k8s:
     state: present
@@ -68,13 +63,11 @@
   register: apply_result
   failed_when: apply_result.failed | default(false)
 
-- name: Display manifest validation and application result
+- name: Display manifest application result
   debug:
     msg:
-      - "{{ service_name | title }} manifest validation and application:"
-      - "  Kubectl validation: {{ 'SUCCESS' if kubectl_validate_result.rc == 0 else 'FAILED' }}"
-      - "  Kubectl error: {{ kubectl_validate_result.stderr | default('None') }}"
-      - "  Ansible result: {{ 'SUCCESS' if not (apply_result.failed | default(false)) else 'FAILED' }}"
+      - "{{ service_name | title }} manifest application:"
+      - "  Result: {{ 'SUCCESS' if not (apply_result.failed | default(false)) else 'FAILED' }}"
       - "  Changed: {{ apply_result.changed }}"
       - "  Error: {{ apply_result.msg | default('None') }}"
 
