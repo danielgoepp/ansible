@@ -1,0 +1,77 @@
+---
+# Cloudflare ACME Challenge Cleanup Playbook
+#
+# Purpose: Remove stale ACME challenge TXT records from Cloudflare DNS
+#
+# Usage:
+#   ansible-playbook playbooks/ops-cloudflare-clear-acme.yaml
+#
+# Notes:
+#   - Requires Cloudflare API token in vault (vault_cloudflare_api_token)
+#   - Target zone is hardcoded to goepp.net (update zone_name variable if needed)
+#   - Idempotent: safe to run multiple times
+#   - Deleted records can be recovered from Cloudflare audit logs (18 month retention)
+
+- name: Clean up stale ACME challenge records from Cloudflare
+  hosts: localhost
+  become: false
+  gather_facts: false
+
+  vars:
+    zone_name: "goepp.net"
+    acme_record_name: "_acme-challenge"
+
+  tasks:
+    - name: Set Cloudflare API credentials from AWX or vault
+      ansible.builtin.set_fact:
+        cloudflare_api_token: "{{ awx_cloudflare_api_token | default(vault_cloudflare_api_token | default('')) }}"
+        cloudflare_zone_id: "{{ awx_cloudflare_zone_id | default(vault_cloudflare_zone_id | default('')) }}"
+
+    - name: Validate credentials are available
+      ansible.builtin.fail:
+        msg: "Cloudflare credentials not found. Ensure vault_cloudflare_api_token and vault_cloudflare_zone_id are set."
+      when: cloudflare_api_token == '' or cloudflare_zone_id == ''
+
+    - name: Fetch all DNS records from Cloudflare zone
+      ansible.builtin.uri:
+        url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id }}/dns_records"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ cloudflare_api_token }}"
+          Content-Type: "application/json"
+        return_content: true
+      register: dns_records_response
+
+    - name: Extract ACME challenge records
+      ansible.builtin.set_fact:
+        acme_records: >-
+          {{
+            dns_records_response.json.result
+            | selectattr('type', 'equalto', 'TXT')
+            | selectattr('name', 'equalto', acme_record_name ~ '.' ~ zone_name)
+            | list
+          }}
+
+    - name: Display found ACME challenge records
+      ansible.builtin.debug:
+        msg: "Found {{ acme_records | length }} stale ACME challenge record(s)"
+
+    - name: Delete stale ACME challenge records
+      community.general.cloudflare_dns:
+        zone: "{{ zone_name }}"
+        record: "{{ acme_record_name }}"
+        type: TXT
+        api_token: "{{ cloudflare_api_token }}"
+        state: absent
+      when: acme_records | length > 0
+      register: deletion_result
+
+    - name: Display deletion results
+      ansible.builtin.debug:
+        msg: "Stale ACME challenge cleanup completed. Records removed: {{ acme_records | length }}"
+      when: deletion_result.changed | default(false)
+
+    - name: No records to clean up
+      ansible.builtin.debug:
+        msg: "No stale ACME challenge records found"
+      when: acme_records | length == 0
