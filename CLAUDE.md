@@ -131,7 +131,6 @@ ansible-playbook playbooks/ops-<operation>.yaml
 - **SSH optimization**: ControlMaster enabled for connection reuse
 - **Python interpreter**: Set to `auto_silent` to suppress discovery warnings
 - **Host key checking**: Disabled for lab environment
-- **Utility scripts**: Git submodule at `scripts/utility-scripts/` containing Python scripts for cluster upgrade operations
 
 **Vault Variable Auto-Loading**: Vault variables are automatically loaded from `inventories/group_vars/all/vault.yml` for all playbooks, regardless of their location in the directory structure. The vault file is placed next to the inventory file (`inventories/hosts.yml`), following Ansible best practices.
 

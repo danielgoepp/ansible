@@ -11,7 +11,6 @@
     - name: Set path variables based on playbook location
       set_fact:
         k3s_config_base_path: "{{ playbook_dir }}/../../files/k3s-config"
-        scripts_base_path: "{{ playbook_dir }}/../../scripts/utility-scripts"
 
     - name: Validate app_name is provided
       fail:

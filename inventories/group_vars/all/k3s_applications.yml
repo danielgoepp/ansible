@@ -7,7 +7,7 @@
 # The unified playbook is at playbooks/k3s/update-app.yaml, so paths are relative to that location
 
 # Common configuration variables
-# Note: k3s_config_base_path and scripts_base_path are set in the playbook
+# Note: k3s_config_base_path is set in the playbook
 # using playbook_dir to ensure correct path resolution
 k3s_default_context: "k3s-prod"
 
