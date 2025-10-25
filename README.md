@@ -60,6 +60,24 @@ ansible-playbook playbooks/k3s/update-app.yaml \
   -e app_name=homeassistant -e target_instance=prod
 ```
 
+### Cluster Alert Management
+
+```bash
+# Disable all alerts (Graylog, Alertmanager, HertzBeat)
+ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable
+
+# Enable all alerts
+ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=enable
+
+# Manage specific alert system
+ansible-playbook playbooks/ops-cluster-alerts.yaml \
+  -e alert_action=disable -e target=graylog
+
+# Customize silence duration (default: 2 hours)
+ansible-playbook playbooks/ops-cluster-alerts.yaml \
+  -e alert_action=disable -e duration_hours=4
+```
+
 ## Infrastructure Overview
 
 - **Ubuntu Servers**: General purpose servers (ui-network, backup, dev, smb)
@@ -76,8 +94,10 @@ ansible-playbook playbooks/k3s/update-app.yaml \
 - **Unified update architecture**: Single playbook for all K3s application updates
 - **Optional system updates**: Add `-e apt_dist_upgrade=true` to any playbook using common role
 - **Version tracking**: Automated version checking across all applications
+- **Centralized alert management**: Control alerts across Graylog, Alertmanager, and HertzBeat
 - **Secure secret management**: ansible-vault encrypted credentials
 - **Automated storage mounting**: SMB media shares and Ceph distributed storage
+- **AWX compatible**: Native Ansible implementation works in both local and AWX environments
 
 ## Documentation
 
@@ -104,7 +124,6 @@ ansible-playbook playbooks/k3s/update-app.yaml \
 - SSH key authentication configured
 - Vault password file at `~/.ansible/.vault-pass` (for local execution)
 - Git submodules initialized:
-  - `scripts/utility-scripts/` - Python utility scripts for cluster operations
   - `files/k3s-config/` - Kubernetes manifest configurations
 
 ## AWX/Tower Compatibility
