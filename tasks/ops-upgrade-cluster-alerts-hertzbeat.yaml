@@ -12,10 +12,10 @@
 - name: Create HertzBeat silence
   when: alert_action == 'disable'
   block:
-    - name: Get timestamps
+    - name: Calculate silence timestamps
       ansible.builtin.set_fact:
-        hertzbeat_start_time: "{{ lookup('pipe', 'date +%Y-%m-%dT%H:%M:%S.000%z') }}"
-        hertzbeat_end_time: "{{ lookup('pipe', 'date -v +' + (alert_duration_hours | string) + 'H +%Y-%m-%dT%H:%M:%S.000%z') }}"
+        hertzbeat_start_time: "{{ '%Y-%m-%dT%H:%M:%S.000%z' | strftime(ansible_date_time.epoch | int, utc=True) }}"
+        hertzbeat_end_time: "{{ '%Y-%m-%dT%H:%M:%S.000%z' | strftime((ansible_date_time.epoch | int) + (alert_duration_hours | int * 3600), utc=True) }}"
 
     - name: Create silence
       ansible.builtin.uri:

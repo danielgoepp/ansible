@@ -10,24 +10,31 @@
 
 # DISABLE ALERTS
 - name: Create Alertmanager silence
-  ansible.builtin.uri:
-    url: "{{ alertmanager_api_url }}/silences"
-    method: POST
-    headers:
-      Content-Type: application/json
-    body_format: json
-    body:
-      matchers:
-        - name: grafana_folder
-          value: Goepp Alerts
-          isRegex: false
-          isEqual: true
-      startsAt: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
-      endsAt: "{{ lookup('pipe', 'date -u -v +' + (alert_duration_hours | string) + 'H +%Y-%m-%dT%H:%M:%SZ') }}"
-      createdBy: "{{ alertmanager_created_by }}"
-      comment: Maintenance window
-    status_code: [200, 201]
   when: alert_action == 'disable'
+  block:
+    - name: Calculate silence timestamps
+      ansible.builtin.set_fact:
+        silence_start: "{{ ansible_date_time.iso8601 }}"
+        silence_end: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime((ansible_date_time.epoch | int) + (alert_duration_hours | int * 3600), utc=True) }}"
+
+    - name: Create silence
+      ansible.builtin.uri:
+        url: "{{ alertmanager_api_url }}/silences"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body:
+          matchers:
+            - name: grafana_folder
+              value: Goepp Alerts
+              isRegex: false
+              isEqual: true
+          startsAt: "{{ silence_start }}"
+          endsAt: "{{ silence_end }}"
+          createdBy: "{{ alertmanager_created_by }}"
+          comment: Maintenance window
+        status_code: [200, 201]
 
 # ENABLE ALERTS
 - name: Delete Alertmanager silences

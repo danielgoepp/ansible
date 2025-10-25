@@ -15,7 +15,7 @@
 
 - name: Manage cluster alerts
   hosts: localhost
-  gather_facts: false
+  gather_facts: true
 
   vars:
     alert_target: "{{ target | default('all') }}"
