@@ -1,0 +1,51 @@
+---
+# Alertmanager Alert Management
+# Creates/deletes Alertmanager silences using native Ansible
+#
+# Parameters:
+#   alert_action: "disable" or "enable"
+#   alertmanager_api_url: Alertmanager API URL
+#   alertmanager_created_by: Creator identifier for silences
+#   alert_duration_hours: Duration in hours for silence period
+
+# DISABLE ALERTS
+- name: Create Alertmanager silence
+  ansible.builtin.uri:
+    url: "{{ alertmanager_api_url }}/silences"
+    method: POST
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body:
+      matchers:
+        - name: grafana_folder
+          value: Goepp Alerts
+          isRegex: false
+          isEqual: true
+      startsAt: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+      endsAt: "{{ lookup('pipe', 'date -u -v +' + (alert_duration_hours | string) + 'H +%Y-%m-%dT%H:%M:%SZ') }}"
+      createdBy: "{{ alertmanager_created_by }}"
+      comment: Maintenance window
+    status_code: [200, 201]
+  when: alert_action == 'disable'
+
+# ENABLE ALERTS
+- name: Delete Alertmanager silences
+  when: alert_action == 'enable'
+  block:
+    - name: Get active silences
+      ansible.builtin.uri:
+        url: "{{ alertmanager_api_url }}/silences"
+        method: GET
+        return_content: true
+      register: alertmanager_silences
+
+    - name: Delete each silence
+      ansible.builtin.uri:
+        url: "{{ alertmanager_api_url }}/silence/{{ item.id }}"
+        method: DELETE
+        status_code: [200, 204]
+      loop: "{{ alertmanager_silences.json }}"
+      loop_control:
+        label: "{{ item.id }}"
+      when: item.status.state == "active"

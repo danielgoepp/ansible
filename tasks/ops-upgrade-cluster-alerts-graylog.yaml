@@ -1,0 +1,106 @@
+---
+# Graylog Alert Management
+# Disables/enables Graylog event definitions using native Ansible
+#
+# Parameters:
+#   alert_action: "disable" or "enable"
+#   graylog_api_url: Graylog API URL
+#   graylog_token: Graylog API token (used as username with "token" as password)
+
+# DISABLE ALERTS
+- name: Disable Graylog alerts
+  when: alert_action == 'disable'
+  block:
+    - name: Fetch Graylog events
+      ansible.builtin.uri:
+        url: "{{ graylog_api_url }}/events/definitions"
+        method: GET
+        user: "{{ graylog_token }}"
+        password: token
+        force_basic_auth: true
+        return_content: true
+      register: graylog_events
+
+    - name: Tag and disable events
+      ansible.builtin.uri:
+        url: "{{ graylog_api_url }}/events/definitions/{{ item.id }}"
+        method: PUT
+        user: "{{ graylog_token }}"
+        password: token
+        force_basic_auth: true
+        headers:
+          X-Requested-By: ansible-script
+          Content-Type: application/json
+        body_format: json
+        body: "{{ item | combine({'description': (item.description | default('')) + ' [ANSIBLE_MUTED]'}) }}"
+        status_code: [200, 201]
+      loop: "{{ graylog_events.json.event_definitions }}"
+      loop_control:
+        label: "{{ item.title }}"
+      when:
+        - item.state == "ENABLED"
+        - "'[ANSIBLE_MUTED]' not in (item.description | default(''))"
+      register: graylog_tagged
+
+    - name: Disable tagged events
+      ansible.builtin.uri:
+        url: "{{ graylog_api_url }}/events/definitions/{{ item.item.id }}/unschedule"
+        method: PUT
+        user: "{{ graylog_token }}"
+        password: token
+        force_basic_auth: true
+        headers:
+          X-Requested-By: ansible-script
+        status_code: [200, 201]
+      loop: "{{ graylog_tagged.results }}"
+      loop_control:
+        label: "{{ item.item.title }}"
+      when: not item.skipped | default(false)
+
+# ENABLE ALERTS
+- name: Enable Graylog alerts
+  when: alert_action == 'enable'
+  block:
+    - name: Fetch Graylog events
+      ansible.builtin.uri:
+        url: "{{ graylog_api_url }}/events/definitions"
+        method: GET
+        user: "{{ graylog_token }}"
+        password: token
+        force_basic_auth: true
+        return_content: true
+      register: graylog_events
+
+    - name: Enable muted events
+      ansible.builtin.uri:
+        url: "{{ graylog_api_url }}/events/definitions/{{ item.id }}/schedule"
+        method: PUT
+        user: "{{ graylog_token }}"
+        password: token
+        force_basic_auth: true
+        headers:
+          X-Requested-By: ansible-script
+        status_code: [200, 201]
+      loop: "{{ graylog_events.json.event_definitions }}"
+      loop_control:
+        label: "{{ item.title }}"
+      when: "'[ANSIBLE_MUTED]' in (item.description | default(''))"
+      register: graylog_enabled
+
+    - name: Remove mute markers
+      ansible.builtin.uri:
+        url: "{{ graylog_api_url }}/events/definitions/{{ item.item.id }}"
+        method: PUT
+        user: "{{ graylog_token }}"
+        password: token
+        force_basic_auth: true
+        headers:
+          X-Requested-By: ansible-script
+          Content-Type: application/json
+        body_format: json
+        body: "{{ item.item | combine({'description': (item.item.description | default('') | replace(' [ANSIBLE_MUTED]', ''))}) }}"
+        status_code: [200, 201]
+      loop: "{{ graylog_enabled.results }}"
+      loop_control:
+        label: "{{ item.item.title }}"
+      when: not item.skipped | default(false)

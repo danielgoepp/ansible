@@ -1,0 +1,59 @@
+---
+# HertzBeat Alert Management
+# Creates/deletes HertzBeat silences using native Ansible
+#
+# Parameters:
+#   alert_action: "disable" or "enable"
+#   hertzbeat_url: HertzBeat base URL
+#   hertzbeat_token: HertzBeat API bearer token
+#   alert_duration_hours: Duration in hours for silence period
+
+# DISABLE ALERTS
+- name: Create HertzBeat silence
+  when: alert_action == 'disable'
+  block:
+    - name: Get timestamps
+      ansible.builtin.set_fact:
+        hertzbeat_start_time: "{{ lookup('pipe', 'date +%Y-%m-%dT%H:%M:%S.000%z') }}"
+        hertzbeat_end_time: "{{ lookup('pipe', 'date -v +' + (alert_duration_hours | string) + 'H +%Y-%m-%dT%H:%M:%S.000%z') }}"
+
+    - name: Create silence
+      ansible.builtin.uri:
+        url: "{{ hertzbeat_url }}/api/alert/silence"
+        method: POST
+        headers:
+          Content-Type: application/json
+          Authorization: "Bearer {{ hertzbeat_token }}"
+        body_format: json
+        body:
+          type: 0
+          name: "Maintenance - {{ lookup('pipe', 'date +%Y-%m-%d_%H:%M') }}"
+          enable: true
+          periodStart: "{{ hertzbeat_start_time }}"
+          periodEnd: "{{ hertzbeat_end_time }}"
+          matchAll: true
+        status_code: [200, 201]
+
+# ENABLE ALERTS
+- name: Delete HertzBeat silences
+  when: alert_action == 'enable'
+  block:
+    - name: Get all silences
+      ansible.builtin.uri:
+        url: "{{ hertzbeat_url }}/api/alert/silences"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ hertzbeat_token }}"
+        return_content: true
+      register: hertzbeat_silences
+
+    - name: Delete each silence
+      ansible.builtin.uri:
+        url: "{{ hertzbeat_url }}/api/alert/silences?ids={{ item.id }}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ hertzbeat_token }}"
+        status_code: [200, 204]
+      loop: "{{ hertzbeat_silences.json.data.content | default([]) }}"
+      loop_control:
+        label: "{{ item.name | default(item.id) }}"

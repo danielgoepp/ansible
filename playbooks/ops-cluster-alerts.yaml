@@ -1,0 +1,50 @@
+---
+# Cluster Alert Management Playbook
+# Disables/enables alerts across monitoring systems
+#
+# Usage:
+#   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable
+#   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=enable
+#   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=graylog
+#   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=enable -e target=alertmanager
+#
+# Parameters:
+#   alert_action: "disable" or "enable" (required)
+#   target: "all", "graylog", "alertmanager", or "hertzbeat" (default: all)
+#   duration_hours: int (default: 2) - for timed silences in alertmanager/hertzbeat
+
+- name: Manage cluster alerts
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    alert_target: "{{ target | default('all') }}"
+    alert_duration_hours: "{{ duration_hours | default(2) }}"
+
+  tasks:
+    - name: Validate alert_action parameter
+      ansible.builtin.fail:
+        msg: "alert_action must be 'disable' or 'enable'"
+      when: alert_action not in ['disable', 'enable']
+
+    - name: Validate target parameter
+      ansible.builtin.fail:
+        msg: "target must be 'all', 'graylog', 'alertmanager', or 'hertzbeat'"
+      when: alert_target not in ['all', 'graylog', 'alertmanager', 'hertzbeat']
+
+    - name: Set credentials from AWX or vault
+      ansible.builtin.set_fact:
+        graylog_token: "{{ awx_graylog_token | default(vault_graylog_token | default('')) }}"
+        hertzbeat_token: "{{ awx_hertzbeat_token | default(vault_hertzbeat_token | default('')) }}"
+
+    - name: Manage Graylog alerts
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-graylog.yaml"
+      when: alert_target in ['all', 'graylog']
+
+    - name: Manage Alertmanager silences
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-alertmanager.yaml"
+      when: alert_target in ['all', 'alertmanager']
+
+    - name: Manage HertzBeat silences
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-hertzbeat.yaml"
+      when: alert_target in ['all', 'hertzbeat']
