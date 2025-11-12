@@ -6,6 +6,7 @@
   ansible.builtin.apt:
     upgrade: dist
     update_cache: true
+    dpkg_options: 'force-confnew'
 
 - name: Clean apt cache and autoremove
   ansible.builtin.apt:

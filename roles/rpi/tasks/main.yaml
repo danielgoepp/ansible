@@ -5,6 +5,7 @@
       - dnsutils
     state: present
     update_cache: true
+    dpkg_options: 'force-confnew'
 
 - name: Cron homeassistant backup
   ansible.builtin.cron:

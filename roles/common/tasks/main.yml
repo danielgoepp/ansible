@@ -5,7 +5,7 @@
 # Optional: Run apt dist-upgrade if apt_dist_upgrade is true
 - name: Run system updates and upgrades
   ansible.builtin.include_tasks: apt-dist-upgrade.yaml
-  when: apt_dist_upgrade | default(false)
+  when: apt_dist_upgrade | default(false) | bool
 
 - name: Create ansible tmp directory for root
   ansible.builtin.file:
@@ -46,7 +46,7 @@
   when: >
     ansible_hostname != 'adambalm' and
     ansible_hostname != 'ui-network' and
-    inventory_hostname not in groups['pve']
+    inventory_hostname not in groups['pve'] and inventory_hostname not in groups['rpi']
 
 - name: Configure rsyslog
   ansible.builtin.include_tasks: rsyslog.yaml
