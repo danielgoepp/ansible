@@ -1,4 +1,18 @@
 ---
+# Set Ceph mount variables based on platform
+# Ubuntu uses mon_addr format, Raspberry Pi uses traditional monitor:port format
+- name: Set Ceph mount parameters for Ubuntu
+  ansible.builtin.set_fact:
+    ceph_src_format: "ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd="
+    ceph_opts_base: "mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev"
+  when: inventory_hostname not in groups['rpi']
+
+- name: Set Ceph mount parameters for Raspberry Pi
+  ansible.builtin.set_fact:
+    ceph_src_format: "10.1.11.11:6789,10.1.11.12:6789,10.1.11.13:6789:"
+    ceph_opts_base: "name=ubuntu-vault,mds_namespace=ceph-ssd,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev"
+  when: inventory_hostname in groups['rpi']
+
 - name: Copy ceph-vault secret
   ansible.builtin.copy:
     src: ceph/ceph-vault.secret
@@ -16,14 +30,16 @@
     owner: root
     group: root
     mode: '0755'
+  when: inventory_hostname not in groups['rpi']
 
 - name: Mount ceph /mnt/k3s-prod-data
   ansible.posix.mount:
-    src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/k3s-prod-data
+    src: "{{ ceph_src_format }}/k3s-prod-data"
     path: /mnt/k3s-prod-data
     state: mounted
     fstype: ceph
-    opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+    opts: "{{ ceph_opts_base }}"
+  when: inventory_hostname not in groups['rpi']
 
 - name: Create /mnt/k3s-lab-data
   ansible.builtin.file:
@@ -32,14 +48,16 @@
     owner: root
     group: root
     mode: '0755'
+  when: inventory_hostname not in groups['rpi']
 
 - name: Mount ceph /mnt/k3s-lab-data
   ansible.posix.mount:
-    src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/k3s-lab-data
+    src: "{{ ceph_src_format }}/k3s-lab-data"
     path: /mnt/k3s-lab-data
     state: mounted
     fstype: ceph
-    opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+    opts: "{{ ceph_opts_base }}"
+  when: inventory_hostname not in groups['rpi']
 
 - name: Create /mnt/homes
   ansible.builtin.file:
@@ -48,14 +66,16 @@
     owner: root
     group: root
     mode: '0755'
+  when: inventory_hostname not in groups['rpi']
 
 - name: Mount ceph /mnt/homes
   ansible.posix.mount:
-    src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/homes
+    src: "{{ ceph_src_format }}/homes"
     path: /mnt/homes
     state: mounted
     fstype: ceph
-    opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+    opts: "{{ ceph_opts_base }}"
+  when: inventory_hostname not in groups['rpi']
 
 - name: Create /mnt/kopia-ssd
   ansible.builtin.file:
@@ -64,14 +84,16 @@
     owner: root
     group: root
     mode: '0755'
+  when: inventory_hostname not in groups['rpi']
 
 - name: Mount ceph /mnt/kopia-ssd
   ansible.posix.mount:
-    src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/kopia-ssd
+    src: "{{ ceph_src_format }}/kopia-ssd"
     path: /mnt/kopia-ssd
     state: mounted
     fstype: ceph
-    opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+    opts: "{{ ceph_opts_base }}"
+  when: inventory_hostname not in groups['rpi']
 
 - name: Create /mnt/backups
   ansible.builtin.file:
@@ -83,8 +105,8 @@
 
 - name: Mount ceph /mnt/backups
   ansible.posix.mount:
-    src: ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd=/backups
+    src: "{{ ceph_src_format }}/backups"
     path: /mnt/backups
     state: mounted
     fstype: ceph
-    opts: mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev
+    opts: "{{ ceph_opts_base }}"

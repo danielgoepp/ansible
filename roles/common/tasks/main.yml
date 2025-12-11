@@ -46,7 +46,7 @@
   when: >
     ansible_hostname != 'adambalm' and
     ansible_hostname != 'ui-network' and
-    inventory_hostname not in groups['pve'] and inventory_hostname not in groups['rpi']
+    inventory_hostname not in groups['pve']
 
 - name: Configure rsyslog
   ansible.builtin.include_tasks: rsyslog.yaml
