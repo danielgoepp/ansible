@@ -1,4 +1,8 @@
 ---
+- name: Set Cloudflare credentials from AWX or vault
+  ansible.builtin.set_fact:
+    cloudflare_api_token: "{{ awx_cloudflare_api_token | default(vault_cloudflare_api_token | default('')) }}"
+
 - name: Download unifi-easy-encrypt.sh script
   ansible.builtin.get_url:
     url: "{{ ui_protect_script_url }}"
