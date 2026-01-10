@@ -9,5 +9,4 @@ k3s_default_context: "k3s-prod"
 # Alert system URLs (non-sensitive)
 graylog_api_url: "https://graylog-prod.goepp.net/api"
 alertmanager_api_url: "https://alertmanager-prod.goepp.net/api/v2"
-hertzbeat_url: "https://hertzbeat-prod.goepp.net"
 alertmanager_created_by: "ansible-automation"

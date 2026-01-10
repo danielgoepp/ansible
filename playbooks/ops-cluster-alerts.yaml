@@ -10,8 +10,8 @@
 #
 # Parameters:
 #   alert_action: "disable" or "enable" (required)
-#   target: "all", "graylog", "alertmanager", or "hertzbeat" (default: all)
-#   duration_hours: int (default: 2) - for timed silences in alertmanager/hertzbeat
+#   target: "all", "graylog", or "alertmanager" (default: all)
+#   duration_hours: int (default: 2) - for timed silences in alertmanager
 
 - name: Manage cluster alerts
   hosts: localhost
@@ -29,13 +29,12 @@
 
     - name: Validate target parameter
       ansible.builtin.fail:
-        msg: "target must be 'all', 'graylog', 'alertmanager', or 'hertzbeat'"
-      when: alert_target not in ['all', 'graylog', 'alertmanager', 'hertzbeat']
+        msg: "target must be 'all', 'graylog', or 'alertmanager'"
+      when: alert_target not in ['all', 'graylog', 'alertmanager']
 
     - name: Set credentials from AWX or vault
       ansible.builtin.set_fact:
         graylog_token: "{{ awx_graylog_token | default(vault_graylog_token | default('')) }}"
-        hertzbeat_token: "{{ awx_hertzbeat_token | default(vault_hertzbeat_token | default('')) }}"
 
     - name: Manage Graylog alerts
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-graylog.yaml"
@@ -44,7 +43,3 @@
     - name: Manage Alertmanager silences
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-alertmanager.yaml"
       when: alert_target in ['all', 'alertmanager']
-
-    - name: Manage HertzBeat silences
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-hertzbeat.yaml"
-      when: alert_target in ['all', 'hertzbeat']

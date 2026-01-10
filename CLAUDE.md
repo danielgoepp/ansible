@@ -70,7 +70,7 @@ ls playbooks/k3s/                                     # List K3s playbooks
 
 ### Cluster Alert Management
 
-Manage alerts across monitoring systems (Graylog, Alertmanager, HertzBeat).
+Manage alerts across monitoring systems (Graylog, Alertmanager).
 
 ```bash
 # Disable all alerts for maintenance
@@ -82,7 +82,6 @@ ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=enable
 # Target specific alert system
 ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=graylog
 ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=alertmanager
-ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=hertzbeat
 
 # Customize silence duration (default: 2 hours)
 ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e duration_hours=4
@@ -137,7 +136,7 @@ ansible-playbook playbooks/ops-<operation>.yaml
   - **setup-global-***: Global system setup tasks
   - **setup-rpi-***: Raspberry Pi specific tasks
   - **ops-upgrade-cluster-***: Cluster upgrade tasks
-  - **ops-upgrade-cluster-alerts-***: Alert management task modules (Graylog, Alertmanager, HertzBeat)
+  - **ops-upgrade-cluster-alerts-***: Alert management task modules (Graylog, Alertmanager)
 - **files/k3s-config/**: Git submodule containing Kubernetes manifests
 - **files/**: Static files and configuration templates
 - **inventories/group_vars/all/common.yml**: Common variables (k3s_config_base_path, contexts) - automatically loaded for all hosts
@@ -317,10 +316,9 @@ The alert management system provides centralized control over monitoring alerts 
 - **Modular task files**: Separate task files for each alert system
   - **tasks/ops-upgrade-cluster-alerts-graylog.yaml**: Manages Graylog event definitions
   - **tasks/ops-upgrade-cluster-alerts-alertmanager.yaml**: Manages Alertmanager silences with timed expiration
-  - **tasks/ops-upgrade-cluster-alerts-hertzbeat.yaml**: Manages HertzBeat silences with timed expiration
 - **Configuration split**: Non-sensitive URLs in common.yml, credentials in vault.yml
 - **AWX compatible**: Uses native Ansible date/time filters instead of platform-specific shell commands
-- **Targeted control**: Can manage all systems or target specific ones (graylog, alertmanager, hertzbeat)
+- **Targeted control**: Can manage all systems or target specific ones (graylog, alertmanager)
 
 ## Markdown Standards
 

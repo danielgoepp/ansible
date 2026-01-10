@@ -48,11 +48,6 @@ k3s_applications:
         manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-prod-homeassistant.yml"
         cluster_name: homeassistant-prod
         service_namespace: cnpg-homeassistant
-      - name: hertzbeat
-        context: k3s-prod
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-prod-hertzbeat.yml"
-        cluster_name: hertzbeat-prod
-        service_namespace: cnpg-hertzbeat
 
   esphome:
     deployment_method: manifest
@@ -66,12 +61,6 @@ k3s_applications:
 
   grafana:
     deployment_method: manifest
-
-  hertzbeat:
-    deployment_method: manifest
-    service_namespace: hertzbeat
-    deployment_name: hertzbeat
-    app_label: hertzbeat
 
   homeassistant:
     deployment_method: manifest-multi
