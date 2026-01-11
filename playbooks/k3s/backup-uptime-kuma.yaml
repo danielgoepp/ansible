@@ -1,0 +1,72 @@
+---
+# Uptime Kuma Backup Playbook
+#
+# Creates a backup of Uptime Kuma's MariaDB database by running mariadb-dump
+# directly inside the running container.
+#
+# Usage:
+#   Local:  ansible-playbook playbooks/k3s/backup-uptime-kuma.yaml
+#   AWX:    Run as job template (no additional configuration required)
+#
+# The backup is stored at /app/backups/uptime-kuma/kuma_backup.sql inside the container.
+
+- name: Backup Uptime Kuma database
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    k3s_context: "{{ awx_k3s_context | default('k3s-prod') }}"
+    uptime_kuma_namespace: "uptime-kuma"
+    uptime_kuma_pod_label: "app=uptime-kuma"
+
+  tasks:
+    - name: Get Uptime Kuma pod name
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ uptime_kuma_namespace }}"
+        label_selectors:
+          - "{{ uptime_kuma_pod_label }}"
+        context: "{{ k3s_context }}"
+      register: uptime_kuma_pods
+
+    - name: Validate pod is running
+      ansible.builtin.fail:
+        msg: "No running Uptime Kuma pod found in namespace {{ uptime_kuma_namespace }}"
+      when: uptime_kuma_pods.resources | length == 0
+
+    - name: Set pod name
+      ansible.builtin.set_fact:
+        uptime_kuma_pod_name: "{{ uptime_kuma_pods.resources[0].metadata.name }}"
+
+    - name: Display backup info
+      ansible.builtin.debug:
+        msg: "Backing up Uptime Kuma database from pod: {{ uptime_kuma_pod_name }}"
+
+    - name: Ensure backup directory exists
+      kubernetes.core.k8s_exec:
+        namespace: "{{ uptime_kuma_namespace }}"
+        pod: "{{ uptime_kuma_pod_name }}"
+        container: uptime-kuma
+        command: mkdir -p /app/backups/uptime-kuma
+        context: "{{ k3s_context }}"
+
+    - name: Run MariaDB backup
+      kubernetes.core.k8s_exec:
+        namespace: "{{ uptime_kuma_namespace }}"
+        pod: "{{ uptime_kuma_pod_name }}"
+        container: uptime-kuma
+        command: >
+          sh -c "mariadb-dump kuma -S /app/data/run/mariadb.sock > /app/backups/uptime-kuma/kuma_backup.sql"
+        context: "{{ k3s_context }}"
+      register: backup_result
+
+    - name: Display backup result
+      ansible.builtin.debug:
+        msg: "Backup completed successfully. Backup file: /app/backups/uptime-kuma/kuma_backup.sql"
+      when: backup_result.rc == 0
+
+    - name: Fail if backup failed
+      ansible.builtin.fail:
+        msg: "Backup failed: {{ backup_result.stderr | default('Unknown error') }}"
+      when: backup_result.rc != 0

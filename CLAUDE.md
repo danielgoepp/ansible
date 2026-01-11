@@ -156,6 +156,30 @@ ansible-playbook playbooks/ops-<operation>.yaml
 
 **AWX Compatibility**: When running on AWX, vault variables are managed through AWX's credential system and do not need to be explicitly loaded.
 
+### Dual-Environment Playbook Design
+
+**IMPORTANT**: All playbooks must be designed to run in both local Ansible and AWX environments.
+
+**Required Pattern for Variables**:
+
+- Use `awx_*` prefix for AWX-injected variables with fallback to local defaults
+- Example: `k3s_context: "{{ awx_k3s_context | default('k3s-prod') }}"`
+
+**Implementation Checklist**:
+
+1. All configurable values should check for AWX variables first
+2. Provide sensible defaults for local execution
+3. Document both usage patterns in playbook header comments
+4. Avoid hardcoded paths or values that differ between environments
+
+**Example Header**:
+
+```yaml
+# Usage:
+#   Local:  ansible-playbook playbooks/k3s/example.yaml
+#   AWX:    Run as job template (no additional configuration required)
+```
+
 **Manifest Path Resolution**: The system uses a standardized pattern:
 `{k3s_config_base_path}/{service_name}/manifests/{service_name}-{context_suffix}.yaml`
 
