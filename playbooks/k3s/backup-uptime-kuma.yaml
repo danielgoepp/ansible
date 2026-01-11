@@ -8,7 +8,8 @@
 #   Local:  ansible-playbook playbooks/k3s/backup-uptime-kuma.yaml
 #   AWX:    Run as job template (no additional configuration required)
 #
-# The backup is stored at /app/backups/uptime-kuma/kuma_backup.sql inside the container.
+# The backup is stored at /app/backups/uptime-kuma/kuma_backup_YYYY-MM-DD.sql inside the container.
+# Backups older than 7 days are automatically removed.
 
 - name: Backup Uptime Kuma database
   hosts: localhost
@@ -19,6 +20,9 @@
     k3s_context: "{{ awx_k3s_context | default('k3s-prod') }}"
     uptime_kuma_namespace: "uptime-kuma"
     uptime_kuma_pod_label: "app=uptime-kuma"
+    backup_date: "{{ '%Y-%m-%d' | strftime }}"
+    backup_filename: "kuma_backup_{{ backup_date }}.sql"
+    backup_retention_days: 7
 
   tasks:
     - name: Get Uptime Kuma pod name
@@ -57,16 +61,31 @@
         pod: "{{ uptime_kuma_pod_name }}"
         container: uptime-kuma
         command: >
-          sh -c "mariadb-dump kuma -S /app/data/run/mariadb.sock > /app/backups/uptime-kuma/kuma_backup.sql"
+          sh -c "mariadb-dump kuma -S /app/data/run/mariadb.sock > /app/backups/uptime-kuma/{{ backup_filename }}"
         context: "{{ k3s_context }}"
       register: backup_result
 
     - name: Display backup result
       ansible.builtin.debug:
-        msg: "Backup completed successfully. Backup file: /app/backups/uptime-kuma/kuma_backup.sql"
+        msg: "Backup completed successfully. Backup file: /app/backups/uptime-kuma/{{ backup_filename }}"
       when: backup_result.rc == 0
 
     - name: Fail if backup failed
       ansible.builtin.fail:
         msg: "Backup failed: {{ backup_result.stderr | default('Unknown error') }}"
       when: backup_result.rc != 0
+
+    - name: Remove backups older than retention period
+      kubernetes.core.k8s_exec:
+        namespace: "{{ uptime_kuma_namespace }}"
+        pod: "{{ uptime_kuma_pod_name }}"
+        container: uptime-kuma
+        command: >
+          find /app/backups/uptime-kuma -name "kuma_backup_*.sql" -type f -mtime +{{ backup_retention_days }} -delete
+        context: "{{ k3s_context }}"
+      register: cleanup_result
+
+    - name: Display cleanup result
+      ansible.builtin.debug:
+        msg: "Removed backups older than {{ backup_retention_days }} days"
+      when: cleanup_result.rc == 0
