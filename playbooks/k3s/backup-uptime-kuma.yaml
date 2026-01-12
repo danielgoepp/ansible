@@ -61,7 +61,7 @@
         pod: "{{ uptime_kuma_pod_name }}"
         container: uptime-kuma
         command: >
-          sh -c "mariadb-dump kuma -S /app/data/run/mariadb.sock > /app/backups/uptime-kuma/{{ backup_filename }}"
+          sh -c "mariadb-dump kuma -S /app/data/run/mariadb.sock --ignore-table-data=kuma.heartbeat > /app/backups/uptime-kuma/{{ backup_filename }}"
         context: "{{ k3s_context }}"
       register: backup_result
 
