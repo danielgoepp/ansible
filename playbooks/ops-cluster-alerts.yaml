@@ -7,11 +7,12 @@
 #   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=enable
 #   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=graylog
 #   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=enable -e target=alertmanager
+#   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=uptime-kuma
 #
 # Parameters:
 #   alert_action: "disable" or "enable" (required)
-#   target: "all", "graylog", or "alertmanager" (default: all)
-#   duration_hours: int (default: 2) - for timed silences in alertmanager
+#   target: "all", "graylog", "alertmanager", or "uptime-kuma" (default: all)
+#   duration_hours: int (default: 2) - for timed silences/maintenance windows
 
 - name: Manage cluster alerts
   hosts: localhost
@@ -29,12 +30,14 @@
 
     - name: Validate target parameter
       ansible.builtin.fail:
-        msg: "target must be 'all', 'graylog', or 'alertmanager'"
-      when: alert_target not in ['all', 'graylog', 'alertmanager']
+        msg: "target must be 'all', 'graylog', 'alertmanager', or 'uptime-kuma'"
+      when: alert_target not in ['all', 'graylog', 'alertmanager', 'uptime-kuma']
 
     - name: Set credentials from AWX or vault
       ansible.builtin.set_fact:
         graylog_token: "{{ awx_graylog_token | default(vault_graylog_token | default('')) }}"
+        uptime_kuma_username: "{{ awx_uptime_kuma_username | default(vault_uptime_kuma_username | default('')) }}"
+        uptime_kuma_password: "{{ awx_uptime_kuma_password | default(vault_uptime_kuma_password | default('')) }}"
 
     - name: Manage Graylog alerts
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-graylog.yaml"
@@ -43,3 +46,7 @@
     - name: Manage Alertmanager silences
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-alertmanager.yaml"
       when: alert_target in ['all', 'alertmanager']
+
+    - name: Manage Uptime Kuma maintenance
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-uptime-kuma.yaml"
+      when: alert_target in ['all', 'uptime-kuma']

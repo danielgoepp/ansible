@@ -70,7 +70,7 @@ ls playbooks/k3s/                                     # List K3s playbooks
 
 ### Cluster Alert Management
 
-Manage alerts across monitoring systems (Graylog, Alertmanager).
+Manage alerts across monitoring systems (Graylog, Alertmanager, Uptime Kuma).
 
 ```bash
 # Disable all alerts for maintenance
@@ -82,6 +82,7 @@ ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=enable
 # Target specific alert system
 ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=graylog
 ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=alertmanager
+ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=uptime-kuma
 
 # Customize silence duration (default: 2 hours)
 ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e duration_hours=4
@@ -136,7 +137,7 @@ ansible-playbook playbooks/ops-<operation>.yaml
   - **setup-global-***: Global system setup tasks
   - **setup-rpi-***: Raspberry Pi specific tasks
   - **ops-upgrade-cluster-***: Cluster upgrade tasks
-  - **ops-upgrade-cluster-alerts-***: Alert management task modules (Graylog, Alertmanager)
+  - **ops-upgrade-cluster-alerts-***: Alert management task modules (Graylog, Alertmanager, Uptime Kuma)
 - **files/k3s-config/**: Git submodule containing Kubernetes manifests
 - **files/**: Static files and configuration templates
 - **inventories/group_vars/all/common.yml**: Common variables (k3s_config_base_path, contexts) - automatically loaded for all hosts
@@ -336,13 +337,14 @@ The cluster upgrade system uses a highly modular approach:
 The alert management system provides centralized control over monitoring alerts during maintenance:
 
 - **playbooks/ops-cluster-alerts.yaml**: Standalone playbook with simple interface (alert_action=disable/enable)
-- **Native Ansible implementation**: Uses uri module for all API interactions (no Python dependencies)
+- **Native Ansible implementation**: Uses uri module for REST APIs, Python library for Socket.io APIs
 - **Modular task files**: Separate task files for each alert system
   - **tasks/ops-upgrade-cluster-alerts-graylog.yaml**: Manages Graylog event definitions
   - **tasks/ops-upgrade-cluster-alerts-alertmanager.yaml**: Manages Alertmanager silences with timed expiration
+  - **tasks/ops-upgrade-cluster-alerts-uptime-kuma.yaml**: Manages Uptime Kuma maintenance windows (requires `pip install uptime-kuma-api`)
 - **Configuration split**: Non-sensitive URLs in common.yml, credentials in vault.yml
 - **AWX compatible**: Uses native Ansible date/time filters instead of platform-specific shell commands
-- **Targeted control**: Can manage all systems or target specific ones (graylog, alertmanager)
+- **Targeted control**: Can manage all systems or target specific ones (graylog, alertmanager, uptime-kuma)
 
 ## Markdown Standards
 

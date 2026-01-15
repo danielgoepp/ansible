@@ -1,0 +1,133 @@
+---
+# Uptime Kuma Alert Management
+# Creates/pauses maintenance windows using the uptime-kuma-api Python library
+#
+# Parameters:
+#   alert_action: "disable" or "enable"
+#   uptime_kuma_url: Uptime Kuma base URL
+#   uptime_kuma_username: Uptime Kuma username
+#   uptime_kuma_password: Uptime Kuma password
+#
+# Requirements:
+#   pip install uptime-kuma-api
+
+# DISABLE ALERTS - Create and activate maintenance window
+- name: Create Uptime Kuma maintenance window
+  when: alert_action == 'disable'
+  block:
+    - name: Create maintenance window for all monitors
+      ansible.builtin.shell: |
+        python3 <<'PYTHON_SCRIPT'
+        import sys
+        try:
+            from uptime_kuma_api import UptimeKumaApi, MaintenanceStrategy
+        except ImportError:
+            print("ERROR: uptime-kuma-api not installed. Run: pip install uptime-kuma-api")
+            sys.exit(1)
+
+        url = "{{ uptime_kuma_url }}"
+        username = "{{ uptime_kuma_username }}"
+        password = "{{ uptime_kuma_password }}"
+        try:
+            api = UptimeKumaApi(url)
+            api.login(username, password)
+
+            # Get all groups (monitors within groups inherit maintenance status)
+            monitors = api.get_monitors()
+            monitor_ids = [{"id": m["id"]} for m in monitors if m.get("type") == "group"]
+
+            if not monitor_ids:
+                print("No monitors found")
+                api.disconnect()
+                sys.exit(0)
+
+            # Create manual maintenance window (stays active until cancelled)
+            result = api.add_maintenance(
+                title="Ansible Maintenance Window",
+                description="Automated maintenance created by Ansible cluster alerts playbook",
+                strategy=MaintenanceStrategy.MANUAL,
+                active=True
+            )
+
+            maintenance_id = result.get("maintenanceID")
+            if maintenance_id:
+                # Associate all monitors with the maintenance
+                api.add_monitor_maintenance(maintenance_id, monitor_ids)
+
+                # Associate all status pages with the maintenance
+                status_pages = api.get_status_pages()
+                if status_pages:
+                    status_page_ids = [{"id": sp["id"]} for sp in status_pages]
+                    api.add_status_page_maintenance(maintenance_id, status_page_ids)
+                    print(f"Created maintenance window {maintenance_id} for {len(monitor_ids)} monitors and {len(status_page_ids)} status pages")
+                else:
+                    print(f"Created maintenance window {maintenance_id} for {len(monitor_ids)} monitors")
+            else:
+                print("Failed to create maintenance window")
+                sys.exit(1)
+
+            api.disconnect()
+        except Exception as e:
+            print(f"ERROR: {e}")
+            sys.exit(1)
+        PYTHON_SCRIPT
+      args:
+        executable: /bin/bash
+      register: uptime_kuma_create_result
+      changed_when: "'Created maintenance window' in uptime_kuma_create_result.stdout"
+
+    - name: Display maintenance creation result
+      ansible.builtin.debug:
+        msg: "{{ uptime_kuma_create_result.stdout_lines }}"
+
+# ENABLE ALERTS - Delete Ansible-created maintenance windows
+- name: Delete Uptime Kuma maintenance windows
+  when: alert_action == 'enable'
+  block:
+    - name: Delete Ansible maintenance windows
+      ansible.builtin.shell: |
+        python3 <<'PYTHON_SCRIPT'
+        import sys
+        try:
+            from uptime_kuma_api import UptimeKumaApi
+        except ImportError:
+            print("ERROR: uptime-kuma-api not installed. Run: pip install uptime-kuma-api")
+            sys.exit(1)
+
+        url = "{{ uptime_kuma_url }}"
+        username = "{{ uptime_kuma_username }}"
+        password = "{{ uptime_kuma_password }}"
+
+        try:
+            api = UptimeKumaApi(url)
+            api.login(username, password)
+
+            # Get all maintenance windows
+            maintenances = api.get_maintenances()
+            deleted_count = 0
+
+            for maintenance in maintenances:
+                # Delete maintenance windows created by Ansible
+                if maintenance.get("title") == "Ansible Maintenance Window":
+                    api.delete_maintenance(maintenance["id"])
+                    print(f"Deleted maintenance window: {maintenance['id']}")
+                    deleted_count += 1
+
+            if deleted_count == 0:
+                print("No Ansible maintenance windows found to delete")
+            else:
+                print(f"Deleted {deleted_count} maintenance window(s)")
+
+            api.disconnect()
+        except Exception as e:
+            print(f"ERROR: {e}")
+            sys.exit(1)
+        PYTHON_SCRIPT
+      args:
+        executable: /bin/bash
+      register: uptime_kuma_delete_result
+      changed_when: "'Deleted maintenance window' in uptime_kuma_delete_result.stdout"
+
+    - name: Display maintenance deletion result
+      ansible.builtin.debug:
+        msg: "{{ uptime_kuma_delete_result.stdout_lines }}"
