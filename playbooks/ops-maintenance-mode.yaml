@@ -1,13 +1,13 @@
 ---
-# Cluster Alert Management Playbook
+# Maintenance Mode Playbook
 # Disables/enables alerts across monitoring systems
 #
 # Usage:
-#   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable
-#   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=enable
-#   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=graylog
-#   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=enable -e target=alertmanager
-#   ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable -e target=uptime-kuma
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e alert_action=disable
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e alert_action=enable
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e alert_action=disable -e target=graylog
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e alert_action=enable -e target=alertmanager
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e alert_action=disable -e target=uptime-kuma
 #
 # Parameters:
 #   alert_action: "disable" or "enable" (required)
