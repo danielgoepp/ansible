@@ -21,7 +21,7 @@
         return_content: true
       register: graylog_events
 
-    - name: Tag and disable events
+    - name: Tag events for muting
       ansible.builtin.uri:
         url: "{{ graylog_api_url }}/events/definitions/{{ item.id }}"
         method: PUT
