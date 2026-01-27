@@ -3,14 +3,14 @@
 # Creates/deletes Alertmanager silences using native Ansible
 #
 # Parameters:
-#   alert_action: "disable" or "enable"
+#   maintenance_action: "enable" (mutes alerts) or "disable" (unmutes alerts)
 #   alertmanager_api_url: Alertmanager API URL
 #   alertmanager_created_by: Creator identifier for silences
 #   alert_duration_hours: Duration in hours for silence period
 
-# DISABLE ALERTS
+# ENABLE MAINTENANCE (mute alerts)
 - name: Create Alertmanager silence
-  when: alert_action == 'disable'
+  when: maintenance_action == 'enable'
   block:
     - name: Calculate silence timestamps
       ansible.builtin.set_fact:
@@ -36,9 +36,9 @@
           comment: Maintenance window
         status_code: [200, 201]
 
-# ENABLE ALERTS
+# DISABLE MAINTENANCE (unmute alerts)
 - name: Delete Alertmanager silences
-  when: alert_action == 'enable'
+  when: maintenance_action == 'disable'
   block:
     - name: Get active silences
       ansible.builtin.uri:

@@ -1,15 +1,15 @@
 ---
 # Graylog Alert Management
-# Disables/enables Graylog event definitions using native Ansible
+# Manages Graylog event definitions using native Ansible
 #
 # Parameters:
-#   alert_action: "disable" or "enable"
+#   maintenance_action: "enable" (mutes alerts) or "disable" (unmutes alerts)
 #   graylog_api_url: Graylog API URL
 #   graylog_token: Graylog API token (used as username with "token" as password)
 
-# DISABLE ALERTS
+# ENABLE MAINTENANCE (mute alerts)
 - name: Disable Graylog alerts
-  when: alert_action == 'disable'
+  when: maintenance_action == 'enable'
   block:
     - name: Fetch Graylog events
       ansible.builtin.uri:
@@ -57,9 +57,9 @@
         label: "{{ item.item.title }}"
       when: not item.skipped | default(false)
 
-# ENABLE ALERTS
+# DISABLE MAINTENANCE (unmute alerts)
 - name: Enable Graylog alerts
-  when: alert_action == 'enable'
+  when: maintenance_action == 'disable'
   block:
     - name: Fetch Graylog events
       ansible.builtin.uri:

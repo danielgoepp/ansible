@@ -5,8 +5,12 @@ Uptime Kuma Maintenance Window Management
 Creates or deletes maintenance windows in Uptime Kuma.
 
 Usage:
-    python3 uptime_kuma_maintenance.py --action disable --url URL --username USER --password PASS
     python3 uptime_kuma_maintenance.py --action enable --url URL --username USER --password PASS
+    python3 uptime_kuma_maintenance.py --action disable --url URL --username USER --password PASS
+
+Action:
+    enable  - Create maintenance window (mute alerts)
+    disable - Delete maintenance window (unmute alerts)
 
 Requirements:
     pip install uptime-kuma-api
@@ -83,8 +87,8 @@ def delete_maintenance(api):
 
 def main():
     parser = argparse.ArgumentParser(description="Manage Uptime Kuma maintenance windows")
-    parser.add_argument("--action", required=True, choices=["disable", "enable"],
-                        help="disable=create maintenance, enable=delete maintenance")
+    parser.add_argument("--action", required=True, choices=["enable", "disable"],
+                        help="enable=create maintenance (mute alerts), disable=delete maintenance (unmute alerts)")
     parser.add_argument("--url", required=True, help="Uptime Kuma URL")
     parser.add_argument("--username", required=True, help="Uptime Kuma username")
     parser.add_argument("--password", required=True, help="Uptime Kuma password")
@@ -94,7 +98,7 @@ def main():
         api = UptimeKumaApi(args.url)
         api.login(args.username, args.password)
 
-        if args.action == "disable":
+        if args.action == "enable":
             success = create_maintenance(api)
         else:
             success = delete_maintenance(api)

@@ -1,9 +1,9 @@
 ---
 # Uptime Kuma Alert Management
-# Creates/pauses maintenance windows using the uptime-kuma-api Python library
+# Creates/deletes maintenance windows using the uptime-kuma-api Python library
 #
 # Parameters:
-#   alert_action: "disable" or "enable"
+#   maintenance_action: "enable" (creates maintenance window) or "disable" (deletes maintenance window)
 #   uptime_kuma_url: Uptime Kuma base URL
 #   uptime_kuma_username: Uptime Kuma username
 #   uptime_kuma_password: Uptime Kuma password
@@ -15,7 +15,7 @@
   ansible.builtin.command:
     cmd: >-
       python3 {{ playbook_dir }}/../scripts/uptime_kuma_maintenance.py
-      --action {{ alert_action }}
+      --action {{ maintenance_action }}
       --url "{{ uptime_kuma_url }}"
       --username "{{ uptime_kuma_username }}"
       --password "{{ uptime_kuma_password }}"

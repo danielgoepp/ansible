@@ -1,16 +1,16 @@
 ---
 # Maintenance Mode Playbook
-# Disables/enables alerts across monitoring systems
+# Enables/disables maintenance mode across monitoring systems
 #
 # Usage:
-#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e alert_action=disable
-#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e alert_action=enable
-#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e alert_action=disable -e target=graylog
-#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e alert_action=enable -e target=alertmanager
-#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e alert_action=disable -e target=uptime-kuma
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=disable
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=graylog
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=disable -e target=alertmanager
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=uptime-kuma
 #
 # Parameters:
-#   alert_action: "disable" or "enable" (required)
+#   maintenance_action: "enable" (mutes alerts) or "disable" (unmutes alerts) (required)
 #   target: "all", "graylog", "alertmanager", or "uptime-kuma" (default: all)
 #   duration_hours: int (default: 2) - for timed silences/maintenance windows
 
@@ -23,10 +23,10 @@
     alert_duration_hours: "{{ duration_hours | default(2) }}"
 
   tasks:
-    - name: Validate alert_action parameter
+    - name: Validate maintenance_action parameter
       ansible.builtin.fail:
-        msg: "alert_action must be 'disable' or 'enable'"
-      when: alert_action not in ['disable', 'enable']
+        msg: "maintenance_action must be 'enable' or 'disable'"
+      when: maintenance_action not in ['enable', 'disable']
 
     - name: Validate target parameter
       ansible.builtin.fail:
@@ -41,12 +41,18 @@
 
     - name: Manage Graylog alerts
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-graylog.yaml"
+      vars:
+        maintenance_action: "{{ maintenance_action }}"
       when: alert_target in ['all', 'graylog']
 
     - name: Manage Alertmanager silences
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-alertmanager.yaml"
+      vars:
+        maintenance_action: "{{ maintenance_action }}"
       when: alert_target in ['all', 'alertmanager']
 
     - name: Manage Uptime Kuma maintenance
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-uptime-kuma.yaml"
+      vars:
+        maintenance_action: "{{ maintenance_action }}"
       when: alert_target in ['all', 'uptime-kuma']
