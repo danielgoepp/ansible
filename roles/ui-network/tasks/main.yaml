@@ -1,8 +1,8 @@
 ---
 - name: Download unifi-easy-encrypt.sh script
   ansible.builtin.get_url:
-    url: "{{ ui_network_script_url }}"
-    dest: "{{ ui_network_script_path }}"
+    url: "{{ ui_network_encrypt_script_url }}"
+    dest: "{{ ui_network_encrypt_script_path }}"
     mode: '0755'
     owner: root
     group: root
@@ -18,7 +18,7 @@
 - name: Run initial Let's Encrypt certificate setup
   ansible.builtin.command:
     cmd: >
-      {{ ui_network_script_path }}
+      {{ ui_network_encrypt_script_path }}
       --skip
       --email {{ ui_network_email }}
       --fqdn {{ ui_network_fqdn }}
@@ -27,9 +27,29 @@
       --dns-provider-credentials {{ ui_network_cloudflare_credentials_path }}
       --server-ip {{ ui_network_server_ip }}
       --external-dns {{ ui_network_external_dns }}
+    creates: "/etc/letsencrypt/live/{{ ui_network_fqdn }}/fullchain.pem"
   register: ui_network_initial_setup
   changed_when: ui_network_initial_setup.rc == 0
-  failed_when: ui_network_initial_setup.rc != 0
+  failed_when:
+    - ui_network_initial_setup.rc is defined
+    - ui_network_initial_setup.rc != 0
+
+- name: Download unifi-update.sh script
+  ansible.builtin.get_url:
+    url: "{{ ui_network_update_script_url }}"
+    dest: "{{ ui_network_update_script_path }}"
+    mode: '0755'
+    owner: root
+    group: root
+  when: ui_network_upgrade | default(false) | bool
+
+- name: Upgrade UniFi Network application
+  ansible.builtin.command:
+    cmd: "{{ ui_network_update_script_path }} --skip --unifi-version latest"
+  register: ui_network_upgrade_result
+  changed_when: ui_network_upgrade_result.rc == 0
+  failed_when: ui_network_upgrade_result.rc != 0
+  when: ui_network_upgrade | default(false) | bool
 
 - name: Create cron job for certificate renewal
   ansible.builtin.cron:
@@ -40,7 +60,7 @@
     month: "{{ ui_network_cron_month }}"
     weekday: "{{ ui_network_cron_weekday }}"
     job: >
-      {{ ui_network_script_path }}
+      {{ ui_network_encrypt_script_path }}
       --skip
       --email {{ ui_network_email }}
       --fqdn {{ ui_network_fqdn }}

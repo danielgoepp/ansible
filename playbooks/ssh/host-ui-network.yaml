@@ -7,6 +7,9 @@
 #
 #   Include system updates (apt update && apt dist-upgrade):
 #     ansible-playbook playbooks/ssh/host-ui-network.yaml -e apt_dist_upgrade=true
+#
+#   Upgrade UniFi Network application:
+#     ansible-playbook playbooks/ssh/host-ui-network.yaml -e ui_network_upgrade=true
 
 - name: Configure UniFi Network server
   hosts: "ui-network"

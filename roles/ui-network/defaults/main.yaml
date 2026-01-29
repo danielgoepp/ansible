@@ -8,8 +8,10 @@ ui_network_server_ip: "10.1.254.10"
 ui_network_external_dns: "10.1.254.1"
 
 # Script configuration
-ui_network_script_url: "https://get.glennr.nl/unifi/extra/unifi-easy-encrypt.sh"
-ui_network_script_path: "/usr/local/bin/unifi-easy-encrypt.sh"
+ui_network_encrypt_script_url: "https://get.glennr.nl/unifi/extra/unifi-easy-encrypt.sh"
+ui_network_encrypt_script_path: "/usr/local/bin/unifi-easy-encrypt.sh"
+ui_network_update_script_url: "https://get.glennr.nl/unifi/update/unifi-update.sh"
+ui_network_update_script_path: "/usr/local/bin/unifi-update.sh"
 
 # Cloudflare credentials
 ui_network_cloudflare_credentials_path: "/root/cloudflare.ini"
