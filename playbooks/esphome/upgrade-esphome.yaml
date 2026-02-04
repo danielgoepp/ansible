@@ -1,7 +1,7 @@
 ---
 # Upgrade ESPHome Devices
 # Discovers and upgrades ESPHome devices via the ESPHome container in Kubernetes.
-# CPU alerts in Alertmanager are silenced during execution to avoid false positives.
+# A 30-minute Alertmanager silence is created for CPU alerts to avoid false positives.
 #
 # Usage:
 #   Local:  ansible-playbook playbooks/esphome/upgrade-esphome.yaml
@@ -11,7 +11,7 @@
 #   -e target_device=<name>         Upgrade a specific device
 #   -e target_pattern=<regex>       Upgrade devices matching pattern
 #   -e esphome_clean_build=false    Skip build cache cleanup
-#   -e esphome_alert_silence_hours=4  Override silence duration (default: 2)
+#   -e esphome_alert_silence_minutes=60  Override silence duration (default: 30)
 
 - name: Upgrade ESPHome devices
   hosts: localhost
@@ -28,98 +28,83 @@
     esphome_timeout: 600  # 10 minutes
 
     # Alert silencing
-    esphome_alert_silence_hours: 2
+    esphome_alert_silence_minutes: 30
 
   tasks:
-    - name: ESPHome upgrade with CPU alert silencing
-      block:
-        # --- Silence CPU alerts ---
-        - name: Calculate silence timestamps
-          ansible.builtin.set_fact:
-            silence_start: "{{ ansible_date_time.iso8601 }}"
-            silence_end: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime((ansible_date_time.epoch | int) + (esphome_alert_silence_hours | int * 3600), utc=True) }}"
+    # --- Silence CPU alerts ---
+    - name: Calculate silence timestamps
+      ansible.builtin.set_fact:
+        silence_start: "{{ ansible_date_time.iso8601 }}"
+        silence_end: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime((ansible_date_time.epoch | int) + (esphome_alert_silence_minutes | int * 60), utc=True) }}"
 
-        - name: Create Alertmanager silence for CPU alerts
-          ansible.builtin.uri:
-            url: "{{ alertmanager_api_url }}/silences"
-            method: POST
-            headers:
-              Content-Type: application/json
-            body_format: json
-            body:
-              matchers:
-                - name: alertname
-                  value: ".*CPU.*"
-                  isRegex: true
-                  isEqual: true
-              startsAt: "{{ silence_start }}"
-              endsAt: "{{ silence_end }}"
-              createdBy: "{{ alertmanager_created_by }}"
-              comment: "ESPHome upgrade - silencing CPU alerts"
-            status_code: [200, 201]
-          register: cpu_silence_response
+    - name: Create Alertmanager silence for CPU alerts
+      ansible.builtin.uri:
+        url: "{{ alertmanager_api_url }}/silences"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body:
+          matchers:
+            - name: alertname
+              value: ".*CPU.*"
+              isRegex: true
+              isEqual: true
+          startsAt: "{{ silence_start }}"
+          endsAt: "{{ silence_end }}"
+          createdBy: "{{ alertmanager_created_by }}"
+          comment: "ESPHome upgrade - silencing CPU alerts"
+        status_code: [200, 201]
 
-        - name: Record silence ID
-          ansible.builtin.set_fact:
-            cpu_silence_id: "{{ cpu_silence_response.json.silenceID }}"
+    # --- Discover and upgrade devices ---
+    - name: Discover ESPHome devices
+      include_tasks: ../../tasks/esphome-discover-devices.yaml
 
-        # --- Discover and upgrade devices ---
-        - name: Discover ESPHome devices
-          include_tasks: ../../tasks/esphome-discover-devices.yaml
+    # Priority 1: Filter by specific target_device if provided
+    - name: Filter devices for target device
+      set_fact:
+        devices_to_upgrade: "{{ esphome_devices | selectattr('name', 'equalto', target_device) | list }}"
+        filter_description: "device '{{ target_device }}'"
+      when: target_device is defined
 
-        # Priority 1: Filter by specific target_device if provided
-        - name: Filter devices for target device
-          set_fact:
-            devices_to_upgrade: "{{ esphome_devices | selectattr('name', 'equalto', target_device) | list }}"
-            filter_description: "device '{{ target_device }}'"
-          when: target_device is defined
+    # Priority 2: Filter by target_pattern if provided and target_device is not
+    - name: Filter devices by pattern
+      set_fact:
+        devices_to_upgrade: "{{ esphome_devices | selectattr('name', 'search', target_pattern) | list }}"
+        filter_description: "pattern '{{ target_pattern }}'"
+      when:
+        - target_device is not defined
+        - target_pattern is defined
 
-        # Priority 2: Filter by target_pattern if provided and target_device is not
-        - name: Filter devices by pattern
-          set_fact:
-            devices_to_upgrade: "{{ esphome_devices | selectattr('name', 'search', target_pattern) | list }}"
-            filter_description: "pattern '{{ target_pattern }}'"
-          when:
-            - target_device is not defined
-            - target_pattern is defined
+    # Priority 3: Use all devices if neither target_device nor target_pattern is provided
+    - name: Use all devices if no filter specified
+      set_fact:
+        devices_to_upgrade: "{{ esphome_devices }}"
+        filter_description: "all devices"
+      when:
+        - target_device is not defined
+        - target_pattern is not defined
 
-        # Priority 3: Use all devices if neither target_device nor target_pattern is provided
-        - name: Use all devices if no filter specified
-          set_fact:
-            devices_to_upgrade: "{{ esphome_devices }}"
-            filter_description: "all devices"
-          when:
-            - target_device is not defined
-            - target_pattern is not defined
+    - name: Validate target device exists
+      fail:
+        msg: |
+          Target device '{{ target_device }}' not found in ESPHome.
+          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
+      when:
+        - target_device is defined
+        - devices_to_upgrade | length == 0
 
-        - name: Validate target device exists
-          fail:
-            msg: |
-              Target device '{{ target_device }}' not found in ESPHome.
-              Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
-          when:
-            - target_device is defined
-            - devices_to_upgrade | length == 0
+    - name: Validate pattern match found devices
+      fail:
+        msg: |
+          No devices found matching {{ filter_description }}.
+          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
+      when:
+        - target_pattern is defined
+        - target_device is not defined
+        - devices_to_upgrade | length == 0
 
-        - name: Validate pattern match found devices
-          fail:
-            msg: |
-              No devices found matching {{ filter_description }}.
-              Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
-          when:
-            - target_pattern is defined
-            - target_device is not defined
-            - devices_to_upgrade | length == 0
-
-        - name: Run ESPHome upgrade
-          include_tasks: ../../tasks/esphome-upgrade-devices.yaml
-          vars:
-            upgrade_description: "ESPHome {{ filter_description }}"
-
-      always:
-        - name: Delete Alertmanager CPU silence
-          ansible.builtin.uri:
-            url: "{{ alertmanager_api_url }}/silence/{{ cpu_silence_id }}"
-            method: DELETE
-            status_code: [200, 204]
-          when: cpu_silence_id is defined
+    - name: Run ESPHome upgrade
+      include_tasks: ../../tasks/esphome-upgrade-devices.yaml
+      vars:
+        upgrade_description: "ESPHome {{ filter_description }}"
