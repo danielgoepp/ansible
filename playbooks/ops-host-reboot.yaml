@@ -1,0 +1,23 @@
+---
+# Reboot a host and wait for it to come back online
+#
+# Usage:
+#   Local:  ansible-playbook playbooks/ops-host-reboot.yaml -l <hostname>
+#   AWX:    Run as job template with limit set to a single target host
+
+- name: Reboot host
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Validate single host target
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts | length == 1
+        fail_msg: "This playbook must target exactly one host. Use -l <hostname> to specify a single host."
+
+    - name: Reboot and wait for host to come back
+      ansible.builtin.reboot:
+        msg: "Reboot initiated by Ansible"
+        reboot_timeout: 300
