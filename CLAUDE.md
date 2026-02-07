@@ -46,10 +46,10 @@ ansible-inventory --graph  # View host organization
 Update ESPHome firmware on IoT devices.
 
 ```bash
-# Two-step container shell upgrade (recommended)
-ansible-playbook playbooks/esphome/upgrade-esphome.yaml                                 # Upgrade all devices
-ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_device=<device-name>  # Specific device
-ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e esphome_clean_build=false    # Skip build cache cleanup
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml                                          # Upgrade all devices (default)
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<device-name>          # Specific device
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<regex>                # Devices matching pattern
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e esphome_clean_build=false             # Skip build cache cleanup
 ```
 
 ### K3s Application Operations

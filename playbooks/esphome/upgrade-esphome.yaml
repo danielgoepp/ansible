@@ -8,8 +8,7 @@
 #   AWX:    Run as job template (no additional configuration required)
 #
 # Options:
-#   -e target_device=<name>         Upgrade a specific device
-#   -e target_pattern=<regex>       Upgrade devices matching pattern
+#   -e target_pattern=<regex|all>   Upgrade devices matching pattern, or "all" for everything (default: all)
 #   -e esphome_clean_build=false    Skip build cache cleanup
 #   -e esphome_alert_silence_minutes=60  Override silence duration (default: 30)
 
@@ -26,6 +25,9 @@
     esphome_no_logs: true
     esphome_clean_build: true
     esphome_timeout: 600  # 10 minutes
+
+    # Targeting
+    target_pattern: "all"
 
     # Alert silencing
     esphome_alert_silence_minutes: 30
@@ -60,39 +62,17 @@
     - name: Discover ESPHome devices
       include_tasks: ../../tasks/esphome-discover-devices.yaml
 
-    # Priority 1: Filter by specific target_device if provided
-    - name: Filter devices for target device
+    - name: Use all devices
       set_fact:
-        devices_to_upgrade: "{{ esphome_devices | selectattr('name', 'equalto', target_device) | list }}"
-        filter_description: "device '{{ target_device }}'"
-      when: target_device is defined
+        devices_to_upgrade: "{{ esphome_devices }}"
+        filter_description: "all devices"
+      when: target_pattern == "all"
 
-    # Priority 2: Filter by target_pattern if provided and target_device is not
     - name: Filter devices by pattern
       set_fact:
         devices_to_upgrade: "{{ esphome_devices | selectattr('name', 'search', target_pattern) | list }}"
         filter_description: "pattern '{{ target_pattern }}'"
-      when:
-        - target_device is not defined
-        - target_pattern is defined
-
-    # Priority 3: Use all devices if neither target_device nor target_pattern is provided
-    - name: Use all devices if no filter specified
-      set_fact:
-        devices_to_upgrade: "{{ esphome_devices }}"
-        filter_description: "all devices"
-      when:
-        - target_device is not defined
-        - target_pattern is not defined
-
-    - name: Validate target device exists
-      fail:
-        msg: |
-          Target device '{{ target_device }}' not found in ESPHome.
-          Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
-      when:
-        - target_device is defined
-        - devices_to_upgrade | length == 0
+      when: target_pattern != "all"
 
     - name: Validate pattern match found devices
       fail:
@@ -100,8 +80,7 @@
           No devices found matching {{ filter_description }}.
           Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
       when:
-        - target_pattern is defined
-        - target_device is not defined
+        - target_pattern != "all"
         - devices_to_upgrade | length == 0
 
     - name: Run ESPHome upgrade
