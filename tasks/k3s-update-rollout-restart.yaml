@@ -1,0 +1,89 @@
+---
+# Generic rollout restart tasks
+# Used for applications that need a rolling restart (e.g., StatefulSets)
+# Requires service_name to be set by the calling playbook
+
+- name: Set rollout restart variables
+  set_fact:
+    rollout_resource_type: "{{ resource_type | default('statefulset') }}"
+    rollout_resource_name: "{{ resource_name | default(service_name) }}"
+    rollout_namespace: "{{ service_namespace | default(service_name) }}"
+    rollout_context: "{{ k8s_context | default(k3s_default_context) }}"
+    _kind_map:
+      statefulset: StatefulSet
+      deployment: Deployment
+      daemonset: DaemonSet
+
+- name: Set Kubernetes kind from resource type
+  set_fact:
+    rollout_kind: "{{ _kind_map[rollout_resource_type] }}"
+
+- name: Display rollout restart parameters
+  debug:
+    msg:
+      - "{{ service_name | title }} Rollout Restart Parameters:"
+      - "  Service: {{ service_name }}"
+      - "  Resource: {{ rollout_resource_type }}/{{ rollout_resource_name }}"
+      - "  Namespace: {{ rollout_namespace }}"
+      - "  Kubernetes Context: {{ rollout_context }}"
+
+- name: Get current resource status (before restart)
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: "{{ rollout_kind }}"
+    name: "{{ rollout_resource_name }}"
+    namespace: "{{ rollout_namespace }}"
+    context: "{{ rollout_context }}"
+  register: current_resource
+
+- name: Display current resource status
+  debug:
+    msg:
+      - "Current {{ service_name | title }} {{ rollout_kind }}:"
+      - "  Name: {{ current_resource.resources[0].metadata.name }}"
+      - "  Image: {{ current_resource.resources[0].spec.template.spec.containers[0].image }}"
+      - "  Ready Replicas: {{ current_resource.resources[0].status.readyReplicas | default(0) }}/{{ current_resource.resources[0].status.replicas | default(0) }}"
+  when: current_resource.resources is defined and current_resource.resources | length > 0
+
+- name: Fail if resource not found
+  fail:
+    msg: "{{ rollout_kind }} '{{ rollout_resource_name }}' not found in namespace '{{ rollout_namespace }}'"
+  when: current_resource.resources is not defined or current_resource.resources | length == 0
+
+- name: Perform rollout restart
+  command: >-
+    kubectl rollout restart {{ rollout_resource_type }}/{{ rollout_resource_name }}
+    --namespace {{ rollout_namespace }}
+    --context {{ rollout_context }}
+  register: rollout_restart_result
+  changed_when: true
+
+- name: Display rollout restart result
+  debug:
+    msg: "{{ rollout_restart_result.stdout }}"
+
+- name: Wait for rollout to complete
+  command: >-
+    kubectl rollout status {{ rollout_resource_type }}/{{ rollout_resource_name }}
+    --namespace {{ rollout_namespace }}
+    --context {{ rollout_context }}
+    --timeout=300s
+  register: rollout_status_result
+  changed_when: false
+
+- name: Get updated resource status (after restart)
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: "{{ rollout_kind }}"
+    name: "{{ rollout_resource_name }}"
+    namespace: "{{ rollout_namespace }}"
+    context: "{{ rollout_context }}"
+  register: updated_resource
+
+- name: Display rollout restart summary
+  debug:
+    msg:
+      - "{{ service_name | title }} rollout restart completed successfully!"
+      - "  Resource: {{ rollout_resource_type }}/{{ rollout_resource_name }}"
+      - "  Image: {{ updated_resource.resources[0].spec.template.spec.containers[0].image }}"
+      - "  Ready Replicas: {{ updated_resource.resources[0].status.readyReplicas | default(0) }}/{{ updated_resource.resources[0].status.replicas | default(0) }}"

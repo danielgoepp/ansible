@@ -76,3 +76,13 @@
       vars:
         instances: "{{ app_config.instances }}"
       when: app_config.deployment_method == 'manifest-multi-cnpg'
+
+    # Rollout restart deployment path
+    - name: Update application using rollout restart
+      include_tasks: ../../tasks/k3s-update-rollout-restart.yaml
+      vars:
+        resource_type: "{{ app_config.resource_type | default('statefulset') }}"
+        resource_name: "{{ app_config.resource_name | default(service_name) }}"
+        service_namespace: "{{ app_config.service_namespace | default(service_name) }}"
+        k8s_context: "{{ app_config.k8s_context | default(k3s_default_context) }}"
+      when: app_config.deployment_method == 'rollout-restart'

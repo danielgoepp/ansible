@@ -62,6 +62,12 @@ k3s_applications:
   grafana:
     deployment_method: manifest
 
+  graylog:
+    deployment_method: rollout-restart
+    resource_type: statefulset
+    resource_name: graylog
+    service_namespace: graylog
+
   homeassistant:
     deployment_method: manifest-multi
     instances:
