@@ -1,0 +1,35 @@
+# Test playbook: Migrate VM with local disks using community.proxmox.proxmox_kvm
+# Reference: https://github.com/ansible-collections/community.proxmox/issues/76
+#
+# Usage:
+#   Local:  ansible-playbook playbooks/ops-proxmox-migrate-vm.yaml
+#   AWX:    Run as job template (no additional configuration required)
+---
+- name: Migrate VM with local disks
+  hosts: localhost
+  become: false
+  gather_facts: false
+  tasks:
+
+    - name: Set Proxmox API credentials from AWX or vault
+      ansible.builtin.set_fact:
+        proxmox_api_token_id: "{{ awx_proxmox_api_token_id | default(vault_proxmox_api_token_id | default('')) }}"
+        proxmox_api_token_secret: "{{ awx_proxmox_api_token_secret | default(vault_proxmox_api_token_secret | default('')) }}"
+
+    - name: Migrate dev VM from pve13 to pve15
+      community.proxmox.proxmox_kvm:
+        api_user: root@pam
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: pve13
+        vmid: 105
+        name: dev
+        node: pve15
+        migrate: true
+        with_local_disks: true
+        timeout: 600
+      register: migration_result
+
+    - name: Display migration result
+      ansible.builtin.debug:
+        var: migration_result
