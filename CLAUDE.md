@@ -126,16 +126,22 @@ ansible-playbook playbooks/ops-<operation>.yaml
     - **update-app.yaml**: Unified update playbook (routes to appropriate deployment method)
   - **ops-*.yaml**: Additional operational tasks (cluster upgrades, maintenance, testing)
 - **roles/**: Ansible roles for modular configuration
-  - **llm/**: LLM role for GPU server setup (NVIDIA drivers, Docker, Python AI/ML packages, Ollama, Open WebUI, Portainer)
-    - **tasks/ollama.yml**: Ollama installation and upgrade tasks (idempotent)
-    - **tasks/openwebui.yml**: Open WebUI Docker container deployment and upgrade tasks
-    - **tasks/portainer.yml**: Portainer Docker container deployment and upgrade tasks
-    - **templates/ollama-override.conf.j2**: Systemd service override for Ollama configuration
-    - **defaults/main.yml**: Configurable variables (ollama_*, openwebui_*, portainer_*, llm_install_*)
+  - **backup/**: Backup server configuration (OPNsense, Jira, SSH backups)
+  - **common/**: Shared configuration (packages, users, mounts, rsyslog, oh-my-zsh)
+  - **llm/**: GPU server setup (NVIDIA drivers, Docker, Ollama, Open WebUI, Portainer)
+  - **rpi/**: Raspberry Pi configuration (NUT UPS, Wyoming satellite)
+  - **samba/**: Samba file server configuration
+  - **ui-network/**: UniFi Network controller
+  - **ui-protect/**: UniFi Protect
 - **tasks/**: Reusable task files
-  - **common-update-manifest.yaml**: Shared manifest update logic
-  - **setup-global-***: Global system setup tasks
-  - **setup-rpi-***: Raspberry Pi specific tasks
+  - **k3s-update-helm.yaml**: Helm chart deployments
+  - **k3s-update-manifest.yaml**: Single manifest deployments
+  - **k3s-update-manifest-multi.yaml**: Multi-instance manifest deployments
+  - **k3s-update-manifest-cnpg.yaml**: CloudNative-PG manifest deployments
+  - **k3s-update-manifest-multi-cnpg.yaml**: Multi-instance CNPG deployments
+  - **k3s-update-rollout-restart.yaml**: Rollout restart deployments
+  - **esphome-discover-devices.yaml**: ESPHome device discovery
+  - **esphome-upgrade-devices.yaml**: ESPHome firmware upgrades
   - **ops-upgrade-cluster-***: Cluster upgrade tasks
   - **ops-upgrade-cluster-alerts-***: Alert management task modules (Graylog, Alertmanager, Uptime Kuma)
 - **files/k3s-config/**: Git submodule containing Kubernetes manifests
@@ -190,10 +196,10 @@ ansible-playbook playbooks/ops-<operation>.yaml
 
 ```bash
 # Override base path for different environment
-ansible-playbook playbooks/k3s/ops-upgrade-grafana-manifest.yaml -e k3s_config_base_path="/path/to/dev/config"
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=grafana -e k3s_config_base_path="/path/to/dev/config"
 
 # Override context for different cluster
-ansible-playbook playbooks/k3s/ops-upgrade-grafana-manifest.yaml -e k3s_default_context="k3s-dev"
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=grafana -e k3s_default_context="k3s-dev"
 ```
 
 **Path Patterns for K3s Config References**:
@@ -259,8 +265,10 @@ Hosts use a `services` variable to define what runs on each system:
 ```yaml
 morgspi:
   services: ['nut', 'homeassistant']
-voicepi-greatroom:
-  services: ['wyoming']
+mudderpi:
+  services: ['nut', 'homeassistant']
+rockyledge:
+  services: ['nut']
 ```
 
 Tasks use conditionals like `when: "'nut' in (services | default([]))"` to run service-specific configuration.
@@ -283,11 +291,14 @@ Playbooks typically have multiple plays:
 
 K3s application updates use a unified, configuration-driven approach:
 
-- **inventories/group_vars/all/k3s_applications.yml**: Centralized application configuration defining all K3s applications, their deployment methods (helm, manifest, manifest-multi), and deployment-specific parameters
+- **inventories/group_vars/all/k3s_applications.yml**: Centralized application configuration defining all K3s applications, their deployment methods (helm, manifest, manifest-multi, manifest-cnpg, manifest-multi-cnpg, rollout-restart), and deployment-specific parameters
 - **playbooks/k3s/update-app.yaml**: Unified playbook that loads application config and routes to appropriate task file based on deployment method
 - **tasks/k3s-update-manifest.yaml**: Reusable task file for single manifest deployments
 - **tasks/k3s-update-manifest-multi.yaml**: Reusable task file for multi-instance manifest deployments
+- **tasks/k3s-update-manifest-cnpg.yaml**: Reusable task file for CloudNative-PG manifest deployments
+- **tasks/k3s-update-manifest-multi-cnpg.yaml**: Reusable task file for multi-instance CNPG deployments
 - **tasks/k3s-update-helm.yaml**: Reusable task file for Helm deployments
+- **tasks/k3s-update-rollout-restart.yaml**: Reusable task file for rollout restart deployments
 - **Benefits**: Single playbook for all updates, eliminates code duplication, consistent behavior, configuration-driven, easy to add new applications
 - **Pattern**: Applications are referenced by name (`app_name=<application>`), configuration is automatically loaded and used
 

@@ -12,22 +12,35 @@ clusters.
 ansible/
 ├── inventories/hosts.yml   # Main inventory with host groups and variables
 ├── playbooks/             # Ansible playbooks
-│   ├── setup-*.yaml       # Initial system setup
-│   ├── ops-*.yaml         # Operational tasks
-│   └── linux-*.yaml       # Linux-specific configurations
+│   ├── ssh/               # SSH host configuration and updates
+│   │   ├── common-*.yaml  # Group playbooks (apply common role)
+│   │   └── host-*.yaml    # Host-specific playbooks
+│   ├── k3s/               # Kubernetes application updates
+│   │   └── update-app.yaml # Unified update playbook
+│   ├── esphome/           # ESPHome device firmware updates
+│   └── ops-*.yaml         # Operational tasks
+├── roles/                 # Ansible roles
+│   ├── backup/            # Backup server configuration
+│   ├── common/            # Shared config (packages, users, mounts, rsyslog)
+│   ├── llm/               # GPU server setup (NVIDIA, Docker, Ollama, Open WebUI)
+│   ├── rpi/               # Raspberry Pi (NUT, Wyoming satellite)
+│   ├── samba/             # Samba file server configuration
+│   ├── ui-network/        # UniFi Network controller
+│   └── ui-protect/        # UniFi Protect
 ├── tasks/                 # Reusable task files
-│   ├── setup-global-*.yaml    # Global system configuration tasks
-│   ├── setup-rpi-*.yaml       # Raspberry Pi specific tasks
-│   └── tasks-*.yaml           # Legacy task files
-├── files/                 # Static files and encrypted secrets
+│   ├── k3s-update-*.yaml  # K3s deployment task files
+│   ├── esphome-*.yaml     # ESPHome task files
+│   └── ops-upgrade-cluster-*.yaml # Cluster upgrade tasks
+├── files/                 # Static files and configuration templates
+│   └── k3s-config/        # Git submodule with Kubernetes manifests
 ├── inventories/          # Inventory and group variables
 │   ├── hosts.yml         # Host inventory
 │   └── group_vars/       # Group-specific variables
 │       └── all/
-│           ├── common.yml    # Common variables
-│           └── vault.yml     # Encrypted secrets (ansible-vault)
+│           ├── common.yml           # Common variables
+│           ├── k3s_applications.yml # K3s application definitions
+│           └── vault.yml            # Encrypted secrets (ansible-vault)
 ├── host_vars/            # Host-specific variables
-├── vars/                 # Additional variable files
 └── ansible.cfg           # Ansible configuration
 ```
 
@@ -35,13 +48,14 @@ ansible/
 
 ### Infrastructure Groups
 
-- **`ubuntu`** - Ubuntu servers (ui-network, backup, dev, adambalm, smb)
+- **`ubuntu`** - Ubuntu servers (ui-network, backup, dev, adambalm)
 - **`rpi`** - Raspberry Pi devices (rockyledge, morgspi, mudderpi, probepi,
-  magpi, voicepi-greatroom)
+  magpi)
 - **`k3s_prod`** - Kubernetes production cluster nodes (k3s-prod-11,
   k3s-prod-12, k3s-prod-13, k3s-prod-15)
 - **`pve`** - Proxmox VE hosts (pve11, pve12, pve13, pve15)
-- **`lxc`** - LXC containers (smb, k3s-prod-15)
+- **`lxc`** - LXC containers (smb)
+- **`ui_protect`** - UniFi Protect (ui-protect)
 
 ### Service-Based Organization
 
@@ -50,8 +64,10 @@ Uses `services` host variable to define what runs on each host:
 ```yaml
 morgspi:
   services: ['nut', 'homeassistant']
-voicepi-greatroom:
-  services: ['wyoming']
+mudderpi:
+  services: ['nut', 'homeassistant']
+rockyledge:
+  services: ['nut']
 ```
 
 ## Key Playbooks
@@ -64,7 +80,8 @@ Apply common configuration to host groups:
 - **`ssh/common-k3s-prod.yaml`** - K3s production cluster nodes
 - **`ssh/common-pve.yaml`** - Proxmox VE hypervisors
 - **`ssh/common-lxc.yaml`** - LXC containers
-- **`ssh/common-rpi.yaml`** - Raspberry Pi servers (includes service-based configuration)
+- **`ssh/common-rpi.yaml`** - Raspberry Pi servers (includes service-based
+  configuration)
 
 ### Host Playbooks (`host-*`)
 
@@ -77,13 +94,45 @@ Configure specific individual servers:
 - **`ssh/host-ui-network.yaml`** - UniFi Network controller (common + ui-network)
 - **`ssh/host-ui-protect.yaml`** - UniFi Protect (ui-protect)
 
+### Operational Playbooks
+
+- **`ops-maintenance-mode.yaml`** - Alert management (Graylog, Alertmanager,
+  Uptime Kuma)
+- **`ops-upgrade-cluster.yaml`** - Cluster upgrade orchestration
+- **`ops-proxmox-maintenance-on.yaml`** - Proxmox maintenance mode
+- **`ops-proxmox-migrate-vm.yaml`** - Proxmox VM migration
+- **`ops-cloudflare-clear-acme.yaml`** - Cloudflare ACME cleanup
+- **`ops-host-reboot.yaml`** - Host reboot management
+
+### K3s Playbooks
+
+- **`k3s/update-app.yaml`** - Unified update playbook (routes by deployment
+  method)
+- **`k3s/update-cnpg-operator.yaml`** - CloudNative-PG operator update wrapper
+- **`k3s/update-mongodb-crd-manifests.yaml`** - MongoDB CRD manifest management
+- **`k3s/backup-uptime-kuma.yaml`** - Uptime Kuma database backup
+
 ### Task Organization
 
-Tasks are organized by function:
+Reusable task files in `tasks/`:
 
-- **`setup-global-*.yaml`** - System-wide configuration
-- **`setup-rpi-*.yaml`** - Raspberry Pi specific tasks
-- Service-specific includes based on `services` variable
+- **K3s deployment tasks**:
+  - `k3s-update-helm.yaml` - Helm chart deployments
+  - `k3s-update-manifest.yaml` - Single manifest deployments
+  - `k3s-update-manifest-multi.yaml` - Multi-instance manifest deployments
+  - `k3s-update-manifest-cnpg.yaml` - CloudNative-PG manifest deployments
+  - `k3s-update-manifest-multi-cnpg.yaml` - Multi-instance CNPG deployments
+  - `k3s-update-rollout-restart.yaml` - Rollout restart deployments
+- **ESPHome tasks**:
+  - `esphome-discover-devices.yaml` - Device discovery
+  - `esphome-upgrade-devices.yaml` - Device firmware upgrades
+- **Cluster upgrade tasks** (`ops-upgrade-cluster-*`):
+  - Alert management (graylog, alertmanager, uptime-kuma)
+  - Ceph noout management
+  - CNPG maintenance mode
+  - Node drain and health checks
+  - K3s, Proxmox, and VM operations
+  - Paired node upgrade orchestration
 
 ## Host Variables and Conditionals
 
@@ -128,7 +177,8 @@ when: ansible_hostname != 'adambalm'
 
 ### Vault Management
 
-- Secrets stored in `inventories/group_vars/all/vault.yml` (encrypted with ansible-vault)
+- Secrets stored in `inventories/group_vars/all/vault.yml` (encrypted with
+  ansible-vault)
 - Vault password stored in `~/.ansible/.vault-pass` (default location)
 - SSH keys, passwords, and credentials all encrypted
 - Vault variables automatically loaded for all playbooks

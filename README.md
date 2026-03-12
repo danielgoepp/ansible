@@ -14,21 +14,6 @@ as I get a chance to clean it up.
 
 ## Operations
 
-### Version Management
-
-```bash
-# List all tracked applications
-ansible-playbook playbooks/version-check.yaml -e version_check_action=list
-
-# Check specific application versions
-ansible-playbook playbooks/version-check.yaml \
-  -e version_check_action=app -e app_name="home assistant"
-
-# Full version check across all services
-ansible-playbook playbooks/version-check.yaml \
-  -e version_check_action=check-all
-```
-
 ### Host and Group Configuration
 
 ```bash
@@ -60,44 +45,55 @@ ansible-playbook playbooks/k3s/update-app.yaml \
   -e app_name=homeassistant -e target_instance=prod
 ```
 
-### Cluster Alert Management
+### ESPHome Device Updates
 
 ```bash
-# Disable all alerts (Graylog, Alertmanager, HertzBeat)
-ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=disable
+# Upgrade all ESPHome devices
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml
 
-# Enable all alerts
-ansible-playbook playbooks/ops-cluster-alerts.yaml -e alert_action=enable
+# Upgrade specific device or pattern
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<device-name>
+```
 
-# Manage specific alert system
-ansible-playbook playbooks/ops-cluster-alerts.yaml \
-  -e alert_action=disable -e target=graylog
+### Maintenance Mode
+
+```bash
+# Enable maintenance mode (mutes all alerts: Graylog, Alertmanager, Uptime Kuma)
+ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable
+
+# Disable maintenance mode (unmutes all alerts)
+ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=disable
+
+# Target specific alert system
+ansible-playbook playbooks/ops-maintenance-mode.yaml \
+  -e maintenance_action=enable -e target=graylog
 
 # Customize silence duration (default: 2 hours)
-ansible-playbook playbooks/ops-cluster-alerts.yaml \
-  -e alert_action=disable -e duration_hours=4
+ansible-playbook playbooks/ops-maintenance-mode.yaml \
+  -e maintenance_action=enable -e duration_hours=4
 ```
 
 ## Infrastructure Overview
 
-- **Ubuntu Servers**: General purpose servers (ui-network, backup, dev, smb)
-- **Raspberry Pi**: IoT and edge services (Home Assistant, NUT UPS, Wyoming
-  voice satellites)
+- **Ubuntu Servers**: General purpose servers (ui-network, backup, dev, adambalm)
+- **Raspberry Pi**: IoT and edge services (Home Assistant, NUT UPS monitoring)
 - **Kubernetes**: k3s production cluster with Ceph storage
 - **Proxmox VE**: Virtualization platform hosts
-- **LXC Containers**: Lightweight application containers
+- **LXC Containers**: Lightweight application containers (smb)
 
 ## Key Features
 
 - **Clear playbook naming**: `common-*` for groups, `host-*` for specific servers
 - **Service-based configuration**: Hosts define their roles via `services` variables
 - **Unified update architecture**: Single playbook for all K3s application updates
-- **Optional system updates**: Add `-e apt_dist_upgrade=true` to any playbook using common role
-- **Version tracking**: Automated version checking across all applications
-- **Centralized alert management**: Control alerts across Graylog, Alertmanager, and HertzBeat
+- **Optional system updates**: Add `-e apt_dist_upgrade=true` to any playbook using
+  common role
+- **Centralized alert management**: Control alerts across Graylog, Alertmanager,
+  and Uptime Kuma
 - **Secure secret management**: ansible-vault encrypted credentials
 - **Automated storage mounting**: SMB media shares and Ceph distributed storage
-- **AWX compatible**: Native Ansible implementation works in both local and AWX environments
+- **AWX compatible**: Native Ansible implementation works in both local and AWX
+  environments
 
 ## Documentation
 
@@ -111,8 +107,24 @@ ansible-playbook playbooks/ops-cluster-alerts.yaml \
 ```text
 ├── inventories/
 │   ├── hosts.yml           # Host inventory and group definitions
-│   └── group_vars/         # Group-specific variables (encrypted)
+│   └── group_vars/         # Group-specific variables
+│       └── all/
+│           ├── common.yml          # Common variables
+│           ├── k3s_applications.yml # K3s app definitions
+│           └── vault.yml           # Encrypted secrets
 ├── playbooks/              # Main execution playbooks
+│   ├── ssh/                # SSH host configuration
+│   ├── k3s/                # Kubernetes app updates
+│   ├── esphome/            # ESPHome device updates
+│   └── ops-*.yaml          # Operational tasks
+├── roles/                  # Ansible roles
+│   ├── backup/             # Backup server configuration
+│   ├── common/             # Shared configuration (packages, users, mounts)
+│   ├── llm/                # GPU/AI server setup
+│   ├── rpi/                # Raspberry Pi configuration
+│   ├── samba/              # Samba file server
+│   ├── ui-network/         # UniFi Network controller
+│   └── ui-protect/         # UniFi Protect
 ├── tasks/                  # Reusable task modules
 ├── files/                  # Static configuration files
 └── host_vars/              # Host-specific overrides
@@ -128,7 +140,7 @@ ansible-playbook playbooks/ops-cluster-alerts.yaml \
 
 ## AWX/Tower Compatibility
 
-Playbooks are designed to run both locally and on AWX/Ansible Tower. Vault
-variables are conditionally loaded using `pre_tasks` that check for the
-`AWX_HOST` environment variable, allowing AWX to use its native credential
-management while maintaining local vault file support.
+Playbooks are designed to run both locally and on AWX/Ansible Tower. Variables
+use an `awx_*` prefix pattern with fallback to vault/local defaults, allowing
+AWX to use its native credential management while maintaining local vault file
+support.
