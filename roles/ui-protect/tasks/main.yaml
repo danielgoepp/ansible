@@ -31,6 +31,8 @@
       --dns-provider-credentials {{ ui_protect_cloudflare_credentials_path }}
       --server-ip {{ ui_protect_server_ip }}
       --external-dns {{ ui_protect_external_dns }}
+  environment:
+    TERM: xterm
   register: ui_protect_initial_setup
   changed_when: ui_protect_initial_setup.rc == 0
   failed_when: ui_protect_initial_setup.rc != 0
