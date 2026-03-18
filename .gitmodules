@@ -1,6 +1,8 @@
 [submodule "files/k3s-config"]
 	path = files/k3s-config
 	url = https://github.com/danielgoepp/k3s-config
+	branch = main
 [submodule "files/utility-scripts"]
 	path = files/utility-scripts
 	url = https://github.com/danielgoepp/utility-scripts.git
+	branch = main
