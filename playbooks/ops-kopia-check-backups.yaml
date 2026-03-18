@@ -1,0 +1,72 @@
+---
+# Kopia Backup Health Check Playbook
+#
+# Checks all Kopia backup instances for stale or missing snapshots and
+# sends alerts to Alertmanager when issues are found.
+#
+# Usage:
+#   Local:  ansible-playbook playbooks/ops-kopia-check-backups.yaml
+#   AWX:    Run as job template with Kopia credentials configured
+#
+# Parameters:
+#   max_age_hours: int (default: 26) - Maximum snapshot age before alerting
+#
+# Requires:
+#   - Kopia credentials in vault or AWX (see credential pattern below)
+#   - python-dotenv and requests in execution environment
+
+- name: Check Kopia backup health
+  hosts: localhost
+  become: false
+  gather_facts: false
+
+  vars:
+    kopia_max_age_hours: "{{ max_age_hours | default(26) }}"
+
+  tasks:
+    - name: Set Kopia credentials from AWX or vault
+      ansible.builtin.set_fact:
+        kopia_b2_server_url: "{{ awx_kopia_b2_server_url | default(vault_kopia_b2_server_url | default('')) }}"
+        kopia_b2_control_username: "{{ awx_kopia_b2_control_username | default(vault_kopia_b2_control_username | default('server-control')) }}"
+        kopia_b2_control_password: "{{ awx_kopia_b2_control_password | default(vault_kopia_b2_control_password | default('')) }}"
+        kopia_ssd_server_url: "{{ awx_kopia_ssd_server_url | default(vault_kopia_ssd_server_url | default('')) }}"
+        kopia_ssd_control_username: "{{ awx_kopia_ssd_control_username | default(vault_kopia_ssd_control_username | default('server-control')) }}"
+        kopia_ssd_control_password: "{{ awx_kopia_ssd_control_password | default(vault_kopia_ssd_control_password | default('')) }}"
+        kopia_hdd_server_url: "{{ awx_kopia_hdd_server_url | default(vault_kopia_hdd_server_url | default('')) }}"
+        kopia_hdd_control_username: "{{ awx_kopia_hdd_control_username | default(vault_kopia_hdd_control_username | default('server-control')) }}"
+        kopia_hdd_control_password: "{{ awx_kopia_hdd_control_password | default(vault_kopia_hdd_control_password | default('')) }}"
+
+    - name: Validate credentials are available
+      ansible.builtin.fail:
+        msg: "Kopia credentials not found. Ensure vault_kopia_*_server_url and vault_kopia_*_control_password are set."
+      when: >-
+        kopia_b2_server_url == '' or kopia_b2_control_password == '' or
+        kopia_ssd_server_url == '' or kopia_ssd_control_password == '' or
+        kopia_hdd_server_url == '' or kopia_hdd_control_password == ''
+
+    - name: Run Kopia backup health check
+      ansible.builtin.command:
+        cmd: >-
+          python3 {{ playbook_dir }}/../files/utility-scripts/kopia/kopia-check-backups.py
+          --alert --max-age {{ kopia_max_age_hours }}
+      environment:
+        KOPIA_INSTANCES: "b2,ssd,hdd"
+        KOPIA_B2_SERVER_URL: "{{ kopia_b2_server_url }}"
+        KOPIA_B2_CONTROL_USERNAME: "{{ kopia_b2_control_username }}"
+        KOPIA_B2_CONTROL_PASSWORD: "{{ kopia_b2_control_password }}"
+        KOPIA_SSD_SERVER_URL: "{{ kopia_ssd_server_url }}"
+        KOPIA_SSD_CONTROL_USERNAME: "{{ kopia_ssd_control_username }}"
+        KOPIA_SSD_CONTROL_PASSWORD: "{{ kopia_ssd_control_password }}"
+        KOPIA_HDD_SERVER_URL: "{{ kopia_hdd_server_url }}"
+        KOPIA_HDD_CONTROL_USERNAME: "{{ kopia_hdd_control_username }}"
+        KOPIA_HDD_CONTROL_PASSWORD: "{{ kopia_hdd_control_password }}"
+        ALERTMANAGER_URL: "{{ alertmanager_api_url | regex_replace('/api/v2$', '') }}"
+        KOPIA_MAX_SNAPSHOT_AGE_HOURS: "{{ kopia_max_age_hours }}"
+        KOPIA_VERIFY_TLS: "false"
+      register: check_result
+      changed_when: false
+      failed_when: check_result.rc == 2
+
+    - name: Show backup check output
+      ansible.builtin.debug:
+        msg: "{{ check_result.stdout_lines }}"
