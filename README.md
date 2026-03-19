@@ -71,6 +71,14 @@ ansible-playbook playbooks/ops-maintenance-mode.yaml \
 # Customize silence duration (default: 2 hours)
 ansible-playbook playbooks/ops-maintenance-mode.yaml \
   -e maintenance_action=enable -e duration_hours=4
+
+# Silence a single Alertmanager alert (default: 1 hour)
+ansible-playbook playbooks/ops-maintenance-mode-single.yaml \
+  -e 'alert_name="Node Exporter - CPU High"'
+
+# Remove a single alert silence early
+ansible-playbook playbooks/ops-maintenance-mode-single.yaml \
+  -e 'alert_name="Node Exporter - CPU High"' -e silence_action=disable
 ```
 
 ## Infrastructure Overview

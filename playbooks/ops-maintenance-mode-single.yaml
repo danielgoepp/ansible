@@ -1,0 +1,97 @@
+---
+# Silence a specific Alertmanager alert
+#
+# Usage:
+#   Local:  ansible-playbook playbooks/ops-silence-alert.yaml -e alert_name="Node Exporter - CPU High"
+#   Local:  ansible-playbook playbooks/ops-silence-alert.yaml -e alert_name="Node Exporter - CPU High" -e duration_hours=2
+#   Local:  ansible-playbook playbooks/ops-silence-alert.yaml -e alert_name="Node Exporter - CPU High" -e silence_action=disable
+#   AWX:    Run as job template (no additional configuration required)
+#
+# Parameters:
+#   alert_name: Name of the alert to silence (required)
+#   silence_action: "enable" (default) or "disable"
+#   duration_hours: Duration in hours for silence (default: 1)
+
+- name: Silence specific Alertmanager alert
+  hosts: localhost
+  gather_facts: true
+
+  vars:
+    silence_action: "{{ awx_silence_action | default('enable') }}"
+    alert_duration_hours: "{{ awx_duration_hours | default(duration_hours | default(1)) }}"
+    effective_alert_name: "{{ awx_alert_name | default(alert_name | default('')) }}"
+
+  tasks:
+    - name: Validate alert_name parameter
+      ansible.builtin.fail:
+        msg: "alert_name is required"
+      when: effective_alert_name == ''
+
+    - name: Validate silence_action parameter
+      ansible.builtin.fail:
+        msg: "silence_action must be 'enable' or 'disable'"
+      when: silence_action not in ['enable', 'disable']
+
+    - name: Create silence for alert
+      when: silence_action == 'enable'
+      block:
+        - name: Calculate silence timestamps
+          ansible.builtin.set_fact:
+            silence_start: "{{ ansible_date_time.iso8601 }}"
+            silence_end: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime((ansible_date_time.epoch | int) + (alert_duration_hours | int * 3600), utc=True) }}"
+
+        - name: Create silence
+          ansible.builtin.uri:
+            url: "{{ alertmanager_api_url }}/silences"
+            method: POST
+            headers:
+              Content-Type: application/json
+            body_format: json
+            body:
+              matchers:
+                - name: alertname
+                  value: "{{ effective_alert_name }}"
+                  isRegex: false
+                  isEqual: true
+              startsAt: "{{ silence_start }}"
+              endsAt: "{{ silence_end }}"
+              createdBy: "{{ alertmanager_created_by }}"
+              comment: "Silenced by ansible: {{ effective_alert_name }} for {{ alert_duration_hours }}h"
+            status_code: [200, 201]
+          register: silence_result
+
+        - name: Display silence info
+          ansible.builtin.debug:
+            msg: "Silenced '{{ effective_alert_name }}' until {{ silence_end }} (ID: {{ silence_result.json.silenceID }})"
+
+    - name: Remove silences for alert
+      when: silence_action == 'disable'
+      block:
+        - name: Get active silences
+          ansible.builtin.uri:
+            url: "{{ alertmanager_api_url }}/silences"
+            method: GET
+            return_content: true
+          register: alertmanager_silences
+
+        - name: Find matching silences
+          ansible.builtin.set_fact:
+            matching_silences: >-
+              {{ alertmanager_silences.json
+                 | selectattr('status.state', 'equalto', 'active')
+                 | selectattr('matchers', 'defined')
+                 | list
+                 | json_query("[?matchers[?name=='alertname' && value=='" + effective_alert_name + "']]") }}
+
+        - name: Delete matching silences
+          ansible.builtin.uri:
+            url: "{{ alertmanager_api_url }}/silence/{{ item.id }}"
+            method: DELETE
+            status_code: [200, 204]
+          loop: "{{ matching_silences }}"
+          loop_control:
+            label: "{{ item.id }}"
+
+        - name: Display result
+          ansible.builtin.debug:
+            msg: "Removed {{ matching_silences | length }} silence(s) for '{{ effective_alert_name }}'"

@@ -98,6 +98,7 @@ Configure specific individual servers:
 
 - **`ops-maintenance-mode.yaml`** - Alert management (Graylog, Alertmanager,
   Uptime Kuma)
+- **`ops-maintenance-mode-single.yaml`** - Silence a single Alertmanager alert
 - **`ops-upgrade-cluster.yaml`** - Cluster upgrade orchestration
 - **`ops-proxmox-maintenance-on.yaml`** - Proxmox maintenance mode
 - **`ops-proxmox-migrate-vm.yaml`** - Proxmox VM migration

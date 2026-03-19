@@ -86,6 +86,13 @@ ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enabl
 
 # Customize silence duration (default: 2 hours)
 ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e duration_hours=4
+
+# Silence a single alert (default: 1 hour)
+ansible-playbook playbooks/ops-maintenance-mode-single.yaml -e 'alert_name="Node Exporter - CPU High"'
+ansible-playbook playbooks/ops-maintenance-mode-single.yaml -e 'alert_name="Node Exporter - CPU High"' -e duration_hours=2
+
+# Remove a single alert silence early
+ansible-playbook playbooks/ops-maintenance-mode-single.yaml -e 'alert_name="Node Exporter - CPU High"' -e silence_action=disable
 ```
 
 ### Supporting Operations
@@ -348,6 +355,7 @@ The cluster upgrade system uses a highly modular approach:
 The alert management system provides centralized control over monitoring alerts during maintenance:
 
 - **playbooks/ops-maintenance-mode.yaml**: Standalone playbook with simple interface (maintenance_action=enable/disable)
+- **playbooks/ops-maintenance-mode-single.yaml**: Silence a single Alertmanager alert by name (default: 1 hour)
 - **Native Ansible implementation**: Uses uri module for REST APIs, Python library for Socket.io APIs
 - **Modular task files**: Separate task files for each alert system
   - **tasks/ops-upgrade-cluster-alerts-graylog.yaml**: Manages Graylog event definitions
