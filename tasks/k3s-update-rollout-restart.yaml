@@ -71,10 +71,28 @@
     context: "{{ rollout_context }}"
     wait: true
     wait_condition:
-      type: Ready
+      type: Available
       status: "True"
     wait_timeout: 300
   register: rollout_status_result
+  when: rollout_resource_type == 'deployment'
+
+- name: Wait for StatefulSet/DaemonSet rollout to complete
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: "{{ rollout_kind }}"
+    name: "{{ rollout_resource_name }}"
+    namespace: "{{ rollout_namespace }}"
+    context: "{{ rollout_context }}"
+  register: rollout_status_result
+  until: >-
+    rollout_status_result.resources | length > 0 and
+    (rollout_status_result.resources[0].status.readyReplicas | default(0)) ==
+    (rollout_status_result.resources[0].status.replicas | default(0)) and
+    (rollout_status_result.resources[0].status.replicas | default(0)) > 0
+  retries: 30
+  delay: 10
+  when: rollout_resource_type != 'deployment'
 
 - name: Display rollout restart summary
   debug:
