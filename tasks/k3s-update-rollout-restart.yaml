@@ -51,39 +51,35 @@
   when: current_resource.resources is not defined or current_resource.resources | length == 0
 
 - name: Perform rollout restart
-  command: >-
-    kubectl rollout restart {{ rollout_resource_type }}/{{ rollout_resource_name }}
-    --namespace {{ rollout_namespace }}
-    --context {{ rollout_context }}
-  register: rollout_restart_result
-  changed_when: true
-
-- name: Display rollout restart result
-  debug:
-    msg: "{{ rollout_restart_result.stdout }}"
+  kubernetes.core.k8s_json_patch:
+    api_version: apps/v1
+    kind: "{{ rollout_kind }}"
+    name: "{{ rollout_resource_name }}"
+    namespace: "{{ rollout_namespace }}"
+    context: "{{ rollout_context }}"
+    patch:
+      - op: add
+        path: /spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt
+        value: "{{ ansible_date_time.iso8601 }}"
 
 - name: Wait for rollout to complete
-  command: >-
-    kubectl rollout status {{ rollout_resource_type }}/{{ rollout_resource_name }}
-    --namespace {{ rollout_namespace }}
-    --context {{ rollout_context }}
-    --timeout=300s
-  register: rollout_status_result
-  changed_when: false
-
-- name: Get updated resource status (after restart)
   kubernetes.core.k8s_info:
     api_version: apps/v1
     kind: "{{ rollout_kind }}"
     name: "{{ rollout_resource_name }}"
     namespace: "{{ rollout_namespace }}"
     context: "{{ rollout_context }}"
-  register: updated_resource
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+  register: rollout_status_result
 
 - name: Display rollout restart summary
   debug:
     msg:
       - "{{ service_name | title }} rollout restart completed successfully!"
       - "  Resource: {{ rollout_resource_type }}/{{ rollout_resource_name }}"
-      - "  Image: {{ updated_resource.resources[0].spec.template.spec.containers[0].image }}"
-      - "  Ready Replicas: {{ updated_resource.resources[0].status.readyReplicas | default(0) }}/{{ updated_resource.resources[0].status.replicas | default(0) }}"
+      - "  Image: {{ rollout_status_result.resources[0].spec.template.spec.containers[0].image }}"
+      - "  Ready Replicas: {{ rollout_status_result.resources[0].status.readyReplicas | default(0) }}/{{ rollout_status_result.resources[0].status.replicas | default(0) }}"
