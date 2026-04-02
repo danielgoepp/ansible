@@ -60,7 +60,7 @@
     patch:
       - op: add
         path: /spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt
-        value: "{{ ansible_date_time.iso8601 }}"
+        value: "{{ now(utc=True, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
 
 - name: Wait for rollout to complete
   kubernetes.core.k8s_info:
