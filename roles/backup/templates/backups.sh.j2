@@ -48,9 +48,6 @@ rsync -ah root@ui-network:/var/lib/unifi/backup/autobackup/ /mnt/backups/unifi/ 
 echo "Processing backup for victoriametrics"
 vmbackup-prod -storageDataPath=/mnt/k3s-prod-data/vms-prod-lt -snapshot.createURL=https://vms-prod-lt.goepp.net/snapshot/create -dst=fs:///mnt/backups/victoriametrics/vms-prod-lt -loggerLevel=WARN
 
-## purge jira backups
-find $BKUPDIR/jira -mtime +7 -delete
-
 ## purge unifi backups
 find $BKUPDIR/unifi -mtime +7 -delete
 

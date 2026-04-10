@@ -133,7 +133,7 @@ ansible-playbook playbooks/ops-<operation>.yaml
     - **update-app.yaml**: Unified update playbook (routes to appropriate deployment method)
   - **ops-*.yaml**: Additional operational tasks (cluster upgrades, maintenance, testing)
 - **roles/**: Ansible roles for modular configuration
-  - **backup/**: Backup server configuration (OPNsense, Jira, SSH backups)
+  - **backup/**: Backup server configuration (OPNsense, SSH backups)
   - **common/**: Shared configuration (packages, users, mounts, rsyslog, oh-my-zsh)
   - **llm/**: GPU server setup (NVIDIA drivers, Docker, Ollama, Open WebUI, Portainer)
   - **rpi/**: Raspberry Pi configuration (NUT UPS, Wyoming satellite)
@@ -248,7 +248,7 @@ ansible-playbook playbooks/k3s/update-app.yaml -e app_name=grafana -e k3s_defaul
 
 **Examples in Codebase**:
 
-- [roles/backup/tasks/main.yml](roles/backup/tasks/main.yml) - OPNsense, Jira, and SSH credentials
+- [roles/backup/tasks/main.yml](roles/backup/tasks/main.yml) - OPNsense, and SSH credentials
 - [roles/common/tasks/mount-smb.yaml](roles/common/tasks/mount-smb.yaml) - CIFS credentials
 - [roles/ui-network/tasks/main.yaml](roles/ui-network/tasks/main.yaml) - SSH public key
 - [playbooks/ops-proxmox-maintenance-on.yaml](playbooks/ops-proxmox-maintenance-on.yaml) - Proxmox API credentials
