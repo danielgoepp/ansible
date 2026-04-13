@@ -1,0 +1,90 @@
+---
+# Todoist Backup Download Playbook
+#
+# Downloads the most recent Todoist backup using the Todoist API directly.
+#
+# Usage:
+#   Local:  ansible-playbook playbooks/ops-todoist-backup.yaml
+#   Local:  ansible-playbook playbooks/ops-todoist-backup.yaml -e todoist_backup_dir=/mnt/backups/todoist
+#   AWX:    Run as job template with Todoist credentials and todoist_backup_dir configured
+#
+# Parameters:
+#   todoist_backup_dir: str (required) - Directory to save backup files
+#
+# Requires:
+#   - vault_todoist_oauth_token: OAuth token (run setup-oauth.py once to obtain)
+#   - vault_todoist_api_token: Personal API token (Settings > Integrations > Developer)
+
+- name: Download Todoist backup
+  hosts: localhost
+  become: false
+  gather_facts: false
+
+  vars:
+    todoist_base_url: "https://api.todoist.com/api/v1"
+
+  tasks:
+    - name: Set Todoist credentials from AWX or vault
+      ansible.builtin.set_fact:
+        todoist_oauth_token: "{{ awx_todoist_oauth_token | default(vault_todoist_oauth_token | default('')) }}"
+        todoist_api_token: "{{ awx_todoist_api_token | default(vault_todoist_api_token | default('')) }}"
+
+    - name: Validate required variables are set
+      ansible.builtin.fail:
+        msg: "todoist_backup_dir must be set. Pass -e todoist_backup_dir=/path/to/backups or configure it in AWX."
+      when: todoist_backup_dir is not defined or todoist_backup_dir == ''
+
+    - name: Validate credentials are available
+      ansible.builtin.fail:
+        msg: >-
+          Todoist credentials not found. Ensure vault_todoist_oauth_token and
+          vault_todoist_api_token are set in vault.yml. Run setup-oauth.py once
+          to obtain the OAuth token.
+      when: todoist_oauth_token == '' or todoist_api_token == ''
+
+    - name: Get list of available backups
+      ansible.builtin.uri:
+        url: "{{ todoist_base_url }}/backups"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ todoist_oauth_token }}"
+        return_content: true
+      register: backups_response
+
+    - name: Identify latest backup
+      ansible.builtin.set_fact:
+        latest_backup: "{{ backups_response.json | sort(attribute='version') | last }}"
+
+    - name: Build destination path
+      ansible.builtin.set_fact:
+        backup_dest: >-
+          {{ todoist_backup_dir }}/todoist-backup-{{ latest_backup.version | replace(' ', '_') | replace(':', '-') }}.zip
+
+    - name: Check if backup already exists
+      ansible.builtin.stat:
+        path: "{{ backup_dest }}"
+      register: backup_stat
+
+    - name: Ensure output directory exists
+      ansible.builtin.file:
+        path: "{{ todoist_backup_dir }}"
+        state: directory
+        mode: "0755"
+      when: not backup_stat.stat.exists
+
+    - name: Download backup
+      ansible.builtin.uri:
+        url: "{{ latest_backup.url }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ todoist_api_token }}"
+        dest: "{{ backup_dest }}"
+        status_code: 200
+      when: not backup_stat.stat.exists
+      register: download_result
+
+    - name: Report result
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'Saved to: ' + backup_dest if not backup_stat.stat.exists
+             else 'Already exists, skipping: ' + backup_dest }}
