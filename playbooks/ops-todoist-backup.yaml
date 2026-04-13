@@ -65,13 +65,6 @@
         path: "{{ backup_dest }}"
       register: backup_stat
 
-    - name: Ensure output directory exists
-      ansible.builtin.file:
-        path: "{{ todoist_backup_dir }}"
-        state: directory
-        mode: "0755"
-      when: not backup_stat.stat.exists
-
     - name: Download backup
       ansible.builtin.uri:
         url: "{{ latest_backup.url }}"
