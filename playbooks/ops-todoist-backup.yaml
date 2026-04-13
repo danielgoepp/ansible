@@ -60,24 +60,16 @@
         backup_dest: >-
           {{ todoist_backup_dir }}/todoist-backup-{{ latest_backup.version | replace(' ', '_') | replace(':', '-') }}.zip
 
-    - name: Check if backup already exists
-      ansible.builtin.stat:
-        path: "{{ backup_dest }}"
-      register: backup_stat
-
     - name: Download backup
-      ansible.builtin.uri:
+      ansible.builtin.get_url:
         url: "{{ latest_backup.url }}"
-        method: GET
+        dest: "{{ backup_dest }}"
         headers:
           Authorization: "Bearer {{ todoist_api_token }}"
-        dest: "{{ backup_dest }}"
-        status_code: 200
-      when: not backup_stat.stat.exists
+        force: false
+        mode: "0644"
       register: download_result
 
     - name: Report result
       ansible.builtin.debug:
-        msg: >-
-          {{ 'Saved to: ' + backup_dest if not backup_stat.stat.exists
-             else 'Already exists, skipping: ' + backup_dest }}
+        msg: "{{ 'Saved to: ' + backup_dest if download_result.changed else 'Already exists, skipping: ' + backup_dest }}"
