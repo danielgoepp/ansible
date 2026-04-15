@@ -60,6 +60,13 @@
         backup_dest: >-
           {{ todoist_backup_dir }}/todoist-backup-{{ latest_backup.version | replace(' ', '_') | replace(':', '-') }}.zip
 
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ todoist_backup_dir }}"
+        state: directory
+        mode: "0755"
+      become: true
+
     - name: Download backup
       ansible.builtin.get_url:
         url: "{{ latest_backup.url }}"
