@@ -12,6 +12,14 @@
       set_fact:
         k3s_config_base_path: "{{ playbook_dir }}/../../files/k3s-config"
 
+    - name: Pull latest k3s-config manifests
+      git:
+        repo: "https://github.com/danielgoepp/k3s-config"
+        dest: "{{ k3s_config_base_path }}"
+        version: main
+        update: yes
+        force: no
+
     - name: Validate app_name is provided
       fail:
         msg: "app_name is required. Use -e app_name=<application>"

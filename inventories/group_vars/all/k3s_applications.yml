@@ -150,21 +150,21 @@ k3s_applications:
   victoriametrics:
     deployment_method: manifest-multi
     instances:
-      - name: vmsingle
+      - name: vms-prod-vmsingle
         context: "{{ k3s_default_context }}"
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-prod-vmsingle.yaml"
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-vms-prod-vmsingle.yaml"
         deployment_name: vmsingle-vms-prod
         service_namespace: victoriametrics
         app_label: vmsingle
-      - name: vmsingle-lt
+      - name: vms-prod-lt-vmsingle
         context: "{{ k3s_default_context }}"
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-prod-vmsingle-lt.yaml"
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-vms-prod-lt-vmsingle.yaml"
         deployment_name: vmsingle-vms-prod-lt
         service_namespace: victoriametrics
         app_label: vmsingle
-      - name: vmagent
+      - name: vms-prod-vmagent
         context: "{{ k3s_default_context }}"
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-prod-vmagent.yaml"
+        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-vms-prod-vmagent.yaml"
         deployment_name: vmagent-vma-prod
         service_namespace: victoriametrics
         app_label: vmagent
