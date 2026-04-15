@@ -17,10 +17,6 @@
         msg: "app_name is required. Use -e app_name=<application>"
       when: app_name is not defined or app_name == ''
 
-    - name: Set default target_instance if not provided
-      set_fact:
-        target_instance: "{{ target_instance | default('all') }}"
-
     - name: Validate application exists in configuration
       fail:
         msg: "Application '{{ app_name }}' not found. Available applications: {{ k3s_applications.keys() | list | join(', ') }}"
@@ -36,7 +32,6 @@
         msg:
           - "Application: {{ app_name }}"
           - "Deployment Method: {{ app_config.deployment_method }}"
-          - "Target Instance: {{ target_instance }}"
 
     # Helm deployment path
     - name: Update application using Helm

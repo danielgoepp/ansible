@@ -11,28 +11,22 @@
 #       - cluster_name: CNPG Cluster name (optional, defaults to service_name-prod)
 #       - service_namespace: Namespace (optional, defaults to service_name)
 #
-# Optional variables:
-#   - target_instance: Specific instance to upgrade, or "all" (default)
+# Required variables:
+#   - target_instance: Specific instance to upgrade
 
-- name: Set default target_instance if not specified
-  set_fact:
-    target_instance: "{{ target_instance | default('all') }}"
+- name: Validate target_instance is provided
+  fail:
+    msg: "target_instance is required. Use -e target_instance=<instance>. Available instances: {{ instances | map(attribute='name') | list | join(', ') }}"
+  when: target_instance is not defined or target_instance == ''
 
 - name: Set filtered instances based on target selection
   set_fact:
-    filtered_instances: >-
-      {%- if target_instance == 'all' -%}
-        {{ instances }}
-      {%- else -%}
-        {{ instances | selectattr('name', 'equalto', target_instance) | list }}
-      {%- endif -%}
+    filtered_instances: "{{ instances | selectattr('name', 'equalto', target_instance) | list }}"
 
 - name: Validate target instance exists
   fail:
     msg: "Instance '{{ target_instance }}' not found. Available instances: {{ instances | map(attribute='name') | list | join(', ') }}"
-  when:
-    - target_instance != 'all'
-    - filtered_instances | length == 0
+  when: filtered_instances | length == 0
 
 - name: Display upgrade parameters
   debug:
