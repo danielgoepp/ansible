@@ -5,6 +5,9 @@
 #
 # Note: Paths use playbook_dir which resolves relative to the calling playbook
 # The unified playbook is at playbooks/k3s/update-app.yaml, so paths are relative to that location
+#
+# Key naming convention: {app_name}-{instance} (matches version-checker note name + instance)
+# All manifest and helm apps are independent entries — no manifest-multi looping.
 
 # Common configuration variables
 # Note: k3s_config_base_path is set in the playbook
@@ -12,20 +15,25 @@
 k3s_default_context: "k3s-prod"
 
 k3s_applications:
-  alertmanager:
+  alertmanager-prod:
     deployment_method: helm
+    helm_release_name: alertmanager
+    helm_namespace: alertmanager
     helm_chart_name: prometheus-community/alertmanager
     helm_repo_name: prometheus-community
     helm_repo_url: https://prometheus-community.github.io/helm-charts
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/alertmanager/helm/alertmanager-values-prod.yaml"
 
-  cert-manager:
+  cert-manager-prod:
     deployment_method: helm
+    helm_release_name: cert-manager
+    helm_namespace: cert-manager
     helm_chart_name: jetstack/cert-manager
     helm_repo_name: jetstack
     helm_repo_url: https://charts.jetstack.io
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cert-manager/helm/cert-manager-values-prod.yaml"
 
+  # cnpg-operator: name=cnpg, instance=operator → cnpg-operator (already correct)
   cnpg-operator:
     deployment_method: helm
     helm_release_name: cloudnative-pg
@@ -49,55 +57,68 @@ k3s_applications:
         cluster_name: homeassistant-prod
         service_namespace: cnpg-homeassistant
 
-  esphome:
+  esphome-prod:
     deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/esphome/manifests/esphome-prod.yaml"
+    service_namespace: esphome
+    deployment_name: esphome
+    app_label: esphome
 
-  fluent-bit:
+  fluent-bit-prod:
     deployment_method: helm
+    helm_release_name: fluent-bit
+    helm_namespace: fluent-bit
     helm_chart_name: fluent/fluent-bit
     helm_repo_name: fluent
     helm_repo_url: https://fluent.github.io/helm-charts
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/fluent-bit/helm/fluent-bit-values-prod.yaml"
 
-  grafana:
+  grafana-prod:
     deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/grafana/manifests/grafana-prod.yaml"
+    service_namespace: grafana
+    deployment_name: grafana
+    app_label: grafana
 
-  graylog:
+  graylog-prod:
     deployment_method: rollout-restart
     resource_type: statefulset
     resource_name: graylog
     service_namespace: graylog
 
-  homeassistant:
-    deployment_method: manifest-multi
-    instances:
-      - name: morgspi
-        context: k3s-morgspi
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/homeassistant/manifests/homeassistant-morgspi.yaml"
-        deployment_name: homeassistant
-        service_namespace: homeassistant
-        app_label: homeassistant
-      - name: mudderpi
-        context: k3s-mudderpi
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/homeassistant/manifests/homeassistant-mudderpi.yaml"
-        deployment_name: homeassistant
-        service_namespace: homeassistant
-        app_label: homeassistant
-      - name: prod
-        context: k3s-prod
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/homeassistant/manifests/homeassistant-prod.yaml"
-        deployment_name: homeassistant
-        service_namespace: homeassistant
-        app_label: homeassistant
+  homeassistant-morgspi:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/homeassistant/manifests/homeassistant-morgspi.yaml"
+    k8s_context: k3s-morgspi
+    service_namespace: homeassistant
+    deployment_name: homeassistant
+    app_label: homeassistant
 
-  metallb:
+  homeassistant-mudderpi:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/homeassistant/manifests/homeassistant-mudderpi.yaml"
+    k8s_context: k3s-mudderpi
+    service_namespace: homeassistant
+    deployment_name: homeassistant
+    app_label: homeassistant
+
+  homeassistant-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/homeassistant/manifests/homeassistant-prod.yaml"
+    service_namespace: homeassistant
+    deployment_name: homeassistant
+    app_label: homeassistant
+
+  metallb-prod:
     deployment_method: helm
+    helm_release_name: metallb
+    helm_namespace: metallb-system
     helm_chart_name: metallb/metallb
     helm_repo_name: metallb
     helm_repo_url: https://metallb.github.io/metallb
-    helm_namespace: metallb-system
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/metallb/helm/metallb-values-prod.yaml"
 
+  # mongodb-operator: name=mongodb, instance=operator → mongodb-operator (already correct)
   mongodb-operator:
     deployment_method: helm
     helm_release_name: community-operator
@@ -107,68 +128,83 @@ k3s_applications:
     helm_namespace: mongodb
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/mongodb/helm/mongodb-operator-values-prod.yaml"
 
-  n8n:
+  n8n-prod:
     deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/n8n/manifests/n8n-prod.yaml"
+    service_namespace: n8n
+    deployment_name: n8n
+    app_label: n8n
 
-  opensearch:
+  opensearch-prod:
     deployment_method: helm
+    helm_release_name: opensearch
+    helm_namespace: opensearch
     helm_chart_name: opensearch/opensearch
     helm_repo_name: opensearch
     helm_repo_url: https://opensearch-project.github.io/helm-charts/
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/opensearch/helm/opensearch-values-prod.yaml"
 
-  pgadmin:
+  pgadmin-prod:
     deployment_method: helm
     helm_release_name: pgadmin4
+    helm_namespace: pgadmin
     helm_chart_name: runix/pgadmin4
     helm_repo_name: runix
     helm_repo_url: https://helm.runix.net
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/pgadmin/helm/pgadmin-values-prod.yaml"
 
-  postfix:
+  postfix-prod:
     deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/postfix/manifests/postfix-prod.yaml"
+    service_namespace: postfix
+    deployment_name: postfix
+    app_label: postfix
 
-  telegraf:
-    deployment_method: manifest-multi
-    instances:
-      - name: vm
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-prod-vm.yaml"
-        deployment_name: telegraf-vm
-        app_label: telegraf
-      - name: graylog
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-prod-graylog.yaml"
-        deployment_name: telegraf-graylog
-        app_label: telegraf
+  telegraf-graylog:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-prod-graylog.yaml"
+    service_namespace: telegraf
+    deployment_name: telegraf-graylog
+    app_label: telegraf
 
-  traefik:
+  telegraf-vm:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-prod-vm.yaml"
+    service_namespace: telegraf
+    deployment_name: telegraf-vm
+    app_label: telegraf
+
+  traefik-prod:
     deployment_method: helm
+    helm_release_name: traefik
+    helm_namespace: traefik
     helm_chart_name: traefik/traefik
     helm_repo_name: traefik
     helm_repo_url: https://traefik.github.io/charts
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/traefik/helm/traefik-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/traefik/helm/traefik3-values-prod.yaml"
 
-  victoriametrics:
-    deployment_method: manifest-multi
-    instances:
-      - name: vms-prod-vmsingle
-        context: "{{ k3s_default_context }}"
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-vms-prod-vmsingle.yaml"
-        deployment_name: vmsingle-vms-prod
-        service_namespace: victoriametrics
-        app_label: vmsingle
-      - name: vms-prod-lt-vmsingle
-        context: "{{ k3s_default_context }}"
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-vms-prod-lt-vmsingle.yaml"
-        deployment_name: vmsingle-vms-prod-lt
-        service_namespace: victoriametrics
-        app_label: vmsingle
-      - name: vms-prod-vmagent
-        context: "{{ k3s_default_context }}"
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-vms-prod-vmagent.yaml"
-        deployment_name: vmagent-vma-prod
-        service_namespace: victoriametrics
-        app_label: vmagent
+  victoriametrics-vms-prod-lt-vmsingle:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-vms-prod-lt-vmsingle.yaml"
+    service_namespace: victoriametrics
+    deployment_name: vmsingle-vms-prod-lt
+    app_label: vmsingle
 
+  victoriametrics-vms-prod-vmagent:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-vms-prod-vmagent.yaml"
+    service_namespace: victoriametrics
+    deployment_name: vmagent-vma-prod
+    app_label: vmagent
+
+  victoriametrics-vms-prod-vmsingle:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-vms-prod-vmsingle.yaml"
+    service_namespace: victoriametrics
+    deployment_name: vmsingle-vms-prod
+    app_label: vmsingle
+
+  # victoriametrics-operator: name=victoriametrics, instance=operator → victoriametrics-operator (already correct)
   victoriametrics-operator:
     deployment_method: helm
     helm_release_name: victoria-metrics-operator
@@ -183,18 +219,18 @@ k3s_applications:
     helm_chart_path: "{{ playbook_dir }}/../../files/k3s-config/weather/helm/weather"
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/weather/helm/weather-values-prod.yaml"
 
-  zigbee2mqtt:
-    deployment_method: manifest-multi
-    instances:
-      - name: "11"
-        context: k3s-prod
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/zigbee2mqtt/manifests/zigbee2mqtt-prod-11.yaml"
-        deployment_name: zigbee11
-        service_namespace: zigbee2mqtt
-        app_label: zigbee11
-      - name: "15"
-        context: k3s-prod
-        manifest_path: "{{ playbook_dir }}/../../files/k3s-config/zigbee2mqtt/manifests/zigbee2mqtt-prod-15.yaml"
-        deployment_name: zigbee15
-        service_namespace: zigbee2mqtt
-        app_label: zigbee15
+  zigbee2mqtt-zigbee11:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/zigbee2mqtt/manifests/zigbee2mqtt-prod-11.yaml"
+    k8s_context: k3s-prod
+    service_namespace: zigbee2mqtt
+    deployment_name: zigbee11
+    app_label: zigbee11
+
+  zigbee2mqtt-zigbee15:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/zigbee2mqtt/manifests/zigbee2mqtt-prod-15.yaml"
+    k8s_context: k3s-prod
+    service_namespace: zigbee2mqtt
+    deployment_name: zigbee15
+    app_label: zigbee15
