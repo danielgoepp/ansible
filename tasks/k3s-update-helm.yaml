@@ -39,7 +39,7 @@
     msg:
       - "Current {{ service_title }} release:"
       - "  Name: {{ current_version.status.name | default('Not installed') }}"
-      - "  Version: {{ current_version.status.chart | default('Unknown') }}"
+      - "  Chart Version: {{ current_version.status.chart | default('Unknown') }}"
       - "  App Version: {{ current_version.status.app_version | default('Unknown') }}"
       - "  Status: {{ current_version.status.status | default('Unknown') }}"
   when: current_version.status is defined
@@ -75,7 +75,7 @@
     msg:
       - "Updated {{ service_title }} release:"
       - "  Name: {{ updated_version.status.name }}"
-      - "  Version: {{ updated_version.status.chart }}"
+      - "  Chart Version: {{ updated_version.status.chart }}"
       - "  App Version: {{ updated_version.status.app_version }}"
       - "  Status: {{ updated_version.status.status }}"
       - "  Revision: {{ updated_version.status.revision }}"
@@ -84,6 +84,6 @@
   debug:
     msg:
       - "{{ service_title }} upgrade completed successfully!"
-      - "{% if current_version.status is defined %}Previous version: {{ current_version.status.chart | default('Unknown') }}{% endif %}"
-      - "Current version: {{ updated_version.status.chart }}"
+      - "{% if current_version.status is defined %}Previous version: {{ current_version.status.app_version | default('Unknown') }}{% endif %}"
+      - "Current version: {{ updated_version.status.app_version }}"
       - "Upgrade performed: {{ upgrade_result.changed }}"
