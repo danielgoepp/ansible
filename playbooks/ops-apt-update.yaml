@@ -1,0 +1,19 @@
+---
+# Refresh apt package cache on all Linux hosts
+#
+# Usage:
+#   ansible-playbook playbooks/ops-apt-update.yaml
+#
+#   Target a subset of hosts:
+#     ansible-playbook playbooks/ops-apt-update.yaml -l morgspi
+#     ansible-playbook playbooks/ops-apt-update.yaml -l ubuntu
+
+- name: Refresh apt cache on all Linux hosts
+  hosts: ubuntu:rpi:k3s_prod:lxc:pve
+  become: true
+
+  tasks:
+    - name: Update apt package cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
