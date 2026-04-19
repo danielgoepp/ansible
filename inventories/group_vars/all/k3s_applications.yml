@@ -219,6 +219,15 @@ k3s_applications:
     helm_chart_path: "{{ playbook_dir }}/../../files/k3s-config/weather/helm/weather"
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/weather/helm/weather-values-prod.yaml"
 
+  vault-prod:
+    deployment_method: helm
+    helm_release_name: vault
+    helm_namespace: vault
+    helm_chart_name: hashicorp/vault
+    helm_repo_name: hashicorp
+    helm_repo_url: https://helm.releases.hashicorp.com
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/hashicorp/helm/hashicorp-values-prod.yaml"
+
   zigbee2mqtt-zigbee11:
     deployment_method: manifest
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/zigbee2mqtt/manifests/zigbee2mqtt-prod-11.yaml"
