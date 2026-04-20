@@ -14,11 +14,6 @@
 #       vm_name: VM/LXC name
 #       vm_type: "qemu" or "lxc"
 
-- name: Validate required parameters
-  fail:
-    msg: "Both pve_node and k3s_node parameters are required"
-  when: pve_node is not defined or k3s_node is not defined
-
 - name: Set default VM operations and modes
   set_fact:
     vm_migrations: "{{ vm_migrations | default([]) }}"

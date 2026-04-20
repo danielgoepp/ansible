@@ -22,12 +22,6 @@
       - "  Deployment: {{ deployment_name }}"
       - "  App Label: {{ app_label }}"
 
-- name: Verify manifest file exists
-  stat:
-    path: "{{ manifest_path | default(default_manifest_path) }}"
-  register: manifest_file
-  failed_when: not manifest_file.stat.exists
-
 - name: Get current deployment (before upgrade)
   kubernetes.core.k8s_info:
     api_version: apps/v1
@@ -40,18 +34,7 @@
 
 - name: Display current deployment status
   debug:
-    msg:
-      - "Current {{ service_name | title }} Deployment:"
-      - "  Name: {{ current_deployment.resources[0].metadata.name | default('Not found') }}"
-      - "  Image: {{ current_deployment.resources[0].spec.template.spec.containers[0].image | default('Unknown') }}"
-      - "  Ready Replicas: {{ current_deployment.resources[0].status.readyReplicas | default(0) }}/{{ current_deployment.resources[0].status.replicas | default(0) }}"
-      - "  Status: {{ current_deployment.resources[0].status.conditions[-1].type | default('Unknown') if current_deployment.resources[0].status.conditions is defined else 'Unknown' }}"
-  when: current_deployment.resources is defined and current_deployment.resources | length > 0
-
-- name: Display status if deployment not found
-  debug:
-    msg: "{{ service_name | title }} deployment '{{ deployment_name }}' not found in namespace '{{ service_namespace }}'"
-  when: current_deployment.resources is not defined or current_deployment.resources | length == 0
+    msg: "{{ service_name | title }}: {% if current_deployment.resources | length > 0 %}image={{ current_deployment.resources[0].spec.template.spec.containers[0].image }}, replicas={{ current_deployment.resources[0].status.readyReplicas | default(0) }}/{{ current_deployment.resources[0].status.replicas | default(0) }}{% else %}not found (will create){% endif %}"
 
 - name: Apply manifest from local file (server-side)
   kubernetes.core.k8s:
@@ -61,15 +44,10 @@
     server_side_apply:
       field_manager: "{{ field_manager }}"
   register: apply_result
-  failed_when: apply_result.failed | default(false)
 
 - name: Display manifest application result
   debug:
-    msg:
-      - "{{ service_name | title }} manifest application:"
-      - "  Result: {{ 'SUCCESS' if not (apply_result.failed | default(false)) else 'FAILED' }}"
-      - "  Changed: {{ apply_result.changed }}"
-      - "  Error: {{ apply_result.msg | default('None') }}"
+    msg: "{{ service_name | title }} manifest applied: changed={{ apply_result.changed }}"
 
 - name: Wait for manifest application to complete
   ansible.builtin.wait_for:
@@ -108,7 +86,6 @@
     loop_var: pod_item
     label: "{{ pod_item.metadata.name }}"
   when:
-    - current_pods.resources is defined
     - current_pods.resources | length > 0
     - not apply_result.changed
     - pod_item.metadata.deletionTimestamp is not defined

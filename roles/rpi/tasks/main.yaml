@@ -13,12 +13,12 @@
     hour: "5"
     minute: "0"
     job: "rsync -ah /k3s/homeassistant/config/backups/ /mnt/backups/homeassistant/{{ ansible_hostname }} --delete"
-  when: "'homeassistant' in (services | default([]))"
+  when: "'homeassistant' in (services)"
 
 - name: Include install nut tasks
   ansible.builtin.include_tasks: setup-rpi-nut.yaml
-  when: "'nut' in (services | default([]))"
+  when: "'nut' in (services)"
 
 - name: Include install wyoming satellite tasks
   ansible.builtin.include_tasks: setup-rpi-wyoming-satellite.yaml
-  when: "'wyoming' in (services | default([]))"
+  when: "'wyoming' in (services)"

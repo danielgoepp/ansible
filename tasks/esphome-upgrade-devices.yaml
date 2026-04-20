@@ -9,11 +9,6 @@
     upgrade_description: "ESPHome devices"
   when: upgrade_description is not defined
 
-- name: Validate devices are provided
-  fail:
-    msg: "No devices provided for upgrade (devices_to_upgrade is empty or undefined)"
-  when: devices_to_upgrade is not defined or devices_to_upgrade | length == 0
-
 - name: Display upgrade plan header
   debug:
     msg: "{{ upgrade_description }} Upgrade Plan:"

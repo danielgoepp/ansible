@@ -9,14 +9,6 @@
 
   tasks:
     # PRE-UPGRADE VALIDATION AND STATUS
-    - name: Validate node lists are not empty
-      fail:
-        msg: "{{ item.name }} list is empty. Check your inventory configuration."
-      when: item.list | length == 0
-      loop:
-        - { name: "Proxmox nodes", list: "{{ pve_nodes }}" }
-        - { name: "K3S nodes", list: "{{ k3s_nodes }}" }
-
     - name: Display cluster information
       debug:
         msg: |
@@ -159,11 +151,6 @@
     - name: Display node pairs for upgrade
       debug:
         msg: "Node pairs to upgrade:"
-
-    - name: Validate node pairing was successful
-      fail:
-        msg: "No valid node pairs found. Check that PVE and K3S nodes have matching numbers (e.g., pve11 <-> k3s-prod-11)"
-      when: node_pairs | length == 0
 
     - name: Display each node pair
       debug:

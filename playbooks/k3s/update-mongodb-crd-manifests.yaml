@@ -20,23 +20,7 @@
 
     - name: Display current MongoDB CR status
       debug:
-        msg:
-          - "Current MongoDB Custom Resource:"
-          - "  Name: {{ mongodb_current_status.resources[0].metadata.name | default('Not found') }}"
-          - "  Version: {{ mongodb_current_status.resources[0].spec.version | default('Unknown') }}"
-          - "  Members: {{ mongodb_current_status.resources[0].spec.members | default('Unknown') }}"
-          - "  Phase: {{ mongodb_current_status.resources[0].status.phase | default('Unknown') }}"
-      when: mongodb_current_status.resources is defined and mongodb_current_status.resources | length > 0
-
-    - name: Display status if MongoDB CR not found
-      debug:
-        msg: "MongoDB Custom Resource '{{ mongodb_name }}' not found in namespace '{{ mongodb_namespace }}'"
-      when: mongodb_current_status.resources is not defined or mongodb_current_status.resources | length == 0
-
-    - name: Validate manifest with kubectl (dry-run)
-      shell: kubectl apply -f "{{ mongodb_cr_file }}" --context="{{ k8s_context }}" --dry-run=server --validate=true
-      register: kubectl_validate_result
-      failed_when: kubectl_validate_result.rc != 0
+        msg: "MongoDB CR: {% if mongodb_current_status.resources | length > 0 %}version={{ mongodb_current_status.resources[0].spec.version }}, members={{ mongodb_current_status.resources[0].spec.members }}, phase={{ mongodb_current_status.resources[0].status.phase | default('Unknown') }}{% else %}not found (will create){% endif %}"
 
     - name: Apply MongoDB Custom Resource manifest
       kubernetes.core.k8s:
@@ -45,18 +29,10 @@
         namespace: "{{ mongodb_namespace }}"
         context: "{{ k8s_context }}"
       register: mongodb_apply_result
-      failed_when: mongodb_apply_result.failed | default(false)
 
-    - name: Display manifest validation and application result
+    - name: Display manifest application result
       debug:
-        msg:
-          - "MongoDB Custom Resource manifest validation:"
-          - "  Kubectl validation: {{ 'SUCCESS' if kubectl_validate_result.rc == 0 else 'FAILED' }}"
-          - "  Kubectl error: {{ kubectl_validate_result.stderr | default('None') }}"
-          - "MongoDB Custom Resource manifest application:"
-          - "  Ansible result: {{ 'SUCCESS' if not (mongodb_apply_result.failed | default(false)) else 'FAILED' }}"
-          - "  Changed: {{ mongodb_apply_result.changed }}"
-          - "  Error: {{ mongodb_apply_result.msg | default('None') }}"
+        msg: "MongoDB CR manifest applied: changed={{ mongodb_apply_result.changed }}"
 
     - name: Wait for MongoDB Custom Resource to be processed
       kubernetes.core.k8s_info:
@@ -67,14 +43,12 @@
         context: "{{ k8s_context }}"
       register: mongodb_wait_result
       until:
-        - mongodb_wait_result.resources is defined
         - mongodb_wait_result.resources | length > 0
         - mongodb_wait_result.resources[0].status.phase is defined
         - mongodb_wait_result.resources[0].status.phase in ['Running', 'Failed']
       retries: 60
       delay: 5
       failed_when:
-        - mongodb_wait_result.resources is defined
         - mongodb_wait_result.resources | length > 0
         - mongodb_wait_result.resources[0].status.phase == 'Failed'
 
@@ -91,7 +65,6 @@
       fail:
         msg: "MongoDB Custom Resource failed to reach healthy state. Phase: {{ mongodb_health_check.resources[0].status.phase | default('Unknown') }}"
       when:
-        - mongodb_health_check.resources is defined
         - mongodb_health_check.resources | length > 0
         - mongodb_health_check.resources[0].status.phase | default('') not in ['Running', 'Pending']
 
@@ -111,10 +84,7 @@
                   kubectl.kubernetes.io/restartedAt: "{{ ansible_date_time.iso8601 | default(lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ')) }}"
         merge_type: strategic-merge
       register: mongodb_restart_result
-      failed_when: mongodb_restart_result.failed | default(false)
       when:
-        - not (mongodb_apply_result.failed | default(false))
-        - mongodb_health_check.resources is defined
         - mongodb_health_check.resources | length > 0
         - mongodb_health_check.resources[0].status.phase | default('') in ['Running', 'Pending']
 
@@ -127,14 +97,12 @@
         context: "{{ k8s_context }}"
       register: statefulset_wait_result
       until:
-        - statefulset_wait_result.resources is defined
         - statefulset_wait_result.resources | length > 0
         - statefulset_wait_result.resources[0].status.readyReplicas is defined
         - statefulset_wait_result.resources[0].status.replicas is defined
         - statefulset_wait_result.resources[0].status.readyReplicas == statefulset_wait_result.resources[0].status.replicas
       retries: 60
       delay: 5
-      failed_when: false
       when: mongodb_restart_result is not skipped
 
     - name: Check MongoDB StatefulSet status
@@ -152,7 +120,6 @@
         msg: "MongoDB StatefulSet failed to reach healthy state. Ready replicas: {{ mongodb_rollout_status.resources[0].status.readyReplicas | default(0) }}/{{ mongodb_rollout_status.resources[0].status.replicas | default(0) }}"
       when:
         - mongodb_restart_result is not skipped
-        - mongodb_rollout_status.resources is defined
         - mongodb_rollout_status.resources | length > 0
         - (mongodb_rollout_status.resources[0].status.readyReplicas | default(0)) != (mongodb_rollout_status.resources[0].status.replicas | default(1))
 

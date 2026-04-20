@@ -36,18 +36,7 @@
 
 - name: Display current {{ service_title }} version
   debug:
-    msg:
-      - "Current {{ service_title }} release:"
-      - "  Name: {{ current_version.status.name | default('Not installed') }}"
-      - "  Chart Version: {{ current_version.status.chart | default('Unknown') }}"
-      - "  App Version: {{ current_version.status.app_version | default('Unknown') }}"
-      - "  Status: {{ current_version.status.status | default('Unknown') }}"
-  when: current_version.status is defined
-
-- name: Display installation status if not found
-  debug:
-    msg: "{{ service_title }} release '{{ helm_release_name }}' not found in namespace '{{ helm_namespace }}'"
-  when: current_version.status is not defined
+    msg: "{{ service_title }}: {% if current_version.status is defined %}chart={{ current_version.status.chart }}, app={{ current_version.status.app_version }}, status={{ current_version.status.status }}{% else %}not installed (will install){% endif %}"
 
 - name: Upgrade {{ service_title }} using Helm
   kubernetes.core.helm:

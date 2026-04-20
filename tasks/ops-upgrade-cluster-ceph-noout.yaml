@@ -12,11 +12,6 @@
     ceph_host: "{{ ceph_host | default(groups['pve'][0]) }}"
     ceph_user: "{{ ceph_user | default('root') }}"
 
-- name: Validate maintenance_action parameter
-  fail:
-    msg: "maintenance_action must be 'enable' or 'disable'"
-  when: maintenance_action not in ['enable', 'disable']
-
 # ENABLE NOOUT FLAG
 - block:
     - name: Set Ceph noout flag

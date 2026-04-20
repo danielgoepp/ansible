@@ -31,16 +31,6 @@
         update: yes
         force: no
 
-    - name: Validate app_name is provided
-      fail:
-        msg: "app_name is required. Use -e app_name=<application>"
-      when: app_name is not defined or app_name == ''
-
-    - name: Validate application exists in configuration
-      fail:
-        msg: "Application '{{ app_name }}' not found. Available applications: {{ k3s_applications.keys() | list | join(', ') }}"
-      when: app_name not in k3s_applications
-
     - name: Set application configuration
       set_fact:
         app_config: "{{ k3s_applications[app_name] }}"

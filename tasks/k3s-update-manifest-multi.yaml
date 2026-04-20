@@ -15,19 +15,9 @@
 # Required variables:
 #   - target_instance: Specific instance to upgrade
 
-- name: Validate target_instance is provided
-  fail:
-    msg: "target_instance is required. Use -e target_instance=<instance>. Available instances: {{ instances | map(attribute='name') | list | join(', ') }}"
-  when: target_instance is not defined or target_instance == ''
-
 - name: Set filtered instances based on target selection
   set_fact:
     filtered_instances: "{{ instances | selectattr('name', 'equalto', target_instance) | list }}"
-
-- name: Validate target instance exists
-  fail:
-    msg: "Instance '{{ target_instance }}' not found. Available instances: {{ instances | map(attribute='name') | list | join(', ') }}"
-  when: filtered_instances | length == 0
 
 - name: Display upgrade parameters
   debug:

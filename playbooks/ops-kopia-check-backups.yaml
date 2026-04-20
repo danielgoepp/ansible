@@ -26,23 +26,15 @@
   tasks:
     - name: Set Kopia credentials from AWX or vault
       ansible.builtin.set_fact:
-        kopia_b2_server_url: "{{ awx_kopia_b2_server_url | default(vault_kopia_b2_server_url | default('')) }}"
+        kopia_b2_server_url: "{{ awx_kopia_b2_server_url | default(vault_kopia_b2_server_url) }}"
         kopia_b2_control_username: "{{ awx_kopia_b2_control_username | default(vault_kopia_b2_control_username | default('server-control')) }}"
-        kopia_b2_control_password: "{{ awx_kopia_b2_control_password | default(vault_kopia_b2_control_password | default('')) }}"
-        kopia_ssd_server_url: "{{ awx_kopia_ssd_server_url | default(vault_kopia_ssd_server_url | default('')) }}"
+        kopia_b2_control_password: "{{ awx_kopia_b2_control_password | default(vault_kopia_b2_control_password) }}"
+        kopia_ssd_server_url: "{{ awx_kopia_ssd_server_url | default(vault_kopia_ssd_server_url) }}"
         kopia_ssd_control_username: "{{ awx_kopia_ssd_control_username | default(vault_kopia_ssd_control_username | default('server-control')) }}"
-        kopia_ssd_control_password: "{{ awx_kopia_ssd_control_password | default(vault_kopia_ssd_control_password | default('')) }}"
-        kopia_hdd_server_url: "{{ awx_kopia_hdd_server_url | default(vault_kopia_hdd_server_url | default('')) }}"
+        kopia_ssd_control_password: "{{ awx_kopia_ssd_control_password | default(vault_kopia_ssd_control_password) }}"
+        kopia_hdd_server_url: "{{ awx_kopia_hdd_server_url | default(vault_kopia_hdd_server_url) }}"
         kopia_hdd_control_username: "{{ awx_kopia_hdd_control_username | default(vault_kopia_hdd_control_username | default('server-control')) }}"
-        kopia_hdd_control_password: "{{ awx_kopia_hdd_control_password | default(vault_kopia_hdd_control_password | default('')) }}"
-
-    - name: Validate credentials are available
-      ansible.builtin.fail:
-        msg: "Kopia credentials not found. Ensure vault_kopia_*_server_url and vault_kopia_*_control_password are set."
-      when: >-
-        kopia_b2_server_url == '' or kopia_b2_control_password == '' or
-        kopia_ssd_server_url == '' or kopia_ssd_control_password == '' or
-        kopia_hdd_server_url == '' or kopia_hdd_control_password == ''
+        kopia_hdd_control_password: "{{ awx_kopia_hdd_control_password | default(vault_kopia_hdd_control_password) }}"
 
     - name: Run Kopia backup health check
       ansible.builtin.command:

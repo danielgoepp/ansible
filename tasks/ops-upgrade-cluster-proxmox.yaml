@@ -42,7 +42,7 @@
 - name: Display upgrade results
   debug:
     var: apt_upgrade_result.stdout_lines
-  when: apt_upgrade_result is defined and apt_upgrade_result.stdout_lines is defined
+  when: apt_upgrade_result is not skipped
 
 - name: Reboot Proxmox node
   reboot:
@@ -118,7 +118,7 @@
 - name: Display final Ceph status
   debug:
     var: ceph_final_status.stdout_lines
-  when: ceph_status.rc == 0 and ceph_final_status is defined
+  when: ceph_status.rc == 0
 
 - name: Proxmox node upgrade completed
   debug:

@@ -26,21 +26,8 @@
   tasks:
     - name: Set Todoist credentials from AWX or vault
       ansible.builtin.set_fact:
-        todoist_oauth_token: "{{ awx_todoist_oauth_token | default(vault_todoist_oauth_token | default('')) }}"
-        todoist_api_token: "{{ awx_todoist_api_token | default(vault_todoist_api_token | default('')) }}"
-
-    - name: Validate required variables are set
-      ansible.builtin.fail:
-        msg: "todoist_backup_dir must be set. Pass -e todoist_backup_dir=/path/to/backups or configure it in AWX."
-      when: todoist_backup_dir is not defined or todoist_backup_dir == ''
-
-    - name: Validate credentials are available
-      ansible.builtin.fail:
-        msg: >-
-          Todoist credentials not found. Ensure vault_todoist_oauth_token and
-          vault_todoist_api_token are set in vault.yml. Run setup-oauth.py once
-          to obtain the OAuth token.
-      when: todoist_oauth_token == '' or todoist_api_token == ''
+        todoist_oauth_token: "{{ awx_todoist_oauth_token | default(vault_todoist_oauth_token) }}"
+        todoist_api_token: "{{ awx_todoist_api_token | default(vault_todoist_api_token) }}"
 
     - name: Get list of available backups
       ansible.builtin.uri:

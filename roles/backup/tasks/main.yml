@@ -2,22 +2,10 @@
 # Set backup credentials from AWX or vault
 - name: Set backup credentials from AWX or vault
   ansible.builtin.set_fact:
-    backup_opnsense_key: "{{ awx_opnsense_key | default(opnsense_key | default('')) }}"
-    backup_opnsense_secret: "{{ awx_opnsense_secret | default(opnsense_secret | default('')) }}"
-    backup_opnsense_host: "{{ awx_opnsense_host | default(opnsense_host | default('')) }}"
-    backup_ssh_private_key: "{{ awx_ssh_private_key | default(ssh_private_key | default('')) }}"
-
-
-# Validate required credentials
-- name: Validate OPNsense credentials are present
-  ansible.builtin.fail:
-    msg: "OPNsense credentials are required but not provided. Ensure opnsense_key and opnsense_secret are defined in vault or AWX credentials."
-  when: backup_opnsense_key == '' or backup_opnsense_secret == ''
-
-- name: Validate SSH private key is present
-  ansible.builtin.fail:
-    msg: "SSH private key is required but not provided. Ensure ssh_private_key is defined in vault or AWX credentials."
-  when: backup_ssh_private_key == ''
+    backup_opnsense_key: "{{ awx_opnsense_key | default(opnsense_key) }}"
+    backup_opnsense_secret: "{{ awx_opnsense_secret | default(opnsense_secret) }}"
+    backup_opnsense_host: "{{ awx_opnsense_host | default(opnsense_host) }}"
+    backup_ssh_private_key: "{{ awx_ssh_private_key | default(ssh_private_key) }}"
 
 # Create backup directories
 - name: Create backup directories

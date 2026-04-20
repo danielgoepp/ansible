@@ -24,13 +24,8 @@
   tasks:
     - name: Set Cloudflare API credentials from AWX or vault
       ansible.builtin.set_fact:
-        cloudflare_api_token: "{{ awx_cloudflare_api_token | default(vault_cloudflare_api_token | default('')) }}"
-        cloudflare_zone_id: "{{ awx_cloudflare_zone_id | default(vault_cloudflare_zone_id | default('')) }}"
-
-    - name: Validate credentials are available
-      ansible.builtin.fail:
-        msg: "Cloudflare credentials not found. Ensure vault_cloudflare_api_token and vault_cloudflare_zone_id are set."
-      when: cloudflare_api_token == '' or cloudflare_zone_id == ''
+        cloudflare_api_token: "{{ awx_cloudflare_api_token | default(vault_cloudflare_api_token) }}"
+        cloudflare_zone_id: "{{ awx_cloudflare_zone_id | default(vault_cloudflare_zone_id) }}"
 
     - name: Fetch all DNS records from Cloudflare zone
       ansible.builtin.uri:
