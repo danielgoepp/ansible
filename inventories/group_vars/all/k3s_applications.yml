@@ -36,7 +36,7 @@ k3s_applications:
   # cnpg-operator: name=cnpg, instance=operator → cnpg-operator (already correct)
   cnpg-operator:
     deployment_method: helm
-    helm_release_name: cloudnative-pg
+    helm_release_name: cnpg
     helm_chart_name: cnpg/cloudnative-pg
     helm_repo_name: cnpg
     helm_repo_url: https://cloudnative-pg.github.io/charts
