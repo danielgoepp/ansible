@@ -158,21 +158,21 @@ k3s_applications:
 
   telegraf-mqtt-to-graylog:
     deployment_method: manifest
-    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-prod-mqtt-to-graylog.yaml"
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-mqtt-to-graylog.yaml"
     service_namespace: telegraf
     deployment_name: telegraf-mqtt-to-graylog
     app_label: telegraf
 
   telegraf-mqtt-to-vms:
     deployment_method: manifest
-    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-prod-mqtt-to-vms.yaml"
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-mqtt-to-vms.yaml"
     service_namespace: telegraf
     deployment_name: telegraf-mqtt-to-vms
     app_label: telegraf
 
   telegraf-upsd-to-vms:
     deployment_method: manifest
-    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-prod-upsd-to-vms.yaml"
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-upsd-to-vms.yaml"
     service_namespace: telegraf
     deployment_name: telegraf-upsd-to-vms
     app_label: telegraf
