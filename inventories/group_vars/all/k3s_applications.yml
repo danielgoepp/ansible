@@ -186,6 +186,13 @@ k3s_applications:
     helm_repo_url: https://traefik.github.io/charts
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/traefik/helm/traefik3-values-prod.yaml"
 
+  unpoller-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/unpoller/manifests/unpoller-prod.yaml"
+    service_namespace: unpoller
+    deployment_name: unpoller
+    app_label: unpoller
+
   victoriametrics-vms-prod-lt-vmsingle:
     deployment_method: manifest
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/manifests/victoriametrics-vms-prod-lt-vmsingle.yaml"
