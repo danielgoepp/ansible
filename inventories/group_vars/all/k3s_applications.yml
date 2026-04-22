@@ -105,6 +105,13 @@ k3s_applications:
     deployment_name: homeassistant
     app_label: homeassistant
 
+  music-assistant-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/music-assistant/manifests/music-assistant-prod.yaml"
+    service_namespace: music-assistant
+    deployment_name: music-assistant
+    app_label: music-assistant
+
   metallb-prod:
     deployment_method: helm
     helm_release_name: metallb
@@ -130,6 +137,13 @@ k3s_applications:
     service_namespace: n8n
     deployment_name: n8n
     app_label: n8n
+
+  openclaw-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/openclaw/manifests/openclaw-prod.yaml"
+    service_namespace: openclaw
+    deployment_name: openclaw
+    app_label: openclaw
 
   opensearch-prod:
     deployment_method: helm
