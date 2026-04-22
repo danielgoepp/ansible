@@ -231,7 +231,7 @@ k3s_applications:
   # victoriametrics-operator: name=victoriametrics, instance=operator → victoriametrics-operator (already correct)
   victoriametrics-operator:
     deployment_method: helm
-    helm_release_name: victoria-metrics-operator
+    helm_release_name: vmoperator
     helm_chart_name: vm/victoria-metrics-operator
     helm_repo_name: vm
     helm_repo_url: https://victoriametrics.github.io/helm-charts/
