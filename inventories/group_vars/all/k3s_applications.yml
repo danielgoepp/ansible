@@ -112,6 +112,15 @@ k3s_applications:
     deployment_name: music-assistant
     app_label: music-assistant
 
+  minio-operator:
+    deployment_method: helm
+    helm_release_name: operator
+    helm_namespace: minio-operator
+    helm_chart_name: minio-operator/operator
+    helm_repo_name: minio-operator
+    helm_repo_url: https://operator.min.io/
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/minio/helm/minio-operator-values-prod.yaml"
+
   minio-prod:
     deployment_method: manifest-apply-only
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/minio/manifests/minio-prod.yaml"
