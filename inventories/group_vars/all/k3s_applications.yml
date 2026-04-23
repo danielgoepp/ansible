@@ -112,6 +112,11 @@ k3s_applications:
     deployment_name: music-assistant
     app_label: music-assistant
 
+  minio-prod:
+    deployment_method: manifest-apply-only
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/minio/manifests/minio-prod.yaml"
+    service_namespace: minio-tenant-goepp
+
   metallb-prod:
     deployment_method: helm
     helm_release_name: metallb

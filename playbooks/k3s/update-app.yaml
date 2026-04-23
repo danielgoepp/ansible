@@ -67,6 +67,15 @@
         app_label: "{{ app_config.app_label | default(service_name) }}"
       when: app_config.deployment_method == 'manifest'
 
+    # Manifest apply-only deployment path (operator-managed CRDs)
+    - name: Update application using manifest apply-only
+      include_tasks: ../../tasks/k3s-update-manifest-apply-only.yaml
+      vars:
+        manifest_path: "{{ app_config.manifest_path }}"
+        k8s_context: "{{ app_config.k8s_context | default(k3s_default_context) }}"
+        service_namespace: "{{ app_config.service_namespace | default(service_name) }}"
+      when: app_config.deployment_method == 'manifest-apply-only'
+
     # Multi-instance manifest deployment path
     - name: Update application using multi-instance manifests
       include_tasks: ../../tasks/k3s-update-manifest-multi.yaml
