@@ -3,9 +3,12 @@
 # Applies the manifest and lets the operator handle pod lifecycle.
 # Does not check for apps/v1 Deployment/StatefulSet status.
 
-- name: Set computed paths
+- name: Set context suffix
   set_fact:
     context_suffix: "{{ context_suffix | default('prod') }}"
+
+- name: Set computed paths
+  set_fact:
     field_manager: "ansible-{{ service_name }}-upgrade"
     default_manifest_path: "{{ k3s_config_base_path }}/{{ service_name }}/manifests/{{ service_name }}-{{ context_suffix }}.yaml"
 
