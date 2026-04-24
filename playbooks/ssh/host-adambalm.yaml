@@ -9,6 +9,7 @@
 #     ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_all=true
 #
 #   Upgrade specific LLM component only:
+#     ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=docker
 #     ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=ollama
 #     ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=openwebui
 #     ansible-playbook playbooks/ssh/host-adambalm.yaml -e llm_upgrade_component=portainer

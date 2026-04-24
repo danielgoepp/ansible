@@ -1,0 +1,39 @@
+---
+# Docker upgrade tasks
+# Handles upgrading Docker Engine and related packages
+
+- name: Get current Docker version
+  ansible.builtin.command: docker --version
+  register: docker_current_version
+  changed_when: false
+  failed_when: false
+
+- name: Display current Docker version
+  ansible.builtin.debug:
+    msg: "{{ 'Current Docker version: ' + docker_current_version.stdout if docker_current_version.rc == 0 else 'Docker not installed - will install' }}"
+
+- name: Upgrade Docker packages
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: latest
+    update_cache: true
+
+- name: Get new Docker version
+  ansible.builtin.command: docker --version
+  register: docker_new_version
+  changed_when: false
+
+- name: Display new Docker version
+  ansible.builtin.debug:
+    msg: "Docker version: {{ docker_new_version.stdout }}"
+
+- name: Ensure Docker service is running
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started

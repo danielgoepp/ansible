@@ -35,6 +35,7 @@ ansible-playbook playbooks/ssh/common-<group>.yaml -l <host1>,<host2>
 # LLM host upgrades (NVIDIA drivers, Docker, Ollama, Open WebUI, Portainer)
 ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_all=true
 ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_component=<component>
+# Available components: docker, ollama, openwebui, portainer
 
 # Discovery commands
 ls playbooks/ssh/          # List all SSH playbooks
