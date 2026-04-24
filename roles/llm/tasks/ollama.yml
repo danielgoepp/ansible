@@ -16,6 +16,19 @@
   ansible.builtin.shell: curl -fsSL https://ollama.com/install.sh | sh
   register: ollama_install_result
   changed_when: "'Ollama is now installed' in ollama_install_result.stdout or 'Installing ollama' in ollama_install_result.stdout"
+  notify:
+    - Reload systemd daemon
+    - Restart Ollama service
+
+- name: Set OLLAMA_HOST in service file
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/system/ollama.service
+    regexp: '^Environment="OLLAMA_HOST='
+    line: 'Environment="OLLAMA_HOST={{ ollama_bind_address }}"'
+    insertafter: '^\[Service\]'
+  notify:
+    - Reload systemd daemon
+    - Restart Ollama service
 
 - name: Get installed Ollama version
   ansible.builtin.command: ollama --version
