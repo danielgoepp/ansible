@@ -22,7 +22,7 @@ k3s_applications:
     helm_chart_name: prometheus-community/alertmanager
     helm_repo_name: prometheus-community
     helm_repo_url: https://prometheus-community.github.io/helm-charts
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/alertmanager/helm/alertmanager-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/alertmanager/helm/alertmanager-prod-values.yaml"
 
   cert-manager-prod:
     deployment_method: helm
@@ -31,7 +31,7 @@ k3s_applications:
     helm_chart_name: jetstack/cert-manager
     helm_repo_name: jetstack
     helm_repo_url: https://charts.jetstack.io
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cert-manager/helm/cert-manager-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cert-manager/helm/cert-manager-prod-values.yaml"
 
   # cnpg-operator: name=cnpg, instance=operator → cnpg-operator (already correct)
   cnpg-operator:
@@ -41,7 +41,7 @@ k3s_applications:
     helm_repo_name: cnpg
     helm_repo_url: https://cloudnative-pg.github.io/charts
     helm_namespace: cnpg-system
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cnpg/helm/cnpg-operator-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cnpg/helm/cnpg-operator-prod-values.yaml"
 
   cnpg-grafana-prod:
     deployment_method: manifest
@@ -67,7 +67,7 @@ k3s_applications:
     helm_chart_name: fluent/fluent-bit
     helm_repo_name: fluent
     helm_repo_url: https://fluent.github.io/helm-charts
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/fluent-bit/helm/fluent-bit-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/fluent-bit/helm/fluent-bit-prod-values.yaml"
 
   grafana-prod:
     deployment_method: manifest
@@ -119,7 +119,7 @@ k3s_applications:
     helm_chart_name: minio-operator/operator
     helm_repo_name: minio-operator
     helm_repo_url: https://operator.min.io/
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/minio/helm/minio-operator-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/minio/helm/minio-operator-prod-values.yaml"
 
   minio-prod:
     deployment_method: manifest-apply-only
@@ -133,7 +133,7 @@ k3s_applications:
     helm_chart_name: metallb/metallb
     helm_repo_name: metallb
     helm_repo_url: https://metallb.github.io/metallb
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/metallb/helm/metallb-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/metallb/helm/metallb-prod-values.yaml"
 
   # mongodb-operator: name=mongodb, instance=operator → mongodb-operator (already correct)
   mongodb-operator:
@@ -143,7 +143,7 @@ k3s_applications:
     helm_repo_name: mongodb
     helm_repo_url: https://mongodb.github.io/helm-charts
     helm_namespace: mongodb
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/mongodb/helm/mongodb-operator-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/mongodb/helm/mongodb-prod-values.yaml"
 
   n8n-prod:
     deployment_method: manifest
@@ -166,7 +166,7 @@ k3s_applications:
     helm_chart_name: opensearch/opensearch
     helm_repo_name: opensearch
     helm_repo_url: https://opensearch-project.github.io/helm-charts/
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/opensearch/helm/opensearch-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/opensearch/helm/opensearch-prod-values.yaml"
 
   pgadmin-prod:
     deployment_method: helm
@@ -175,7 +175,7 @@ k3s_applications:
     helm_chart_name: runix/pgadmin4
     helm_repo_name: runix
     helm_repo_url: https://helm.runix.net
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/pgadmin/helm/pgadmin-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/pgadmin/helm/pgadmin-prod-values.yaml"
 
   postfix-prod:
     deployment_method: manifest
@@ -212,7 +212,7 @@ k3s_applications:
     helm_chart_name: traefik/traefik
     helm_repo_name: traefik
     helm_repo_url: https://traefik.github.io/charts
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/traefik/helm/traefik3-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/traefik/helm/traefik3-prod-values.yaml"
 
   unpoller-prod:
     deployment_method: manifest
@@ -250,12 +250,12 @@ k3s_applications:
     helm_repo_name: vm
     helm_repo_url: https://victoriametrics.github.io/helm-charts/
     helm_namespace: victoriametrics
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/helm/victoriametrics-operator-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/victoriametrics/helm/victoriametrics-operator-prod-values.yaml"
 
   weather:
     deployment_method: helm
     helm_chart_path: "{{ playbook_dir }}/../../files/k3s-config/weather/helm/weather"
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/weather/helm/weather-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/weather/helm/weather-prod-values.yaml"
 
   vault-prod:
     deployment_method: helm
@@ -264,7 +264,7 @@ k3s_applications:
     helm_chart_name: hashicorp/vault
     helm_repo_name: hashicorp
     helm_repo_url: https://helm.releases.hashicorp.com
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/hashicorp/helm/hashicorp-values-prod.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/hashicorp/helm/hashicorp-prod-values.yaml"
 
   zigbee2mqtt-zigbee11:
     deployment_method: manifest
