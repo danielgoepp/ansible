@@ -22,7 +22,7 @@ openwebui_volume: "open-webui"
 
 # Portainer configuration
 portainer_container_name: "portainer"
-portainer_image: "portainer/portainer-ce:2.40.0"
+portainer_image: "portainer/portainer-ce:sts"
 portainer_http_port: 8000
 portainer_https_port: 9443
 portainer_volume: "portainer_data"
