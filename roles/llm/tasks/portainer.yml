@@ -3,36 +3,31 @@
 # Handles both initial installation and upgrades
 
 - name: Stop existing Portainer container
-  community.docker.docker_container:
-    name: "{{ portainer_container_name }}"
-    state: stopped
-  ignore_errors: true
+  ansible.builtin.command: docker stop {{ portainer_container_name }}
+  changed_when: false
+  failed_when: false
 
 - name: Remove existing Portainer container
-  community.docker.docker_container:
-    name: "{{ portainer_container_name }}"
-    state: absent
-  ignore_errors: true
+  ansible.builtin.command: docker rm {{ portainer_container_name }}
+  changed_when: false
+  failed_when: false
 
 - name: Pull latest Portainer CE image
-  community.docker.docker_image:
-    name: "{{ portainer_image }}"
-    source: pull
-    force_source: true
-    force_tag: true
+  ansible.builtin.command: docker pull {{ portainer_image }}
+  register: portainer_pull
+  changed_when: "'Status: Downloaded newer image' in portainer_pull.stdout or 'Pulling from' in portainer_pull.stdout"
 
 - name: Start new Portainer container
-  community.docker.docker_container:
-    name: "{{ portainer_container_name }}"
-    image: "{{ portainer_image }}"
-    state: started
-    restart_policy: always
-    ports:
-      - "{{ portainer_http_port }}:8000"
-      - "{{ portainer_https_port }}:9443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - "{{ portainer_volume }}:/data"
+  ansible.builtin.shell: >
+    docker run -d
+    --name {{ portainer_container_name }}
+    --restart always
+    -p {{ portainer_http_port }}:8000
+    -p {{ portainer_https_port }}:9443
+    -v /var/run/docker.sock:/var/run/docker.sock
+    -v {{ portainer_volume }}:/data
+    {{ portainer_image }}
+  changed_when: true
 
 - name: Wait for Portainer to be ready
   ansible.builtin.uri:

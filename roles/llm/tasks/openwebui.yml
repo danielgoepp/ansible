@@ -3,38 +3,31 @@
 # Handles both initial installation and upgrades
 
 - name: Stop existing Open WebUI container
-  community.docker.docker_container:
-    name: "{{ openwebui_container_name }}"
-    state: stopped
-  ignore_errors: true
+  ansible.builtin.command: docker stop {{ openwebui_container_name }}
+  changed_when: false
+  failed_when: false
 
 - name: Remove existing Open WebUI container
-  community.docker.docker_container:
-    name: "{{ openwebui_container_name }}"
-    state: absent
-  ignore_errors: true
+  ansible.builtin.command: docker rm {{ openwebui_container_name }}
+  changed_when: false
+  failed_when: false
 
 - name: Pull latest Open WebUI image
-  community.docker.docker_image:
-    name: "{{ openwebui_image }}"
-    source: pull
-    force_source: true
-    force_tag: true
+  ansible.builtin.command: docker pull {{ openwebui_image }}
+  register: openwebui_pull
+  changed_when: "'Status: Downloaded newer image' in openwebui_pull.stdout or 'Pulling from' in openwebui_pull.stdout"
 
 - name: Start new Open WebUI container
-  community.docker.docker_container:
-    name: "{{ openwebui_container_name }}"
-    image: "{{ openwebui_image }}"
-    state: started
-    restart_policy: always
-    ports:
-      - "{{ openwebui_port }}:8080"
-    env:
-      OLLAMA_BASE_URL: "{{ openwebui_ollama_url }}"
-    etc_hosts:
-      host.docker.internal: host-gateway
-    volumes:
-      - "{{ openwebui_volume }}:/app/backend/data"
+  ansible.builtin.shell: >
+    docker run -d
+    --name {{ openwebui_container_name }}
+    --restart always
+    -p {{ openwebui_port }}:8080
+    -e OLLAMA_BASE_URL={{ openwebui_ollama_url }}
+    --add-host host.docker.internal:host-gateway
+    -v {{ openwebui_volume }}:/app/backend/data
+    {{ openwebui_image }}
+  changed_when: true
 
 - name: Wait for Open WebUI to be ready
   ansible.builtin.uri:
