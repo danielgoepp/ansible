@@ -34,7 +34,7 @@
 
 - name: Display current deployment status
   debug:
-    msg: "{{ service_name | title }}: {% if current_deployment.resources | length > 0 %}image={{ current_deployment.resources[0].spec.template.spec.containers[0].image }}, replicas={{ current_deployment.resources[0].status.readyReplicas | default(0) }}/{{ current_deployment.resources[0].status.replicas | default(0) }}{% else %}not found (will create){% endif %}"
+    msg: "{{ service_name | title }}: {% if current_deployment.failed | default(false) %}fetch failed ({{ current_deployment.msg | default('unknown error') }}){% elif current_deployment.resources | length > 0 %}image={{ current_deployment.resources[0].spec.template.spec.containers[0].image }}, replicas={{ current_deployment.resources[0].status.readyReplicas | default(0) }}/{{ current_deployment.resources[0].status.replicas | default(0) }}{% else %}not found (will create){% endif %}"
 
 - name: Apply manifest from local file (server-side)
   kubernetes.core.k8s:
@@ -133,7 +133,7 @@
 
 - name: Extract version information from container images
   set_fact:
-    previous_image: "{{ current_deployment.resources[0].spec.template.spec.containers[0].image | default('Unknown') }}"
+    previous_image: "{{ (current_deployment.resources | default([]) | length > 0) | ternary(current_deployment.resources[0].spec.template.spec.containers[0].image, 'Unknown') }}"
     current_image: "{{ updated_deployment.resources[0].spec.template.spec.containers[0].image }}"
 
 - name: Display upgrade summary
