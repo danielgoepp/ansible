@@ -170,7 +170,7 @@ k3s_applications:
 
   pgadmin-prod:
     deployment_method: helm
-    helm_release_name: pgadmin4
+    helm_release_name: pgadmin
     helm_namespace: pgadmin
     helm_chart_name: runix/pgadmin4
     helm_repo_name: runix
