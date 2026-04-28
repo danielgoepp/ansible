@@ -1,0 +1,66 @@
+---
+# K3s in-place version upgrade on a k3s VM
+# Runs the upstream installer with INSTALL_K3S_VERSION and INSTALL_K3S_SKIP_START=true.
+# The --server flag is intentionally omitted - it's an upgrade, not a fresh install,
+# so the existing server URL is retained from the prior install.
+#
+# Parameters:
+#   k3s_node: hostname of the k3s VM
+#   k3s_target_version: target k3s version (e.g. v1.31.5+k3s1) - REQUIRED, no default
+#   k3s_token: cluster token (default: k3s-prod)
+
+- name: Validate k3s_target_version is set
+  ansible.builtin.fail:
+    msg: "k3s_target_version is required (e.g. -e k3s_target_version=v1.31.5+k3s1)"
+  when: k3s_target_version is not defined or k3s_target_version | length == 0
+
+- name: Set k3s install defaults
+  ansible.builtin.set_fact:
+    k3s_token: "{{ k3s_token | default('k3s-prod') }}"
+
+- name: Display k3s upgrade target
+  ansible.builtin.debug:
+    msg: "=== k3s install {{ k3s_target_version }} on {{ k3s_node }} ==="
+
+- name: Check current k3s version on {{ k3s_node }}
+  ansible.builtin.command: k3s --version
+  delegate_to: "{{ k3s_node }}"
+  become: true
+  register: k3s_current_version
+  changed_when: false
+
+- name: Display current k3s version
+  ansible.builtin.debug:
+    msg: "Current: {{ k3s_current_version.stdout_lines[0] }}  Target: {{ k3s_target_version }}"
+
+- name: Run k3s installer (INSTALL_K3S_SKIP_START=true)
+  ansible.builtin.shell:
+    cmd: >-
+      curl -sfL https://get.k3s.io |
+      K3S_TOKEN={{ k3s_token }}
+      INSTALL_K3S_VERSION={{ k3s_target_version }}
+      INSTALL_K3S_SKIP_START=true
+      sh -s - server
+      --disable servicelb
+      --disable traefik
+      --flannel-backend=none
+      --disable-network-policy
+  delegate_to: "{{ k3s_node }}"
+  become: true
+  register: k3s_install_result
+
+- name: Display k3s install output
+  ansible.builtin.debug:
+    var: k3s_install_result.stdout_lines
+
+- name: Verify k3s binary version after install
+  ansible.builtin.command: k3s --version
+  delegate_to: "{{ k3s_node }}"
+  become: true
+  register: k3s_post_version
+  changed_when: false
+  failed_when: k3s_target_version not in k3s_post_version.stdout
+
+- name: Display new k3s version
+  ansible.builtin.debug:
+    msg: "k3s on {{ k3s_node }} is now: {{ k3s_post_version.stdout_lines[0] }}"

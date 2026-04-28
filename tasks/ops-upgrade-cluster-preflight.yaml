@@ -1,0 +1,220 @@
+---
+# Preflight Health Gate
+# Runs before any destructive operation. All checks support a retry/continue/abort
+# operator prompt on failure; defaults to retry.
+#
+# Checks:
+#   1. Ceph healthy (HEALTH_OK only - noout shouldn't be set yet)
+#   2. No active Alertmanager alerts
+#   3. No down Uptime Kuma monitors
+#   4. opnsense (VM 101) is running on pve11
+#
+# Parameters:
+#   interactive_mode (default true): prompt on failure
+#   opnsense_vm_id (default 101)
+#   opnsense_home_node (default pve11)
+
+- name: Set preflight defaults
+  ansible.builtin.set_fact:
+    interactive_mode: "{{ interactive_mode | default(true) }}"
+    opnsense_vm_id: "{{ opnsense_vm_id | default(101) }}"
+    opnsense_home_node: "{{ opnsense_home_node | default('pve11') }}"
+    proxmox_api_token_id: "{{ awx_proxmox_api_token_id | default(vault_proxmox_api_token_id | default('')) }}"
+    proxmox_api_token_secret: "{{ awx_proxmox_api_token_secret | default(vault_proxmox_api_token_secret | default('')) }}"
+    uptime_kuma_username: "{{ awx_uptime_kuma_username | default(vault_uptime_kuma_username | default('')) }}"
+    uptime_kuma_password: "{{ awx_uptime_kuma_password | default(vault_uptime_kuma_password | default('')) }}"
+
+- name: Display preflight banner
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PREFLIGHT HEALTH GATE
+      ========================================
+      Verifying cluster is healthy before starting maintenance.
+
+# CHECK 1: Ceph - require HEALTH_OK (noout not yet set)
+- name: Preflight - Ceph health
+  ansible.builtin.include_tasks: ops-upgrade-cluster-ceph-health.yaml
+  vars:
+    allow_noout: false
+    ceph_health_retries: 5
+    ceph_health_delay: 15
+
+# CHECK 2: Alertmanager
+- name: Preflight - Alertmanager
+  block:
+    - name: Check for active Alertmanager alerts
+      ansible.builtin.uri:
+        url: "{{ alertmanager_api_url }}/alerts?active=true&silenced=false&inhibited=false"
+        method: GET
+        return_content: true
+      register: am_alerts
+      until: am_alerts.json | length == 0
+      retries: 3
+      delay: 10
+  rescue:
+    - name: Display Alertmanager preflight failure
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          ALERTMANAGER PREFLIGHT FAILED
+          ========================================
+          {{ (am_alerts.json | default([])) | length }} active alert(s) found:
+          {% for a in am_alerts.json | default([]) %}
+          - {{ a.labels.alertname | default('unknown') }}: {{ a.annotations.summary | default('') }}
+          {% endfor %}
+          {% if am_alerts.json is not defined %}
+          (Alertmanager API was not reachable - investigate connectivity)
+          {% endif %}
+
+    - name: Operator decision on Alertmanager failure
+      ansible.builtin.pause:
+        prompt: |
+
+          [c]ontinue (proceed despite active alerts),
+          [r]etry  (re-check alertmanager), or
+          [a]bort  (fail the playbook)?
+      register: am_decision
+      when: interactive_mode | bool
+
+    - name: Abort if operator chose abort (alertmanager)
+      ansible.builtin.fail:
+        msg: "Operator aborted: active alerts in Alertmanager"
+      when:
+        - interactive_mode | bool
+        - am_decision.user_input | lower in ['a', 'abort']
+
+    - name: Recurse into preflight on operator retry (alertmanager)
+      ansible.builtin.include_tasks: ops-upgrade-cluster-preflight.yaml
+      when:
+        - interactive_mode | bool
+        - am_decision.user_input | lower in ['r', 'retry']
+
+    - name: Fail if non-interactive and alerts active
+      ansible.builtin.fail:
+        msg: "Alertmanager has active alerts and interactive_mode=false"
+      when: not (interactive_mode | bool)
+
+# CHECK 3: Uptime Kuma
+- name: Preflight - Uptime Kuma
+  block:
+    - name: Check Uptime Kuma for down monitors
+      ansible.builtin.command:
+        cmd: >-
+          python3 {{ playbook_dir }}/../scripts/uptime_kuma_maintenance.py
+          --action status
+          --url "{{ uptime_kuma_url }}"
+          --username "{{ uptime_kuma_username }}"
+          --password "{{ uptime_kuma_password }}"
+      register: uk_status
+      changed_when: false
+      failed_when: uk_status.rc != 0
+
+    - name: Display Uptime Kuma OK
+      ansible.builtin.debug:
+        msg: "{{ uk_status.stdout_lines }}"
+
+  rescue:
+    - name: Display Uptime Kuma preflight failure
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          UPTIME KUMA PREFLIGHT FAILED
+          ========================================
+          {{ uk_status.stdout | default('(no output)') }}
+          {{ uk_status.stderr | default('') }}
+
+    - name: Operator decision on Uptime Kuma failure
+      ansible.builtin.pause:
+        prompt: |
+
+          [c]ontinue (proceed despite down monitors),
+          [r]etry  (re-check uptime kuma), or
+          [a]bort  (fail the playbook)?
+      register: uk_decision
+      when: interactive_mode | bool
+
+    - name: Abort if operator chose abort (uptime kuma)
+      ansible.builtin.fail:
+        msg: "Operator aborted: down monitors in Uptime Kuma"
+      when:
+        - interactive_mode | bool
+        - uk_decision.user_input | lower in ['a', 'abort']
+
+    - name: Recurse into preflight on operator retry (uptime kuma)
+      ansible.builtin.include_tasks: ops-upgrade-cluster-preflight.yaml
+      when:
+        - interactive_mode | bool
+        - uk_decision.user_input | lower in ['r', 'retry']
+
+    - name: Fail if non-interactive and uptime-kuma down
+      ansible.builtin.fail:
+        msg: "Uptime Kuma reports down monitors and interactive_mode=false"
+      when: not (interactive_mode | bool)
+
+# CHECK 4: opnsense location
+- name: Preflight - opnsense location
+  block:
+    - name: Get opnsense VM info from pve11
+      community.proxmox.proxmox_vm_info:
+        api_user: root@pam
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ opnsense_home_node }}"
+        node: "{{ opnsense_home_node }}"
+        vmid: "{{ opnsense_vm_id }}"
+      register: opnsense_info
+      failed_when: >
+        opnsense_info.proxmox_vms | default([]) | length == 0 or
+        (opnsense_info.proxmox_vms[0].status | default('')) != 'running'
+
+    - name: Display opnsense location confirmation
+      ansible.builtin.debug:
+        msg: "opnsense (VM {{ opnsense_vm_id }}) is running on {{ opnsense_home_node }}"
+
+  rescue:
+    - name: Display opnsense location failure
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          OPNSENSE LOCATION CHECK FAILED
+          ========================================
+          opnsense (VM {{ opnsense_vm_id }}) is not running on {{ opnsense_home_node }}.
+          Move it there manually before continuing - this is critical to avoid
+          a network outage during the pve11 upgrade.
+
+    - name: Operator decision on opnsense location failure
+      ansible.builtin.pause:
+        prompt: |
+
+          Move opnsense to {{ opnsense_home_node }}, then choose:
+          [r]etry  (re-check opnsense location), or
+          [a]bort  (fail the playbook)?
+      register: opn_decision
+      when: interactive_mode | bool
+
+    - name: Abort if operator chose abort (opnsense)
+      ansible.builtin.fail:
+        msg: "Operator aborted: opnsense not on {{ opnsense_home_node }}"
+      when:
+        - interactive_mode | bool
+        - opn_decision.user_input | lower in ['a', 'abort']
+
+    - name: Recurse into preflight on operator retry (opnsense)
+      ansible.builtin.include_tasks: ops-upgrade-cluster-preflight.yaml
+      when:
+        - interactive_mode | bool
+        - opn_decision.user_input | lower in ['r', 'retry']
+
+    - name: Fail if non-interactive and opnsense misplaced
+      ansible.builtin.fail:
+        msg: "opnsense not on {{ opnsense_home_node }} and interactive_mode=false"
+      when: not (interactive_mode | bool)
+
+- name: Preflight complete
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      PREFLIGHT PASSED
+      ========================================
+      Ceph healthy, no active alerts, opnsense on {{ opnsense_home_node }}.

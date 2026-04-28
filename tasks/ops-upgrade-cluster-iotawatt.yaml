@@ -1,0 +1,42 @@
+---
+# iotawatt-sync deployment stop/restart
+# Deletes the deployment before maintenance, re-applies it after.
+#
+# Parameters:
+#   iotawatt_action: "stop" or "start"
+#   iotawatt_manifest: path to manifest (defaults to k3s_config_base_path layout)
+
+- name: Set iotawatt defaults
+  ansible.builtin.set_fact:
+    iotawatt_manifest: >-
+      {{ iotawatt_manifest |
+         default(k3s_config_base_path + '/iotawatt-sync/manifests/iotawatt-sync-prod.yaml') }}
+
+- name: Validate iotawatt_action
+  ansible.builtin.fail:
+    msg: "iotawatt_action must be 'stop' or 'start'"
+  when: iotawatt_action not in ['stop', 'start']
+
+- name: Stop iotawatt-sync
+  ansible.builtin.command:
+    cmd: kubectl delete -f {{ iotawatt_manifest }} --ignore-not-found
+  register: iotawatt_stop
+  changed_when: "'deleted' in iotawatt_stop.stdout"
+  when: iotawatt_action == 'stop'
+
+- name: Display iotawatt stop result
+  ansible.builtin.debug:
+    var: iotawatt_stop.stdout_lines
+  when: iotawatt_action == 'stop'
+
+- name: Start iotawatt-sync
+  ansible.builtin.command:
+    cmd: kubectl apply -f {{ iotawatt_manifest }}
+  register: iotawatt_start
+  changed_when: "'created' in iotawatt_start.stdout or 'configured' in iotawatt_start.stdout"
+  when: iotawatt_action == 'start'
+
+- name: Display iotawatt start result
+  ansible.builtin.debug:
+    var: iotawatt_start.stdout_lines
+  when: iotawatt_action == 'start'

@@ -1,237 +1,237 @@
-- name: Proxmox and K3S Cluster Upgrade with Maintenance Mode
+---
+# Cluster Maintenance Playbook
+#
+# Performs a rolling upgrade of:
+#   - Proxmox hosts (apt dist-upgrade + reboot)
+#   - Ubuntu k3s VMs (apt dist-upgrade)
+#   - K3s itself (in-place version upgrade via the official installer)
+#
+# Pair order: pve15+k3s-prod-15 -> pve13+k3s-prod-13 -> pve12+k3s-prod-12 -> pve11+k3s-prod-11
+#
+# Pre-flight (once):
+#   1. Validate inputs
+#   2. Health gate (Ceph HEALTH_OK, no Alertmanager alerts, no down Uptime Kuma
+#      monitors, opnsense on pve11)
+#   3. Stop iotawatt-sync
+#   4. Shutdown shared VMs/LXCs (ui-network, dev, smb, backup) for the entire window
+#   5. Set Ceph noout flag
+#   6. Set CNPG maintenance mode
+#   7. Mute alerts (Graylog, Alertmanager, Uptime Kuma)
+#
+# Per pair:
+#   See tasks/ops-upgrade-cluster-paired.yaml
+#
+# Post-flight:
+#   1. Cluster health summary
+#   2. Unmute alerts
+#   3. Disable CNPG maintenance mode
+#   4. Disable Ceph noout flag
+#   5. Start shared VMs/LXCs
+#   6. Re-apply iotawatt-sync
+#
+# Required:
+#   -e k3s_target_version=v1.31.5+k3s1
+#
+# Optional:
+#   -e interactive_mode=false   # skip pause prompts
+#   -e verbose_status=false     # quieter status output
+#
+# Usage:
+#   Local:  ansible-playbook playbooks/ops-upgrade-cluster.yaml \
+#             -e k3s_target_version=v1.31.5+k3s1
+#   AWX:    Run as job template with k3s_target_version set as an extra var
+
+- name: Cluster Upgrade - Pre-flight
   hosts: localhost
-  gather_facts: false
+  gather_facts: true
   vars:
-    k3s_nodes: "{{ groups['k3s_prod'] }}"
-    pve_nodes: "{{ groups['pve'] }}"
     interactive_mode: "{{ interactive_mode | default(true) }}"
     verbose_status: "{{ verbose_status | default(true) }}"
+    # Hardcoded upgrade order per planning notes: 15, 13, 12, 11
+    upgrade_pairs:
+      - { pve: pve15, k3s: k3s-prod-15 }
+      - { pve: pve13, k3s: k3s-prod-13 }
+      - { pve: pve12, k3s: k3s-prod-12 }
+      - { pve: pve11, k3s: k3s-prod-11 }
+    # Shared VMs/LXCs that stay shut down for the entire maintenance window.
+    # host_node = the PVE host that owns each VM under normal operation.
+    shared_shutdowns:
+      - { vm_id: 254, vm_name: ui-network, vm_type: qemu, host_node: pve15 }
+      - { vm_id: 105, vm_name: dev, vm_type: qemu, host_node: pve15 }
+      - { vm_id: 103, vm_name: backup, vm_type: qemu, host_node: pve15 }
+      - { vm_id: 106, vm_name: smb, vm_type: lxc, host_node: pve15 }
+    opnsense_vm_id: 101
+    opnsense_home_node: pve11
+    opnsense_failover_node: pve12
 
   tasks:
-    # PRE-UPGRADE VALIDATION AND STATUS
-    - name: Display cluster information
-      debug:
+    - name: Validate k3s_target_version
+      ansible.builtin.fail:
         msg: |
-          ========================================
-          CLUSTER UPGRADE PREPARATION
-          ========================================
-          Interactive Mode: {{ interactive_mode }}
-          Verbose Status: {{ verbose_status }}
+          k3s_target_version is required.
+          Example: -e k3s_target_version=v1.31.5+k3s1
+      when: k3s_target_version is not defined or k3s_target_version | length == 0
 
-          Proxmox nodes: {{ pve_nodes | join(', ') }}
-          K3S nodes: {{ k3s_nodes | join(', ') }}
+    # Persist play vars as facts so they survive across plays (play vars are
+    # scoped to a single play; facts persist on the host for the run).
+    - name: Persist cross-play configuration as facts
+      ansible.builtin.set_fact:
+        interactive_mode: "{{ interactive_mode }}"
+        verbose_status: "{{ verbose_status }}"
+        upgrade_pairs: "{{ upgrade_pairs }}"
+        shared_shutdowns: "{{ shared_shutdowns }}"
+        opnsense_vm_id: "{{ opnsense_vm_id }}"
+        opnsense_home_node: "{{ opnsense_home_node }}"
+        opnsense_failover_node: "{{ opnsense_failover_node }}"
 
-    - name: Check current cluster status
-      block:
-        - name: Get current K3s node status
-          command: kubectl get nodes -o wide
-          register: k3s_nodes_status
+    - name: Display upgrade plan
+      ansible.builtin.debug:
+        msg: |
+          ===================================================
+          CLUSTER MAINTENANCE PLAYBOOK
+          ===================================================
+          k3s target version : {{ k3s_target_version }}
+          Interactive mode   : {{ interactive_mode }}
+          Verbose status     : {{ verbose_status }}
 
-        - name: Display current K3s cluster status
-          debug:
-            var: k3s_nodes_status.stdout_lines
-          when: verbose_status | bool
+          Upgrade pair order :
+          {% for p in upgrade_pairs %}
+            {{ loop.index }}. {{ p.pve }} + {{ p.k3s }}
+          {% endfor %}
 
-        - name: Get current pod distribution
-          command: kubectl get pods --all-namespaces -o wide
-          register: current_pods
+          Shared VMs to shut down for the window:
+          {% for v in shared_shutdowns %}
+            - {{ v.vm_name }} ({{ v.vm_type }} {{ v.vm_id }}) on {{ v.host_node }}
+          {% endfor %}
 
-        - name: Show critical pod count by node
-          shell: |
-            echo "Pod distribution by node:"
-            kubectl get pods --all-namespaces -o wide --no-headers | awk '{print $8}' | sort | uniq -c
-          register: pod_distribution
-
-        - name: Display pod distribution
-          debug:
-            var: pod_distribution.stdout_lines
-          when: verbose_status | bool
-
-    - name: Check Proxmox cluster status
-      block:
-        - name: Check PVE cluster status
-          command: pvecm status
-          delegate_to: "{{ pve_nodes[0] }}"
-          become: true
-          register: pve_cluster_status
-
-        - name: Display PVE cluster status
-          debug:
-            var: pve_cluster_status.stdout_lines
-          when: verbose_status | bool
-
-        - name: Check Ceph status
-          command: ceph status
-          delegate_to: "{{ pve_nodes[0] }}"
-          become: true
-          register: ceph_status
-          failed_when: false
-
-        - name: Display Ceph status
-          debug:
-            var: ceph_status.stdout_lines
-          when: verbose_status | bool and ceph_status.rc == 0
-
-    - name: Pre-upgrade validation pause
-      pause:
-        prompt: |
-
-          ========================================
-          PRE-UPGRADE VALIDATION COMPLETE
-          ========================================
-
-          Please review the cluster status above and confirm:
-          1. All nodes are Ready and healthy
-          2. All critical pods are running
-          3. Ceph is healthy (if applicable)
-          4. No ongoing maintenance or issues
-
-          CONTINUE with upgrade preparation? (yes/no)
-      register: validation_confirm
-      when: interactive_mode | bool
-
-    - name: Fail if validation not confirmed
-      fail:
-        msg: "Upgrade cancelled during validation"
-      when: interactive_mode | bool and validation_confirm.user_input | lower not in ['yes', 'y']
+          opnsense (VM {{ opnsense_vm_id }}) will move {{ opnsense_home_node }} -> {{ opnsense_failover_node }}
+          before the {{ opnsense_home_node }} pair, then back after.
 
     - name: Confirm cluster upgrade
-      pause:
+      ansible.builtin.pause:
         prompt: |
 
-          About to upgrade clusters:
-          - {{ pve_nodes | length }} Proxmox nodes: {{ pve_nodes | join(', ') }}
-          - {{ k3s_nodes | length }} K3S nodes: {{ k3s_nodes | join(', ') }}
+          About to start cluster maintenance. Estimated 60+ minutes.
+          Continue? (yes/no)
+      register: top_confirm
+      when: interactive_mode | bool
 
-          This will:
-          - Enable maintenance mode (Ceph noout, mute alerts, CNPG maintenance)
-          - Upgrade Proxmox nodes sequentially
-          - Drain and upgrade K3S nodes sequentially
-          - Upgrade packages and reboot if needed
-          - Wait for node recovery and uncordon K3S nodes
-          - Disable maintenance mode
-
-          This process may take 60+ minutes. Continue? (yes/no)
-      register: confirm_upgrade
-
-    - name: Fail if not confirmed
-      fail:
+    - name: Abort if not confirmed
+      ansible.builtin.fail:
         msg: "Cluster upgrade cancelled by user"
-      when: confirm_upgrade.user_input | lower not in ['yes', 'y']
+      when:
+        - interactive_mode | bool
+        - top_confirm.user_input | lower not in ['yes', 'y']
 
-    # PRE-UPGRADE: Enable maintenance mode
+    # PRE-FLIGHT: health gate
+    - name: Pre-flight health gate
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-preflight.yaml
+
+    # PRE-FLIGHT: stop iotawatt-sync
+    - name: Stop iotawatt-sync
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
+      vars:
+        iotawatt_action: stop
+
+    # PRE-FLIGHT: shutdown shared VMs (entire window)
+    - name: Shutdown shared VMs/LXCs for the maintenance window
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-vm.yaml
+      vars:
+        vm_action: shutdown
+        vm_shutdowns: "{{ shared_shutdowns }}"
+
+    # PRE-FLIGHT: enable Ceph noout
     - name: Enable Ceph noout flag
-      include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
       vars:
         maintenance_action: enable
 
+    # PRE-FLIGHT: enable CNPG maintenance
     - name: Enable CNPG maintenance mode
-      include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
       vars:
         maintenance_action: enable
 
-    - name: Enable maintenance mode (mute alerts)
-      include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
+    # PRE-FLIGHT: mute alerts
+    - name: Mute alerts (Graylog / Alertmanager / Uptime Kuma)
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
       vars:
         maintenance_action: enable
 
-    - name: Create node pairs for upgrade
-      set_fact:
-        node_pairs: |
-          {% set pairs = [] %}
-          {% for pve_node in pve_nodes %}
-            {% set node_number = pve_node.replace('pve', '') %}
-            {% set k3s_node = 'k3s-prod-' + node_number %}
-            {% if k3s_node in k3s_nodes %}
-              {% set _ = pairs.append({'pve': pve_node, 'k3s': k3s_node}) %}
-            {% endif %}
-          {% endfor %}
-          {{ pairs }}
+    - name: Pre-flight complete
+      ansible.builtin.debug:
+        msg: "=== Pre-flight done. Beginning paired upgrades. ==="
 
-    - name: Display node pairs for upgrade
-      debug:
-        msg: "Node pairs to upgrade:"
-
-    - name: Display each node pair
-      debug:
-        msg: "- {{ item.pve }} + {{ item.k3s }}"
-      loop: "{{ node_pairs }}"
-
-# Paired upgrade loop - process each pair sequentially
-- name: Upgrade paired nodes sequentially
+# PAIRED LOOP
+- name: Cluster Upgrade - Paired Upgrades
   hosts: localhost
   gather_facts: false
   vars:
-    node_pairs: "{{ hostvars['localhost']['node_pairs'] }}"
+    upgrade_pairs: "{{ hostvars['localhost']['upgrade_pairs'] }}"
+    opnsense_vm_id: "{{ hostvars['localhost']['opnsense_vm_id'] }}"
+    opnsense_home_node: "{{ hostvars['localhost']['opnsense_home_node'] }}"
+    opnsense_failover_node: "{{ hostvars['localhost']['opnsense_failover_node'] }}"
 
   tasks:
-    - name: Upgrade each paired set of nodes
-      include_tasks: ../tasks/ops-upgrade-cluster-paired.yaml
+    - name: Upgrade each pair
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-paired.yaml
       vars:
         pve_node: "{{ pair.pve }}"
         k3s_node: "{{ pair.k3s }}"
-        vm_migrations: "{{ vm_migrations_map[pair.pve] | default([]) }}"
-        vm_shutdowns: "{{ vm_shutdowns_map[pair.pve] | default([]) }}"
-        vm_migrations_map:
-          pve11:
-            - vm_id: 101
-              vm_name: "opnsense"
-              target_node: "pve12"
-        vm_shutdowns_map:
-          pve15:
-            - vm_id: 103
-              vm_name: "backup"
-              vm_type: "qemu"
-            - vm_id: 105
-              vm_name: "dev"
-              vm_type: "qemu"
-            - vm_id: 254
-              vm_name: "ui-network"
-              vm_type: "qemu"
-            - vm_id: 106
-              vm_name: "smb"
-              vm_type: "lxc"
-      loop: "{{ node_pairs }}"
+      loop: "{{ upgrade_pairs }}"
       loop_control:
         loop_var: pair
         label: "{{ pair.pve }} + {{ pair.k3s }}"
 
-# POST-UPGRADE: Disable maintenance mode
-- name: Disable maintenance mode
+# POST-FLIGHT
+- name: Cluster Upgrade - Post-flight
   hosts: localhost
   gather_facts: false
+  vars:
+    shared_shutdowns: "{{ hostvars['localhost']['shared_shutdowns'] }}"
 
   tasks:
-    - name: Check overall cluster health
-      include_tasks: ../tasks/ops-upgrade-cluster-health.yaml
+    - name: Cluster health summary
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-health.yaml
       vars:
         health_action: cluster-status
 
-    - name: Disable maintenance mode (unmute alerts)
-      include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
+    - name: Unmute alerts
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
       vars:
         maintenance_action: disable
 
     - name: Disable CNPG maintenance mode
-      include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
       vars:
         maintenance_action: disable
 
     - name: Disable Ceph noout flag
-      include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
       vars:
         maintenance_action: disable
 
-    - name: Cluster upgrade completed
-      debug:
+    - name: Start shared VMs/LXCs
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-vm.yaml
+      vars:
+        vm_action: startup
+        vm_shutdowns: "{{ shared_shutdowns }}"
+
+    - name: Re-apply iotawatt-sync
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
+      vars:
+        iotawatt_action: start
+
+    - name: Cluster maintenance complete
+      ansible.builtin.debug:
         msg: |
           ===================================================
-          PROXMOX AND K3S CLUSTER UPGRADE COMPLETED SUCCESSFULLY
+          CLUSTER MAINTENANCE COMPLETE
           ===================================================
-          Upgraded Proxmox nodes: {{ hostvars['localhost']['pve_nodes'] | join(', ') }}
-          Upgraded K3S nodes: {{ hostvars['localhost']['k3s_nodes'] | join(', ') }}
+          k3s target version : {{ k3s_target_version }}
 
-          Next steps:
-          - Verify all applications are running correctly
-          - Check logs for any issues
-          - Monitor cluster performance
+          Manual checks (per planning notes):
+          - Verify Postgres pods are accepting connections
+          - Verify Mosquitto pod is up, no errors in logs
+          - Verify zigbee15 and zigbee11 pods are up
+          - Verify Home Assistant is up and reachable

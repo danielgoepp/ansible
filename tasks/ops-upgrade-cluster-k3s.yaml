@@ -1,125 +1,158 @@
 ---
-# K3s Node Upgrade Operations
-# Handles K3s node lifecycle during cluster upgrades
+# K3s Node Lifecycle Operations
+# Drains, powers down, powers up, and uncordons a k3s VM.
 #
 # Parameters:
-#   k3s_action: "drain", "shutdown", "startup", "uncordon", "validate"
-#   k3s_node: K3s node hostname
-#   wait_timeout: timeout for wait operations in seconds (default: 600)
+#   k3s_action: "drain" | "shutdown" | "startup" | "uncordon"
+#   k3s_node:   K3s VM hostname (e.g. k3s-prod-11)
+#   pve_node:   PVE host that owns this k3s VM. Defaults to derived (pveXX where
+#               XX matches the trailing digits of k3s_node).
+#   wait_timeout: timeout for wait_for_connection (default: 600)
 
-- name: Set default K3s parameters
-  set_fact:
+- name: Set k3s lifecycle defaults
+  ansible.builtin.set_fact:
     k3s_node: "{{ k3s_node | default(inventory_hostname) }}"
+    pve_node: >-
+      {{ pve_node |
+         default('pve' + (k3s_node | regex_replace('^k3s-prod-', ''))) }}
     wait_timeout: "{{ wait_timeout | default(600) }}"
+    proxmox_api_token_id: "{{ awx_proxmox_api_token_id | default(vault_proxmox_api_token_id | default('')) }}"
+    proxmox_api_token_secret: "{{ awx_proxmox_api_token_secret | default(vault_proxmox_api_token_secret | default('')) }}"
 
-- name: Validate k3s_action parameter
-  fail:
-    msg: "k3s_action must be one of: drain, shutdown, startup, uncordon, validate"
-  when: k3s_action not in ['drain', 'shutdown', 'startup', 'uncordon', 'validate']
+- name: Validate k3s_action
+  ansible.builtin.fail:
+    msg: "k3s_action must be one of: drain, shutdown, startup, uncordon"
+  when: k3s_action not in ['drain', 'shutdown', 'startup', 'uncordon']
 
-- name: Display K3s action
-  debug:
-    msg: "=== K3s {{ k3s_action | upper }} for node {{ k3s_node }} ==="
+- name: Display k3s action
+  ansible.builtin.debug:
+    msg: "=== k3s {{ k3s_action | upper }} {{ k3s_node }} (host: {{ pve_node }}) ==="
 
-# DRAIN K3S NODE
-- block:
-    - name: Drain K3s node
-      include_tasks: ops-upgrade-cluster-drain.yaml
-      vars:
-        node_action: drain
-        node_name: "{{ k3s_node }}"
-
+# DRAIN
+- name: Drain k3s node
+  ansible.builtin.include_tasks: ops-upgrade-cluster-drain.yaml
+  vars:
+    node_action: drain
+    node_name: "{{ k3s_node }}"
   when: k3s_action == 'drain'
 
-# SHUTDOWN K3S SERVICE
-- block:
-    - name: Shutdown K3s service
-      delegate_to: "{{ k3s_node }}"
-      become: true
-      systemd:
-        name: k3s
-        state: stopped
+# SHUTDOWN VM via Proxmox API
+- name: Shutdown k3s VM via Proxmox API
+  when: k3s_action == 'shutdown'
+  block:
+    - name: Look up VM ID for {{ k3s_node }}
+      community.proxmox.proxmox_vm_info:
+        api_user: root@pam
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ pve_node }}"
+        node: "{{ pve_node }}"
+        name: "{{ k3s_node }}"
+      register: k3s_vm_lookup
 
-    - name: Wait for K3s service to be fully stopped
-      delegate_to: localhost
-      wait_for:
-        port: 6443
-        host: "{{ k3s_node }}"
-        state: stopped
-        timeout: 120
+    - name: Fail if VM not found
+      ansible.builtin.fail:
+        msg: "VM {{ k3s_node }} not found on {{ pve_node }}"
+      when: k3s_vm_lookup.proxmox_vms | default([]) | length == 0
 
-    - name: Verify K3s node is offline in cluster
-      delegate_to: localhost
-      shell: "kubectl get nodes {{ k3s_node }} -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}'"
-      register: k3s_node_status
-      until: k3s_node_status.stdout != "True"
-      retries: 12
+    - name: Shutdown {{ k3s_node }} (graceful ACPI)
+      community.proxmox.proxmox_kvm:
+        api_user: root@pam
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ pve_node }}"
+        node: "{{ pve_node }}"
+        vmid: "{{ k3s_vm_lookup.proxmox_vms[0].vmid }}"
+        state: stopped
+        timeout: 300
+
+    - name: Verify {{ k3s_node }} is stopped
+      community.proxmox.proxmox_vm_info:
+        api_user: root@pam
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ pve_node }}"
+        node: "{{ pve_node }}"
+        vmid: "{{ k3s_vm_lookup.proxmox_vms[0].vmid }}"
+      register: k3s_vm_stopped
+      until: >
+        k3s_vm_stopped.proxmox_vms | default([]) | length > 0 and
+        k3s_vm_stopped.proxmox_vms[0].status == 'stopped'
+      retries: 30
       delay: 10
 
-    - name: Display K3s node offline confirmation
-      debug:
-        msg: "K3s node {{ k3s_node }} is now offline and service stopped"
+    - name: Confirm {{ k3s_node }} is offline
+      ansible.builtin.debug:
+        msg: "{{ k3s_node }} is stopped on {{ pve_node }}"
 
-  when: k3s_action == 'shutdown'
+# STARTUP VM via Proxmox API + wait for k3s Ready
+- name: Start k3s VM via Proxmox API
+  when: k3s_action == 'startup'
+  block:
+    - name: Look up VM ID for {{ k3s_node }}
+      community.proxmox.proxmox_vm_info:
+        api_user: root@pam
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ pve_node }}"
+        node: "{{ pve_node }}"
+        name: "{{ k3s_node }}"
+      register: k3s_vm_lookup
 
-# STARTUP K3S SERVICE
-- block:
-    - name: Start K3s service
+    - name: Fail if VM not found
+      ansible.builtin.fail:
+        msg: "VM {{ k3s_node }} not found on {{ pve_node }}"
+      when: k3s_vm_lookup.proxmox_vms | default([]) | length == 0
+
+    - name: Start {{ k3s_node }}
+      community.proxmox.proxmox_kvm:
+        api_user: root@pam
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ pve_node }}"
+        node: "{{ pve_node }}"
+        vmid: "{{ k3s_vm_lookup.proxmox_vms[0].vmid }}"
+        state: started
+        timeout: 300
+
+    - name: Wait for {{ k3s_node }} to accept SSH
+      ansible.builtin.wait_for_connection:
+        connect_timeout: 10
+        delay: 30
+        sleep: 10
+        timeout: "{{ wait_timeout | int }}"
       delegate_to: "{{ k3s_node }}"
-      become: true
-      systemd:
+
+    - name: Wait for k3s service on {{ k3s_node }}
+      ansible.builtin.systemd:
         name: k3s
         state: started
-        enabled: yes
+        enabled: true
+      delegate_to: "{{ k3s_node }}"
+      become: true
 
-    - name: Wait for K3s node to be ready
-      include_tasks: ops-upgrade-cluster-health.yaml
+    - name: Wait for k3s node Ready in cluster
+      ansible.builtin.include_tasks: ops-upgrade-cluster-health.yaml
       vars:
         health_action: node-ready
         node_name: "{{ k3s_node }}"
 
-    - name: Display K3s node startup confirmation
-      debug:
-        msg: "K3s node {{ k3s_node }} is now online and ready"
+    - name: Confirm {{ k3s_node }} is online
+      ansible.builtin.debug:
+        msg: "{{ k3s_node }} is back online and Ready"
 
-  when: k3s_action == 'startup'
-
-# UNCORDON K3S NODE
-- block:
-    - name: Uncordon K3s node
-      include_tasks: ops-upgrade-cluster-drain.yaml
+# UNCORDON
+- name: Uncordon k3s node and wait for pods
+  when: k3s_action == 'uncordon'
+  block:
+    - name: Uncordon
+      ansible.builtin.include_tasks: ops-upgrade-cluster-drain.yaml
       vars:
         node_action: uncordon
         node_name: "{{ k3s_node }}"
 
-    - name: Wait for pods to be ready on K3s node
-      include_tasks: ops-upgrade-cluster-health.yaml
+    - name: Wait for pods to be ready on {{ k3s_node }}
+      ansible.builtin.include_tasks: ops-upgrade-cluster-health.yaml
       vars:
         health_action: pods-ready
         node_name: "{{ k3s_node }}"
-
-    - name: Display K3s node uncordon confirmation
-      debug:
-        msg: "K3s node {{ k3s_node }} is now uncordoned and pods are ready"
-
-  when: k3s_action == 'uncordon'
-
-# VALIDATE K3S NODE
-- block:
-    - name: Verify K3s node status
-      include_tasks: ops-upgrade-cluster-health.yaml
-      vars:
-        health_action: node-ready
-        node_name: "{{ k3s_node }}"
-
-    - name: Verify pods on K3s node
-      include_tasks: ops-upgrade-cluster-health.yaml
-      vars:
-        health_action: pods-ready
-        node_name: "{{ k3s_node }}"
-
-    - name: Display K3s node validation result
-      debug:
-        msg: "K3s node {{ k3s_node }} validation completed successfully"
-
-  when: k3s_action == 'validate'

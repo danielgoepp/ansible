@@ -2,15 +2,18 @@
 """
 Uptime Kuma Maintenance Window Management
 
-Creates or deletes maintenance windows in Uptime Kuma.
+Creates or deletes maintenance windows in Uptime Kuma, or reports down monitors.
 
 Usage:
     python3 uptime_kuma_maintenance.py --action enable --url URL --username USER --password PASS
     python3 uptime_kuma_maintenance.py --action disable --url URL --username USER --password PASS
+    python3 uptime_kuma_maintenance.py --action status --url URL --username USER --password PASS
 
 Action:
     enable  - Create maintenance window (mute alerts)
     disable - Delete maintenance window (unmute alerts)
+    status  - Print any monitors that are not currently UP. Exit 0 if all up,
+              exit 2 if any are down (other errors exit 1).
 
 Requirements:
     pip install uptime-kuma-api
@@ -66,6 +69,46 @@ def create_maintenance(api):
     return True
 
 
+def report_status(api):
+    """Print any monitors that are not currently UP.
+
+    Exit code 0 = all monitors up. Exit code 2 = one or more down/unknown.
+    Monitors of type 'group' are skipped (their state is derived).
+    Monitors that are paused/inactive are skipped.
+    """
+    monitors = api.get_monitors()
+    down = []
+    for m in monitors:
+        if m.get("type") == "group":
+            continue
+        if not m.get("active", True):
+            continue
+        try:
+            beats = api.get_monitor_beats(m["id"], 1)
+        except Exception:
+            beats = []
+        if not beats:
+            continue
+        last = beats[-1]
+        # status: 0=down, 1=up, 2=pending, 3=maintenance
+        if last.get("status") != 1:
+            down.append({
+                "name": m.get("name"),
+                "id": m.get("id"),
+                "status": last.get("status"),
+                "msg": last.get("msg", ""),
+            })
+
+    if down:
+        print(f"DOWN: {len(down)} monitor(s) not up:")
+        for d in down:
+            print(f"  - {d['name']} (id={d['id']}, status={d['status']}): {d['msg']}")
+        return False
+
+    print(f"OK: all {len(monitors)} monitors up")
+    return True
+
+
 def delete_maintenance(api):
     """Delete all Ansible-created maintenance windows."""
     maintenances = api.get_maintenances()
@@ -87,8 +130,8 @@ def delete_maintenance(api):
 
 def main():
     parser = argparse.ArgumentParser(description="Manage Uptime Kuma maintenance windows")
-    parser.add_argument("--action", required=True, choices=["enable", "disable"],
-                        help="enable=create maintenance (mute alerts), disable=delete maintenance (unmute alerts)")
+    parser.add_argument("--action", required=True, choices=["enable", "disable", "status"],
+                        help="enable=create maintenance, disable=delete maintenance, status=report down monitors")
     parser.add_argument("--url", required=True, help="Uptime Kuma URL")
     parser.add_argument("--username", required=True, help="Uptime Kuma username")
     parser.add_argument("--password", required=True, help="Uptime Kuma password")
@@ -100,11 +143,16 @@ def main():
 
         if args.action == "enable":
             success = create_maintenance(api)
-        else:
+            api.disconnect()
+            sys.exit(0 if success else 1)
+        elif args.action == "disable":
             success = delete_maintenance(api)
-
-        api.disconnect()
-        sys.exit(0 if success else 1)
+            api.disconnect()
+            sys.exit(0 if success else 1)
+        else:
+            success = report_status(api)
+            api.disconnect()
+            sys.exit(0 if success else 2)
 
     except Exception as e:
         print(f"ERROR: {e}")

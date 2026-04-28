@@ -1,125 +1,107 @@
 ---
 # Proxmox Node Upgrade Operations
-# Safely upgrades a Proxmox VE node including package updates and reboot if needed
+# apt update && dist-upgrade, reboot, wait for services and Ceph to settle.
+# noout is set globally before this runs, so HEALTH_WARN-noout is treated as healthy.
 #
 # Parameters:
-#   pve_user: Proxmox user (default: root)
-#   wait_timeout: timeout for wait operations in seconds (default: 600)
-#   reboot_wait: time to wait after reboot in seconds (default: 60)
+#   pve_node: target Proxmox node (delegate_to)
+#   wait_timeout: timeout for reboot wait (default: 600)
+#   reboot_wait: post-reboot delay (default: 60)
 
-- name: Set default Proxmox parameters
-  set_fact:
-    pve_user: "{{ pve_user | default('root') }}"
+- name: Set Proxmox upgrade defaults
+  ansible.builtin.set_fact:
     wait_timeout: "{{ wait_timeout | default(600) }}"
     reboot_wait: "{{ reboot_wait | default(60) }}"
 
-- name: Display current Proxmox node being processed
-  debug:
-    msg: "=== Processing Proxmox node {{ inventory_hostname }} ==="
+- name: Display Proxmox upgrade target
+  ansible.builtin.debug:
+    msg: "=== Upgrade Proxmox node {{ pve_node }} ==="
 
-- name: Update package cache
-  apt:
-    update_cache: yes
+- name: apt update on {{ pve_node }}
+  ansible.builtin.apt:
+    update_cache: true
     cache_valid_time: 0
+  delegate_to: "{{ pve_node }}"
+  become: true
 
-- name: Check for available upgrades
-  shell: apt list --upgradable 2>/dev/null | grep -v "WARNING" | wc -l
-  register: upgrades_available
+- name: List upgradable packages on {{ pve_node }}
+  ansible.builtin.shell:
+    cmd: apt list --upgradable 2>/dev/null | grep -v '^Listing' | wc -l
+  delegate_to: "{{ pve_node }}"
+  become: true
+  register: pve_upgradable
   changed_when: false
 
-- name: Display upgrade count
-  debug:
-    msg: "{{ upgrades_available.stdout }} packages available for upgrade on {{ inventory_hostname }}"
+- name: Display upgradable count
+  ansible.builtin.debug:
+    msg: "{{ pve_upgradable.stdout }} packages available for upgrade on {{ pve_node }}"
 
-- name: Upgrade all packages
-  apt:
+- name: apt dist-upgrade on {{ pve_node }}
+  ansible.builtin.apt:
     upgrade: dist
-    autoclean: yes
-    autoremove: yes
-  register: apt_upgrade_result
-  when: upgrades_available.stdout | int > 0
+    autoclean: true
+    autoremove: true
+    dpkg_options: force-confdef,force-confold
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  delegate_to: "{{ pve_node }}"
+  become: true
+  register: pve_upgrade_result
+  when: pve_upgradable.stdout | int > 0
 
-- name: Display upgrade results
-  debug:
-    var: apt_upgrade_result.stdout_lines
-  when: apt_upgrade_result is not skipped
+- name: Display Proxmox upgrade output
+  ansible.builtin.debug:
+    var: pve_upgrade_result.stdout_lines
+  when: pve_upgrade_result is not skipped
 
-- name: Reboot Proxmox node
-  reboot:
-    reboot_timeout: "{{ wait_timeout }}"
-    post_reboot_delay: "{{ reboot_wait }}"
-    msg: "Rebooting {{ inventory_hostname }} after package upgrades"
+- name: Reboot {{ pve_node }}
+  ansible.builtin.reboot:
+    reboot_timeout: "{{ wait_timeout | int }}"
+    post_reboot_delay: "{{ reboot_wait | int }}"
+    msg: "Rebooting after Proxmox upgrade"
+  delegate_to: "{{ pve_node }}"
+  become: true
 
-- name: Wait for node to come back online after reboot
-  wait_for_connection:
+- name: Wait for {{ pve_node }} to be reachable
+  ansible.builtin.wait_for_connection:
     connect_timeout: 10
     delay: 30
     sleep: 10
-    timeout: "{{ wait_timeout }}"
+    timeout: "{{ wait_timeout | int }}"
+  delegate_to: "{{ pve_node }}"
 
-- name: Wait for system to stabilize after reboot
-  pause:
-    seconds: 30
-
-- name: Wait for Proxmox services to be ready
-  systemd:
+- name: Verify Proxmox services are running on {{ pve_node }}
+  ansible.builtin.systemd:
     name: "{{ item }}"
     state: started
+  delegate_to: "{{ pve_node }}"
+  become: true
   loop:
     - pveproxy
     - pvedaemon
     - pvestatd
-  register: pve_services
 
-- name: Check Proxmox cluster status
-  command: pvecm status
-  register: cluster_status
+- name: Check pvecm status from {{ pve_node }}
+  ansible.builtin.command: pvecm status
+  delegate_to: "{{ pve_node }}"
+  become: true
+  register: pvecm_after
+  changed_when: false
   failed_when: false
 
-- name: Display Proxmox cluster status
-  debug:
-    var: cluster_status.stdout_lines
-  when: cluster_status.rc == 0
+- name: Display pvecm status
+  ansible.builtin.debug:
+    var: pvecm_after.stdout_lines
+  when: pvecm_after.rc == 0
 
-- name: Check Ceph status on this node
-  command: ceph status
-  register: ceph_status
-  failed_when: false
+- name: Wait for Ceph to settle (noout allowed)
+  ansible.builtin.include_tasks: ops-upgrade-cluster-ceph-health.yaml
+  vars:
+    ceph_host: "{{ pve_node }}"
+    allow_noout: true
+    ceph_health_retries: 60
+    ceph_health_delay: 30
 
-- name: Display initial Ceph status
-  debug:
-    var: ceph_status.stdout_lines
-  when: ceph_status.rc == 0
-
-- name: Wait for Ceph cluster to be healthy
-  command: ceph health
-  register: ceph_health_check
-  until: ceph_health_check.stdout == "HEALTH_OK"
-  retries: 60
-  delay: 30
-  failed_when: false
-  when: ceph_status.rc == 0
-
-- name: Display Ceph health wait result
-  debug:
-    msg: "Ceph health status: {{ ceph_health_check.stdout | default('Not available') }}"
-  when: ceph_status.rc == 0
-
-- name: Display Ceph health status message
-  debug:
-    msg: "{{ '✓ Ceph cluster is healthy - safe to proceed' if ceph_health_check.stdout == 'HEALTH_OK' else '⚠ Ceph cluster may need attention before proceeding' }}"
-  when: ceph_status.rc == 0
-
-- name: Get detailed Ceph status after health check
-  command: ceph status
-  register: ceph_final_status
-  when: ceph_status.rc == 0
-
-- name: Display final Ceph status
-  debug:
-    var: ceph_final_status.stdout_lines
-  when: ceph_status.rc == 0
-
-- name: Proxmox node upgrade completed
-  debug:
-    msg: "=== Proxmox node {{ inventory_hostname }} upgrade completed successfully ==="
+- name: Proxmox upgrade complete
+  ansible.builtin.debug:
+    msg: "=== Proxmox node {{ pve_node }} upgrade complete ==="

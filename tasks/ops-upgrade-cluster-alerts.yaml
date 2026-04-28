@@ -1,0 +1,23 @@
+---
+# Alerts wrapper - mutes/unmutes alerts across all monitoring systems.
+# Fans out to graylog, alertmanager, uptime-kuma sub-tasks.
+#
+# Parameters:
+#   maintenance_action: "enable" (mute) or "disable" (unmute)
+#   alert_duration_hours: silence duration for alertmanager (default: 8)
+
+- name: Set alert credentials and config
+  ansible.builtin.set_fact:
+    graylog_token: "{{ awx_graylog_token | default(vault_graylog_token | default('')) }}"
+    uptime_kuma_username: "{{ awx_uptime_kuma_username | default(vault_uptime_kuma_username | default('')) }}"
+    uptime_kuma_password: "{{ awx_uptime_kuma_password | default(vault_uptime_kuma_password | default('')) }}"
+    alert_duration_hours: "{{ alert_duration_hours | default(8) }}"
+
+- name: Manage Graylog alerts
+  ansible.builtin.include_tasks: ops-upgrade-cluster-alerts-graylog.yaml
+
+- name: Manage Alertmanager silences
+  ansible.builtin.include_tasks: ops-upgrade-cluster-alerts-alertmanager.yaml
+
+- name: Manage Uptime Kuma maintenance window
+  ansible.builtin.include_tasks: ops-upgrade-cluster-alerts-uptime-kuma.yaml
