@@ -69,6 +69,41 @@ cat inventories/group_vars/all/k3s_applications.yml  # List available applicatio
 ls playbooks/k3s/                                     # List K3s playbooks
 ```
 
+### Cluster Upgrade
+
+Rolling upgrade of the Proxmox cluster, the Ubuntu k3s VMs, and k3s itself.
+Safety-critical playbook with operator confirmation prompts at each major step.
+
+```bash
+# Required: target k3s version (no default)
+ansible-playbook playbooks/ops-upgrade-cluster.yaml \
+  -e k3s_target_version=v1.31.5+k3s1
+
+# Skip pause prompts (run unattended)
+ansible-playbook playbooks/ops-upgrade-cluster.yaml \
+  -e k3s_target_version=v1.31.5+k3s1 -e interactive_mode=false
+
+# Quieter status output
+ansible-playbook playbooks/ops-upgrade-cluster.yaml \
+  -e k3s_target_version=v1.31.5+k3s1 -e verbose_status=false
+```
+
+Pair upgrade order is hardcoded: `pve15+k3s-prod-15` → `pve13+k3s-prod-13` →
+`pve12+k3s-prod-12` → `pve11+k3s-prod-11`. opnsense is migrated `pve11→pve12`
+before the pve11 pair, then back after.
+
+Pre-flight runs once: a health gate (Ceph HEALTH_OK, no active Alertmanager
+alerts, no down Uptime Kuma monitors, opnsense on pve11), then deletes the
+iotawatt-sync deployment, shuts down shared VMs (ui-network, dev, smb,
+backup) for the entire window, sets Ceph `noout`, sets CNPG maintenance, and
+mutes alerts. Per pair: drain → apt dist-upgrade on the k3s VM → in-place
+k3s install (no `--server` flag) → shutdown VM → apt dist-upgrade + reboot
+PVE → start VM → uncordon. Post-flight reverses the pre-flight gates.
+
+The Ceph health check treats `HEALTH_WARN` whose only condition involves
+`noout` as healthy (only after `noout` is set). Any other unhealthy state
+retries with backoff and then prompts the operator with continue/retry/abort.
+
 ### Maintenance Mode
 
 Manage alerts across monitoring systems (Graylog, Alertmanager, Uptime Kuma).
@@ -332,13 +367,17 @@ All cluster upgrade task files use the prefix `ops-upgrade-cluster-` for consist
 
 **Task Categories**:
 
-- Alert and monitoring management
-- Ceph storage operations
-- Database maintenance mode
-- Node lifecycle (drain, shutdown, startup, uncordon)
-- Health validation
-- VM/LXC operations
-- Orchestration tasks
+- Alert and monitoring management (alerts wrapper + per-system: graylog, alertmanager, uptime-kuma)
+- Ceph storage operations (`ceph-noout`, `ceph-health` reusable healthy-or-noout-only check)
+- Database maintenance mode (`cnpg-maintenance`)
+- Node lifecycle (drain, shutdown via Proxmox API, startup via Proxmox API, uncordon)
+- Health validation (`health` for k3s, `preflight` for full cluster gate)
+- VM/LXC operations (`vm`, using `community.proxmox` modules)
+- Ubuntu apt dist-upgrade (`ubuntu`)
+- K3s in-place version install (`k3s-install`)
+- iotawatt-sync deployment management (`iotawatt`)
+- Proxmox node upgrade (`proxmox`)
+- Orchestration (`paired` for per-pair sequencing)
 
 Use `ls tasks/ops-upgrade-cluster-*.yaml` to see all cluster upgrade tasks.
 

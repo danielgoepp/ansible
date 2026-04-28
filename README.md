@@ -55,6 +55,28 @@ ansible-playbook playbooks/esphome/upgrade-esphome.yaml
 ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<device-name>
 ```
 
+### Cluster Upgrade
+
+Rolling upgrade of the Proxmox cluster, the Ubuntu k3s VMs, and k3s itself.
+Includes a pre-flight health gate, per-pair sequencing, and operator
+confirmation prompts at each major step.
+
+```bash
+# Required: target k3s version
+ansible-playbook playbooks/ops-upgrade-cluster.yaml \
+  -e k3s_target_version=<version>
+
+# Run unattended (skip pause prompts)
+ansible-playbook playbooks/ops-upgrade-cluster.yaml \
+  -e k3s_target_version=<version> -e interactive_mode=false
+```
+
+Per pair, the playbook drains the k3s node, dist-upgrades the Ubuntu VM,
+runs an in-place k3s version install, shuts down the VM, dist-upgrades and
+reboots the PVE host, brings the VM back up, and uncordons. Pre-flight
+shuts down non-essential VMs for the duration of the maintenance window
+and mutes alerts; post-flight reverses both.
+
 ### Maintenance Mode
 
 ```bash
