@@ -40,7 +40,8 @@
       K3S_TOKEN={{ k3s_token }}
       INSTALL_K3S_VERSION={{ k3s_target_version }}
       INSTALL_K3S_SKIP_START=true
-      sh -s - server
+      INSTALL_K3S_EXEC="server"
+      sh -s -
       --disable servicelb
       --disable traefik
       --flannel-backend=none
