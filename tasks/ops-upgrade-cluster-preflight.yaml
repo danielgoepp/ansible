@@ -26,7 +26,9 @@
 
 - name: Display preflight banner
   ansible.builtin.debug:
-    msg: |
+    msg: "{{ _msg.split('\n') }}"
+  vars:
+    _msg: |
       ========================================
       PREFLIGHT HEALTH GATE
       ========================================
@@ -55,7 +57,9 @@
   rescue:
     - name: Display Alertmanager preflight failure
       ansible.builtin.debug:
-        msg: |
+        msg: "{{ _msg.split('\n') }}"
+      vars:
+        _msg: |
           ========================================
           ALERTMANAGER PREFLIGHT FAILED
           ========================================
@@ -117,7 +121,9 @@
   rescue:
     - name: Display Uptime Kuma preflight failure
       ansible.builtin.debug:
-        msg: |
+        msg: "{{ _msg.split('\n') }}"
+      vars:
+        _msg: |
           ========================================
           UPTIME KUMA PREFLIGHT FAILED
           ========================================
@@ -175,7 +181,9 @@
   rescue:
     - name: Display opnsense location failure
       ansible.builtin.debug:
-        msg: |
+        msg: "{{ _msg.split('\n') }}"
+      vars:
+        _msg: |
           ========================================
           OPNSENSE LOCATION CHECK FAILED
           ========================================
@@ -213,7 +221,9 @@
 
 - name: Preflight complete
   ansible.builtin.debug:
-    msg: |
+    msg: "{{ _msg.split('\n') }}"
+  vars:
+    _msg: |
       ========================================
       PREFLIGHT PASSED
       ========================================

@@ -38,7 +38,9 @@
 
 - name: Display paired upgrade banner
   ansible.builtin.debug:
-    msg: |
+    msg: "{{ _msg.split('\n') }}"
+  vars:
+    _msg: |
       ===================================================
       PAIRED UPGRADE: {{ pve_node }} + {{ k3s_node }}
       ===================================================
@@ -93,9 +95,7 @@
 
     - name: Display pre-pair status
       ansible.builtin.debug:
-        msg: |
-          {{ pair_pre_vms.stdout }}
-          {{ pair_pre_k3s.stdout }}
+        msg: "{{ (pair_pre_vms.stdout + '\n' + pair_pre_k3s.stdout).split('\n') }}"
       when: verbose_status | bool
 
 - name: Confirm before starting this pair
@@ -316,7 +316,9 @@
 
     - name: Display pair completion
       ansible.builtin.debug:
-        msg: |
+        msg: "{{ _msg.split('\n') }}"
+      vars:
+        _msg: |
           ===================================================
           PAIR COMPLETE: {{ pve_node }} + {{ k3s_node }}
           ===================================================

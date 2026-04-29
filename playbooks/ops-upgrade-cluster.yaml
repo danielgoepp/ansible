@@ -89,7 +89,9 @@
 
     - name: Display upgrade plan
       ansible.builtin.debug:
-        msg: |
+        msg: "{{ _msg.split('\n') }}"
+      vars:
+        _msg: |
           ===================================================
           CLUSTER MAINTENANCE PLAYBOOK
           ===================================================
@@ -279,7 +281,9 @@
 
     - name: Cluster maintenance complete
       ansible.builtin.debug:
-        msg: |
+        msg: "{{ _msg.split('\n') }}"
+      vars:
+        _msg: |
           ===================================================
           CLUSTER MAINTENANCE COMPLETE
           ===================================================

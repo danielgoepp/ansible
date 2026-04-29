@@ -70,7 +70,9 @@
   rescue:
     - name: Display pods-ready timeout
       ansible.builtin.debug:
-        msg: |
+        msg: "{{ _msg.split('\n') }}"
+      vars:
+        _msg: |
           ========================================
           PODS-READY TIMEOUT on {{ node_name }}
           ========================================

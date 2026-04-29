@@ -40,7 +40,9 @@
   rescue:
     - name: Display ceph health failure
       ansible.builtin.debug:
-        msg: |
+        msg: "{{ _msg.split('\n') }}"
+      vars:
+        _msg: |
           ========================================
           CEPH HEALTH CHECK FAILED
           ========================================
