@@ -58,8 +58,8 @@ ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<devic
 ### Cluster Upgrade
 
 Rolling upgrade of the Proxmox cluster, the Ubuntu k3s VMs, and k3s itself.
-Includes a pre-flight health gate, per-pair sequencing, and operator
-confirmation prompts at each major step.
+Includes a pre-flight health gate, Ceph health checks before every drain,
+post-drain pod snapshots, and operator confirmation prompts throughout.
 
 ```bash
 # Required: target k3s version
@@ -71,11 +71,15 @@ ansible-playbook playbooks/ops-upgrade-cluster.yaml \
   -e k3s_target_version=<version> -e interactive_mode=false
 ```
 
-Per pair, the playbook drains the k3s node, dist-upgrades the Ubuntu VM,
-runs an in-place k3s version install, shuts down the VM, dist-upgrades and
-reboots the PVE host, brings the VM back up, and uncordons. Pre-flight
-shuts down non-essential VMs for the duration of the maintenance window
-and mutes alerts; post-flight reverses both.
+Pre-flight checks cluster health, then pauses for operator confirmation before
+making any changes (shutdown shared VMs, set Ceph noout, enable CNPG
+maintenance, mute alerts). Each pair opens with a Ceph health check, a
+pre-pair status snapshot, and an operator pause; after drain a pod snapshot is
+shown before the Ubuntu upgrade begins; and a second pause gates the PVE
+reboot. The pve11 pair additionally migrates opnsense to pve12 with a network
+connectivity test before and after. Post-flight pauses for a final cluster
+review before reversing all maintenance gates, and waits for Ceph HEALTH_OK
+after noout is cleared.
 
 ### Maintenance Mode
 

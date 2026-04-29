@@ -12,22 +12,25 @@
 #   1. Validate inputs
 #   2. Health gate (Ceph HEALTH_OK, no Alertmanager alerts, no down Uptime Kuma
 #      monitors, opnsense on pve11)
-#   3. Stop iotawatt-sync
-#   4. Shutdown shared VMs/LXCs (ui-network, dev, smb, backup) for the entire window
-#   5. Set Ceph noout flag
-#   6. Set CNPG maintenance mode
-#   7. Mute alerts (Graylog, Alertmanager, Uptime Kuma)
+#   3. [PAUSE] Confirm before any cluster-wide changes
+#   4. Stop iotawatt-sync
+#   5. Shutdown shared VMs/LXCs (ui-network, dev, smb, backup) for the entire window
+#   6. Set Ceph noout flag
+#   7. Set CNPG maintenance mode
+#   8. Mute alerts (Graylog, Alertmanager, Uptime Kuma)
 #
 # Per pair:
 #   See tasks/ops-upgrade-cluster-paired.yaml
 #
 # Post-flight:
 #   1. Cluster health summary
-#   2. Unmute alerts
-#   3. Disable CNPG maintenance mode
-#   4. Disable Ceph noout flag
-#   5. Start shared VMs/LXCs
-#   6. Re-apply iotawatt-sync
+#   2. [PAUSE] Confirm before reversing maintenance gates
+#   3. Unmute alerts
+#   4. Disable CNPG maintenance mode (displays kubectl get cluster -A)
+#   5. Disable Ceph noout flag
+#   6. Wait for Ceph HEALTH_OK
+#   7. Start shared VMs/LXCs (verified running via Proxmox API)
+#   8. Re-apply iotawatt-sync
 #
 # Required:
 #   -e k3s_target_version=v1.31.5+k3s1
@@ -127,6 +130,26 @@
     - name: Pre-flight health gate
       ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-preflight.yaml
 
+    - name: Confirm pre-flight passed — proceed with maintenance setup
+      ansible.builtin.pause:
+        prompt: |
+
+          Pre-flight passed. About to make cluster-wide changes:
+            - Shutdown shared VMs (ui-network, dev, smb, backup)
+            - Set Ceph noout flag
+            - Enable CNPG maintenance mode
+            - Mute alerts (Graylog, Alertmanager, Uptime Kuma)
+          Proceed? (yes/no)
+      register: preflight_proceed_confirm
+      when: interactive_mode | bool
+
+    - name: Abort if pre-flight proceed not confirmed
+      ansible.builtin.fail:
+        msg: "Cluster upgrade cancelled before maintenance setup"
+      when:
+        - interactive_mode | bool
+        - preflight_proceed_confirm.user_input | lower not in ['yes', 'y']
+
     # PRE-FLIGHT: stop iotawatt-sync
     - name: Stop iotawatt-sync
       ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
@@ -189,12 +212,37 @@
   gather_facts: false
   vars:
     shared_shutdowns: "{{ hostvars['localhost']['shared_shutdowns'] }}"
+    interactive_mode: "{{ hostvars['localhost']['interactive_mode'] | default(true) }}"
 
   tasks:
     - name: Cluster health summary
       ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-health.yaml
       vars:
         health_action: cluster-status
+
+    - name: Confirm post-flight cleanup
+      ansible.builtin.pause:
+        prompt: |
+
+          ===================================================
+          ALL PAIRS COMPLETE — REVIEW CLUSTER STATUS ABOVE
+          ===================================================
+          About to begin post-flight cleanup:
+            - Unmute alerts (Graylog, Alertmanager, Uptime Kuma)
+            - Disable CNPG maintenance mode
+            - Disable Ceph noout flag (rebalancing will resume)
+            - Start shared VMs (ui-network, dev, smb, backup)
+            - Re-apply iotawatt-sync
+          Proceed? (yes/no)
+      register: postflight_confirm
+      when: interactive_mode | bool
+
+    - name: Abort if post-flight not confirmed
+      ansible.builtin.fail:
+        msg: "Post-flight cancelled by operator"
+      when:
+        - interactive_mode | bool
+        - postflight_confirm.user_input | lower not in ['yes', 'y']
 
     - name: Unmute alerts
       ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
@@ -210,6 +258,13 @@
       ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
       vars:
         maintenance_action: disable
+
+    - name: Wait for Ceph HEALTH_OK after noout unset
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-health.yaml
+      vars:
+        allow_noout: false
+        ceph_health_retries: 60
+        ceph_health_delay: 30
 
     - name: Start shared VMs/LXCs
       ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-vm.yaml

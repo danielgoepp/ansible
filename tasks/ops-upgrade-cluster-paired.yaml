@@ -1,16 +1,23 @@
 ---
 # Paired Proxmox + K3s Node Upgrade
 # Per-pair sequence:
-#   0a. (pve11 only) Migrate opnsense pve11 -> pve12
-#   1.  Drain k3s node
-#   2.  Ubuntu apt dist-upgrade on the k3s VM
-#   3.  k3s in-place version install (skip-start)
-#   4.  Shutdown k3s VM
-#   5.  Upgrade Proxmox node + reboot, wait for ceph
-#   6.  Start k3s VM
-#   7.  Wait for k3s node Ready
-#   8.  Uncordon k3s node
-#   9.  (pve11 only) Migrate opnsense pve12 -> pve11
+#   PRE. Ceph health check (allow noout)
+#   PRE. [PAUSE] Confirm before starting pair
+#   0a.  (pve11 only) Migrate opnsense pve11 -> pve12
+#   0b.  (pve11 only) ping google.com + [PAUSE] confirm network OK
+#   1.   Drain k3s node
+#   1b.  Post-drain pod snapshot + [PAUSE] confirm drain acceptable
+#   2.   Ubuntu apt dist-upgrade on the k3s VM
+#   3.   k3s in-place version install (skip-start)
+#   4.   Shutdown k3s VM
+#   4b.  [PAUSE] Confirm before Proxmox upgrade (CRITICAL)
+#   5.   Upgrade Proxmox node + reboot, wait for Ceph HEALTH_WARN-noout-only
+#   6.   Start k3s VM
+#   7.   Wait for k3s node Ready
+#   8.   Uncordon k3s node + wait for pods ready (operator prompt on timeout)
+#   9.   (pve11 only) Migrate opnsense pve12 -> pve11
+#   9b.  (pve11 only) ping google.com + [PAUSE] confirm network OK
+#   END. [PAUSE] Confirm pair complete before next pair
 #
 # Parameters:
 #   pve_node: Proxmox host (e.g. pve11)
@@ -49,6 +56,14 @@
       {% if is_opnsense_pair %}
       9. Migrate opnsense {{ opnsense_failover_node }} -> {{ opnsense_home_node }}
       {% endif %}
+
+# PRE-PAIR: Ceph health check before every drain
+- name: Ceph health check before pair upgrade
+  ansible.builtin.include_tasks: ops-upgrade-cluster-ceph-health.yaml
+  vars:
+    allow_noout: true
+    ceph_health_retries: 20
+    ceph_health_delay: 30
 
 - name: Pre-pair status snapshot
   block:
@@ -111,12 +126,80 @@
         target_node: "{{ opnsense_failover_node }}"
   when: is_opnsense_pair | bool
 
+# POST-MIGRATE-AWAY: verify network is routing through opnsense on failover node
+- name: Test network connectivity after opnsense migrate-away
+  ansible.builtin.command: ping -c 3 google.com
+  register: post_migrate_away_ping
+  changed_when: false
+  failed_when: false
+  when: is_opnsense_pair | bool
+
+- name: Display migrate-away network test result
+  ansible.builtin.debug:
+    msg: "{{ post_migrate_away_ping.stdout_lines | default([]) }}"
+  when: is_opnsense_pair | bool
+
+- name: Confirm network OK after opnsense migrate-away
+  ansible.builtin.pause:
+    prompt: |
+
+      opnsense migrated to {{ opnsense_failover_node }}.
+      Network test (ping google.com): {{ 'PASSED' if post_migrate_away_ping.rc == 0 else 'FAILED' }}
+      Verify routing is working before draining {{ k3s_node }}.
+      Continue? (yes/no)
+  register: post_migrate_away_confirm
+  when:
+    - is_opnsense_pair | bool
+    - interactive_mode | bool
+
+- name: Abort if network not confirmed after migrate-away
+  ansible.builtin.fail:
+    msg: "Aborting - network not confirmed after opnsense migrate-away"
+  when:
+    - is_opnsense_pair | bool
+    - interactive_mode | bool
+    - post_migrate_away_confirm.user_input | lower not in ['yes', 'y']
+
 # STEP 1: drain
 - name: Drain k3s node
   ansible.builtin.include_tasks: ops-upgrade-cluster-k3s.yaml
   vars:
     k3s_action: drain
     k3s_node: "{{ k3s_node }}"
+
+# POST-DRAIN: snapshot + operator confirmation
+- name: Post-drain cluster snapshot
+  ansible.builtin.shell:
+    cmd: |
+      echo "=== Nodes ==="
+      kubectl get nodes -o wide
+      echo ""
+      echo "=== Non-running / non-completed pods ==="
+      kubectl get pods --all-namespaces --no-headers | grep -v -E '\s+Running\s+|\s+Completed\s+' || echo "(none)"
+  delegate_to: localhost
+  register: post_drain_snapshot
+  changed_when: false
+
+- name: Display post-drain snapshot
+  ansible.builtin.debug:
+    msg: "{{ post_drain_snapshot.stdout }}"
+
+- name: Confirm drain looks acceptable
+  ansible.builtin.pause:
+    prompt: |
+
+      {{ k3s_node }} drained. Review pod status above.
+      Non-running pods should be expected for this maintenance window.
+      Continue to upgrade {{ k3s_node }}? (yes/no)
+  register: post_drain_confirm
+  when: interactive_mode | bool
+
+- name: Abort if drain not confirmed acceptable
+  ansible.builtin.fail:
+    msg: "Upgrade cancelled after drain of {{ k3s_node }}"
+  when:
+    - interactive_mode | bool
+    - post_drain_confirm.user_input | lower not in ['yes', 'y']
 
 # STEP 2: ubuntu apt dist-upgrade
 - name: Ubuntu apt dist-upgrade on {{ k3s_node }}
@@ -188,6 +271,40 @@
         vm_name: opnsense
         target_node: "{{ opnsense_failover_node }}"
   when: is_opnsense_pair | bool
+
+# POST-MIGRATE-BACK: verify network is routing through opnsense on home node
+- name: Test network connectivity after opnsense migrate-back
+  ansible.builtin.command: ping -c 3 google.com
+  register: post_migrate_back_ping
+  changed_when: false
+  failed_when: false
+  when: is_opnsense_pair | bool
+
+- name: Display migrate-back network test result
+  ansible.builtin.debug:
+    msg: "{{ post_migrate_back_ping.stdout_lines | default([]) }}"
+  when: is_opnsense_pair | bool
+
+- name: Confirm network OK after opnsense migrate-back
+  ansible.builtin.pause:
+    prompt: |
+
+      opnsense migrated back to {{ opnsense_home_node }}.
+      Network test (ping google.com): {{ 'PASSED' if post_migrate_back_ping.rc == 0 else 'FAILED' }}
+      Verify routing is restored before continuing.
+      Continue? (yes/no)
+  register: post_migrate_back_confirm
+  when:
+    - is_opnsense_pair | bool
+    - interactive_mode | bool
+
+- name: Abort if network not confirmed after migrate-back
+  ansible.builtin.fail:
+    msg: "Aborting - network not confirmed after opnsense migrate-back"
+  when:
+    - is_opnsense_pair | bool
+    - interactive_mode | bool
+    - post_migrate_back_confirm.user_input | lower not in ['yes', 'y']
 
 - name: Pair completion status
   block:

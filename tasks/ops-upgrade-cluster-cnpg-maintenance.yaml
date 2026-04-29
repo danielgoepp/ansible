@@ -35,4 +35,14 @@
       debug:
         msg: "CNPG maintenance mode disabled - database operations resumed"
 
+    - name: Get CNPG cluster status
+      ansible.builtin.command: kubectl get cluster --all-namespaces
+      register: cnpg_cluster_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display CNPG cluster status
+      ansible.builtin.debug:
+        msg: "{{ cnpg_cluster_status.stdout_lines }}"
+
   when: maintenance_action == 'disable'

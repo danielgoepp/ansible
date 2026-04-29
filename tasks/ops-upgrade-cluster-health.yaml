@@ -13,6 +13,7 @@
     node_name: "{{ node_name | default(inventory_hostname) }}"
     wait_timeout: "{{ wait_timeout | default(300) }}"
     stabilize_delay: "{{ stabilize_delay | default(60) }}"
+    interactive_mode: "{{ interactive_mode | default(hostvars['localhost']['interactive_mode'] | default(true)) }}"
 
 - name: Validate health_action parameter
   fail:
@@ -21,12 +22,6 @@
 
 # CHECK NODE READY STATUS
 - block:
-    - name: Check k3s service is running
-      systemd:
-        name: k3s
-        state: started
-      register: k3s_service
-
     - name: Wait for k3s node to be ready
       delegate_to: localhost
       command: kubectl wait --for=condition=Ready node/{{ node_name }} --timeout={{ wait_timeout }}s
@@ -62,7 +57,6 @@
       until: not_ready_pods.stdout == ""
       retries: 24
       delay: 10
-      failed_when: false
 
     - name: Display final pods status on node
       delegate_to: localhost
@@ -72,6 +66,49 @@
     - name: Show all pods on node
       debug:
         var: node_pods.stdout_lines
+
+  rescue:
+    - name: Display pods-ready timeout
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          PODS-READY TIMEOUT on {{ node_name }}
+          ========================================
+          The following pods on {{ node_name }} are not Running after the wait timeout:
+          {{ not_ready_pods.stdout | default('(no output)') }}
+
+    - name: Show all pods on node after timeout
+      delegate_to: localhost
+      ansible.builtin.command: kubectl get pods --all-namespaces --field-selector spec.nodeName={{ node_name }}
+      register: node_pods_timeout
+      changed_when: false
+
+    - name: Display all pods on node after timeout
+      ansible.builtin.debug:
+        var: node_pods_timeout.stdout_lines
+
+    - name: Operator decision on pods-ready timeout
+      ansible.builtin.pause:
+        prompt: |
+
+          Some pods on {{ node_name }} are not ready after the wait timeout.
+          If these are expected to be down for this maintenance window, continue.
+          [c]ontinue  (proceed despite non-ready pods)
+          [a]bort     (fail the playbook)
+      register: pods_ready_decision
+      when: interactive_mode | bool
+
+    - name: Abort if operator chose abort
+      ansible.builtin.fail:
+        msg: "Operator aborted: pods not ready on {{ node_name }} after timeout"
+      when:
+        - interactive_mode | bool
+        - pods_ready_decision.user_input | lower in ['a', 'abort']
+
+    - name: Fail if non-interactive and pods not ready
+      ansible.builtin.fail:
+        msg: "Pods not ready on {{ node_name }} after timeout and interactive_mode=false"
+      when: not (interactive_mode | bool)
 
   when: health_action == 'pods-ready'
 

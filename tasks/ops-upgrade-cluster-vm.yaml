@@ -153,6 +153,24 @@
       loop_control:
         label: "{{ item.vm_name }} ({{ item.vm_id }}) on {{ item.host_node }}"
 
+    - name: Verify QEMU VMs are running
+      community.proxmox.proxmox_vm_info:
+        api_user: root@pam
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ item.host_node }}"
+        node: "{{ item.host_node }}"
+        vmid: "{{ item.vm_id }}"
+      register: qemu_start_status
+      until: >
+        qemu_start_status.proxmox_vms | default([]) | length > 0 and
+        qemu_start_status.proxmox_vms[0].status == 'running'
+      retries: 30
+      delay: 10
+      loop: "{{ vm_shutdowns | selectattr('vm_type', 'equalto', 'qemu') | list }}"
+      loop_control:
+        label: "{{ item.vm_name }} ({{ item.vm_id }}) on {{ item.host_node }}"
+
     - name: Start LXC containers
       community.proxmox.proxmox:
         api_user: root@pam
@@ -163,6 +181,24 @@
         vmid: "{{ item.vm_id }}"
         state: started
         timeout: 300
+      loop: "{{ vm_shutdowns | selectattr('vm_type', 'equalto', 'lxc') | list }}"
+      loop_control:
+        label: "{{ item.vm_name }} ({{ item.vm_id }}) on {{ item.host_node }}"
+
+    - name: Verify LXC containers are running
+      community.proxmox.proxmox_vm_info:
+        api_user: root@pam
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ item.host_node }}"
+        node: "{{ item.host_node }}"
+        vmid: "{{ item.vm_id }}"
+      register: lxc_start_status
+      until: >
+        lxc_start_status.proxmox_vms | default([]) | length > 0 and
+        lxc_start_status.proxmox_vms[0].status == 'running'
+      retries: 30
+      delay: 10
       loop: "{{ vm_shutdowns | selectattr('vm_type', 'equalto', 'lxc') | list }}"
       loop_control:
         label: "{{ item.vm_name }} ({{ item.vm_id }}) on {{ item.host_node }}"

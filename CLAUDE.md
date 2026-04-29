@@ -93,16 +93,30 @@ Pair upgrade order is hardcoded: `pve15+k3s-prod-15` → `pve13+k3s-prod-13` →
 before the pve11 pair, then back after.
 
 Pre-flight runs once: a health gate (Ceph HEALTH_OK, no active Alertmanager
-alerts, no down Uptime Kuma monitors, opnsense on pve11), then deletes the
-iotawatt-sync deployment, shuts down shared VMs (ui-network, dev, smb,
-backup) for the entire window, sets Ceph `noout`, sets CNPG maintenance, and
-mutes alerts. Per pair: drain → apt dist-upgrade on the k3s VM → in-place
-k3s install (no `--server` flag) → shutdown VM → apt dist-upgrade + reboot
-PVE → start VM → uncordon. Post-flight reverses the pre-flight gates.
+alerts, no down Uptime Kuma monitors, opnsense on pve11), then an operator
+pause before any changes, then deletes the iotawatt-sync deployment, shuts
+down shared VMs (ui-network, dev, smb, backup) for the entire window, sets
+Ceph `noout`, sets CNPG maintenance, and mutes alerts. Per pair: Ceph health
+check (allow noout) → operator pause to confirm → drain → post-drain pod
+snapshot + operator pause → apt dist-upgrade on the k3s VM → in-place k3s
+install (no `--server` flag, upgrade only) → shutdown VM → operator pause
+before PVE upgrade → apt dist-upgrade + reboot PVE (waits for Ceph
+HEALTH_WARN-noout-only after reboot) → start VM → uncordon → wait for pods
+ready (operator prompt on timeout). On the pve11 pair only: opnsense migrates
+`pve11→pve12` with a `ping google.com` connectivity test and operator pause
+before the drain, then migrates back after uncordon with another connectivity
+test. Post-flight: operator pause with cluster-wide health snapshot → unmute
+alerts → disable CNPG maintenance (displays `kubectl get cluster -A`) →
+disable Ceph `noout` → wait for Ceph HEALTH_OK → start shared VMs (verified
+running via Proxmox API) → re-apply iotawatt-sync.
 
 The Ceph health check treats `HEALTH_WARN` whose only condition involves
 `noout` as healthy (only after `noout` is set). Any other unhealthy state
 retries with backoff and then prompts the operator with continue/retry/abort.
+
+Interactive mode (default) has approximately 21 operator pause points across
+the full run (19 for non-pve11 pairs + 2 extra for opnsense network tests on
+the pve11 pair), plus additional prompts for any Ceph or pods-ready failures.
 
 ### Maintenance Mode
 
