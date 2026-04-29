@@ -48,8 +48,8 @@
   hosts: localhost
   gather_facts: true
   vars:
-    interactive_mode: "{{ interactive_mode | default(true) }}"
-    verbose_status: "{{ verbose_status | default(true) }}"
+    interactive_mode: true
+    verbose_status: true
     # Hardcoded upgrade order per planning notes: 15, 13, 12, 11
     upgrade_pairs:
       - { pve: pve15, k3s: k3s-prod-15 }
