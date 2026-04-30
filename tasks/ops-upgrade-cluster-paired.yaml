@@ -29,16 +29,6 @@
 #   opnsense_home_node (default pve11)
 #   opnsense_failover_node (default pve12)
 
-- name: Check if pair {{ pve_node }} already completed
-  ansible.builtin.stat:
-    path: "{{ hostvars['localhost']['upgrade_state_dir'] }}/pair_{{ pve_node }}_done"
-  register: pair_checkpoint
-
-- name: Pair {{ pve_node }} + {{ k3s_node }} already completed — skipping
-  ansible.builtin.debug:
-    msg: "=== Pair {{ pve_node }} + {{ k3s_node }} already completed — skipping ==="
-  when: pair_checkpoint.stat.exists
-
 - block:
     - name: Set paired upgrade defaults
       ansible.builtin.set_fact:
@@ -384,9 +374,4 @@
             - interactive_mode | bool
             - pair_done_confirm.user_input | lower not in ['yes', 'y']
 
-        - name: Mark pair {{ pve_node }} complete
-          ansible.builtin.file:
-            path: "{{ hostvars['localhost']['upgrade_state_dir'] }}/pair_{{ pve_node }}_done"
-            state: touch
       when: not skip_this_pair | bool
-  when: not pair_checkpoint.stat.exists

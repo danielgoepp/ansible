@@ -86,17 +86,19 @@ ansible-playbook playbooks/ops-upgrade-cluster.yaml \
 # Quieter status output
 ansible-playbook playbooks/ops-upgrade-cluster.yaml \
   -e k3s_target_version=v1.31.5+k3s1 -e verbose_status=false
+
+# Skip pre-flight (health gate + maintenance setup already done)
+ansible-playbook playbooks/ops-upgrade-cluster.yaml \
+  -e k3s_target_version=v1.31.5+k3s1 -e skip_preflight=true
+
+# Skip post-flight cleanup (run cleanup separately or manually)
+ansible-playbook playbooks/ops-upgrade-cluster.yaml \
+  -e k3s_target_version=v1.31.5+k3s1 -e skip_postflight=true
 ```
 
 Pair upgrade order is hardcoded: `pve15+k3s-prod-15` → `pve13+k3s-prod-13` →
 `pve12+k3s-prod-12` → `pve11+k3s-prod-11`. opnsense is migrated `pve11→pve12`
 before the pve11 pair, then back after.
-
-**Checkpoint/resume**: Progress is saved to `/tmp/cluster-upgrade-YYYY-MM-DD/`
-as marker files. If the playbook is re-run after a failure or cancellation, it
-detects the existing checkpoint and prompts to resume or start over. Each
-marker is written only after its phase completes successfully. The state
-directory is deleted on successful completion.
 
 Pre-flight runs once: a health gate (Ceph HEALTH_OK, opnsense on pve11), then
 an operator pause before any changes, then mutes alerts (Graylog, Alertmanager,

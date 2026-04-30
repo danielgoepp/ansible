@@ -34,8 +34,10 @@
 #   -e k3s_target_version=v1.31.5+k3s1
 #
 # Optional:
-#   -e interactive_mode=false   # skip pause prompts
-#   -e verbose_status=false     # quieter status output
+#   -e interactive_mode=false    # skip pause prompts
+#   -e verbose_status=false      # quieter status output
+#   -e skip_preflight=true       # skip health gate and maintenance setup
+#   -e skip_postflight=true      # skip post-flight cleanup
 #
 # Usage:
 #   Local:  ansible-playbook playbooks/ops-upgrade-cluster.yaml \
@@ -48,6 +50,8 @@
   vars:
     interactive_mode: true
     verbose_status: true
+    skip_preflight: false
+    skip_postflight: false
     # Hardcoded upgrade order per planning notes: 15, 13, 12, 11
     upgrade_pairs:
       - { pve: pve15, k3s: k3s-prod-15 }
@@ -73,63 +77,6 @@
           Example: -e k3s_target_version=v1.31.5+k3s1
       when: k3s_target_version is not defined or k3s_target_version | length == 0
 
-    - name: Set upgrade state directory
-      ansible.builtin.set_fact:
-        upgrade_state_dir: "/tmp/cluster-upgrade-{{ ansible_date_time.date }}"
-
-    - name: Create upgrade state directory
-      ansible.builtin.file:
-        path: "{{ upgrade_state_dir }}"
-        state: directory
-        mode: '0755'
-
-    - name: Check for existing upgrade checkpoint
-      ansible.builtin.find:
-        paths: "{{ upgrade_state_dir }}"
-        file_type: file
-      register: upgrade_checkpoint_files
-
-    - name: Display checkpoint notice
-      ansible.builtin.debug:
-        msg: "{{ _msg.split('\n') }}"
-      vars:
-        _completed: "{{ upgrade_checkpoint_files.files | map(attribute='path') | map('basename') | map('replace', '_done', '') | list }}"
-        _msg: |
-          ===================================================
-          CHECKPOINT FOUND — UPGRADE IN PROGRESS
-          ===================================================
-          Completed steps: {{ _completed | join(', ') }}
-      when: upgrade_checkpoint_files.matched > 0
-
-    - name: Prompt to resume or restart
-      ansible.builtin.pause:
-        prompt: |
-
-          [r]esume from checkpoint, or [s]tart over (clears all progress)?
-      register: resume_decision
-      when:
-        - upgrade_checkpoint_files.matched > 0
-        - interactive_mode | bool
-
-    - name: Clear checkpoint for fresh start
-      ansible.builtin.file:
-        path: "{{ upgrade_state_dir }}"
-        state: absent
-      when:
-        - upgrade_checkpoint_files.matched > 0
-        - interactive_mode | bool
-        - resume_decision.user_input | lower not in ['r', 'resume']
-
-    - name: Recreate state directory after restart
-      ansible.builtin.file:
-        path: "{{ upgrade_state_dir }}"
-        state: directory
-        mode: '0755'
-      when:
-        - upgrade_checkpoint_files.matched > 0
-        - interactive_mode | bool
-        - resume_decision.user_input | lower not in ['r', 'resume']
-
     # Persist play vars as facts so they survive across plays (play vars are
     # scoped to a single play; facts persist on the host for the run).
     - name: Persist cross-play configuration as facts
@@ -141,7 +88,6 @@
         opnsense_vm_id: "{{ opnsense_vm_id }}"
         opnsense_home_node: "{{ opnsense_home_node }}"
         opnsense_failover_node: "{{ opnsense_failover_node }}"
-        upgrade_state_dir: "{{ upgrade_state_dir }}"
 
     - name: Display upgrade plan
       ansible.builtin.debug:
@@ -154,6 +100,8 @@
           k3s target version : {{ k3s_target_version }}
           Interactive mode   : {{ interactive_mode }}
           Verbose status     : {{ verbose_status }}
+          Skip pre-flight    : {{ skip_preflight }}
+          Skip post-flight   : {{ skip_postflight }}
 
           Upgrade pair order :
           {% for p in upgrade_pairs %}
@@ -184,27 +132,13 @@
         - interactive_mode | bool
         - top_confirm.user_input | lower not in ['yes', 'y']
 
-    # Check whether maintenance setup already ran (resume scenario).
-    # Must happen before the preflight so we can pass allow_noout correctly —
-    # if noout is already set, the preflight must accept HEALTH_WARN/noout.
-    - name: Check maintenance setup checkpoint
-      ansible.builtin.stat:
-        path: "{{ upgrade_state_dir }}/maintenance_setup_done"
-      register: maintenance_setup_checkpoint
-
-    # PRE-FLIGHT: health gate (always runs, even on resume)
-    - name: Pre-flight health gate
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-preflight.yaml
-      vars:
-        preflight_allow_noout: "{{ maintenance_setup_checkpoint.stat.exists }}"
-
-    # MAINTENANCE SETUP: skip if already completed on a previous run
-    - name: Maintenance setup already complete — skipping
-      ansible.builtin.debug:
-        msg: "Checkpoint found: maintenance setup already done. Skipping to paired upgrades."
-      when: maintenance_setup_checkpoint.stat.exists
-
     - block:
+        # PRE-FLIGHT: health gate
+        - name: Pre-flight health gate
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-preflight.yaml
+          vars:
+            preflight_allow_noout: false
+
         - name: Confirm pre-flight passed — proceed with maintenance setup
           ansible.builtin.pause:
             prompt: |
@@ -249,15 +183,10 @@
           vars:
             maintenance_action: enable
 
-        - name: Mark maintenance setup complete
-          ansible.builtin.file:
-            path: "{{ upgrade_state_dir }}/maintenance_setup_done"
-            state: touch
-
         - name: Pre-flight complete
           ansible.builtin.debug:
             msg: "=== Pre-flight done. Beginning paired upgrades. ==="
-      when: not maintenance_setup_checkpoint.stat.exists
+      when: not skip_preflight | bool
 
 # PAIRED LOOP
 - name: Cluster Upgrade - Paired Upgrades
@@ -287,87 +216,90 @@
   vars:
     shared_shutdowns: "{{ hostvars['localhost']['shared_shutdowns'] }}"
     interactive_mode: "{{ hostvars['localhost']['interactive_mode'] | default(true) }}"
+    skip_postflight: "{{ skip_postflight | default(false) }}"
 
   tasks:
-    - name: Cluster health summary
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-health.yaml
-      vars:
-        health_action: cluster-status
-
-    - name: Confirm post-flight cleanup
-      ansible.builtin.pause:
-        prompt: |
-
-          ===================================================
-          ALL PAIRS COMPLETE — REVIEW CLUSTER STATUS ABOVE
-          ===================================================
-          About to begin post-flight cleanup:
-            - Disable CNPG maintenance mode
-            - Disable Ceph noout flag (rebalancing will resume)
-            - Verify shared VMs running (started during pve15 pair)
-            - Re-apply iotawatt-sync
-            - Unmute alerts (Graylog, Alertmanager, Uptime Kuma)
-          Proceed? (yes/no)
-      register: postflight_confirm
-      when: interactive_mode | bool
-
-    - name: Abort if post-flight not confirmed
-      ansible.builtin.fail:
-        msg: "Post-flight cancelled by operator"
-      when:
-        - interactive_mode | bool
-        - postflight_confirm.user_input | lower not in ['yes', 'y']
-
-    - name: Disable CNPG maintenance mode
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
-      vars:
-        maintenance_action: disable
-
-    - name: Disable Ceph noout flag
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
-      vars:
-        maintenance_action: disable
-
-    - name: Wait for Ceph HEALTH_OK after noout unset
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-health.yaml
-      vars:
-        allow_noout: false
-        ceph_health_retries: 60
-        ceph_health_delay: 30
-
-    - name: Start shared VMs/LXCs
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-vm.yaml
-      vars:
-        vm_action: startup
-        vm_shutdowns: "{{ shared_shutdowns }}"
-
-    - name: Re-apply iotawatt-sync
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
-      vars:
-        iotawatt_action: start
-
-    - name: Unmute alerts
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
-      vars:
-        maintenance_action: disable
-
-    - name: Cleanup upgrade state directory
-      ansible.builtin.file:
-        path: "{{ hostvars['localhost']['upgrade_state_dir'] }}"
-        state: absent
-
-    - name: Cluster maintenance complete
+    - name: Skipping post-flight cleanup
       ansible.builtin.debug:
-        msg: "{{ _msg.split('\n') }}"
-      vars:
-        _msg: |
-          ===================================================
-          CLUSTER MAINTENANCE COMPLETE
-          ===================================================
-          k3s target version : {{ k3s_target_version }}
+        msg: "=== Post-flight skipped (skip_postflight=true) ==="
+      when: skip_postflight | bool
 
-          Manual checks (per planning notes):
-          - Verify Postgres pods are accepting connections
-          - Verify Mosquitto pod is up, no errors in logs
-          - Verify zigbee15 and zigbee11 pods are up
-          - Verify Home Assistant is up and reachable
+    - block:
+        - name: Cluster health summary
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-health.yaml
+          vars:
+            health_action: cluster-status
+
+        - name: Confirm post-flight cleanup
+          ansible.builtin.pause:
+            prompt: |
+
+              ===================================================
+              ALL PAIRS COMPLETE — REVIEW CLUSTER STATUS ABOVE
+              ===================================================
+              About to begin post-flight cleanup:
+                - Disable CNPG maintenance mode
+                - Disable Ceph noout flag (rebalancing will resume)
+                - Verify shared VMs running (started during pve15 pair)
+                - Re-apply iotawatt-sync
+                - Unmute alerts (Graylog, Alertmanager, Uptime Kuma)
+              Proceed? (yes/no)
+          register: postflight_confirm
+          when: interactive_mode | bool
+
+        - name: Abort if post-flight not confirmed
+          ansible.builtin.fail:
+            msg: "Post-flight cancelled by operator"
+          when:
+            - interactive_mode | bool
+            - postflight_confirm.user_input | lower not in ['yes', 'y']
+
+        - name: Disable CNPG maintenance mode
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
+          vars:
+            maintenance_action: disable
+
+        - name: Disable Ceph noout flag
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
+          vars:
+            maintenance_action: disable
+
+        - name: Wait for Ceph HEALTH_OK after noout unset
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-health.yaml
+          vars:
+            allow_noout: false
+            ceph_health_retries: 60
+            ceph_health_delay: 30
+
+        - name: Start shared VMs/LXCs
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-vm.yaml
+          vars:
+            vm_action: startup
+            vm_shutdowns: "{{ shared_shutdowns }}"
+
+        - name: Re-apply iotawatt-sync
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
+          vars:
+            iotawatt_action: start
+
+        - name: Unmute alerts
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
+          vars:
+            maintenance_action: disable
+
+        - name: Cluster maintenance complete
+          ansible.builtin.debug:
+            msg: "{{ _msg.split('\n') }}"
+          vars:
+            _msg: |
+              ===================================================
+              CLUSTER MAINTENANCE COMPLETE
+              ===================================================
+              k3s target version : {{ k3s_target_version }}
+
+              Manual checks (per planning notes):
+              - Verify Postgres pods are accepting connections
+              - Verify Mosquitto pod is up, no errors in logs
+              - Verify zigbee15 and zigbee11 pods are up
+              - Verify Home Assistant is up and reachable
+      when: not skip_postflight | bool
