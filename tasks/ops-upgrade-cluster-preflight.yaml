@@ -30,11 +30,12 @@
       ========================================
       Verifying cluster is healthy before starting maintenance.
 
-# CHECK 1: Ceph - require HEALTH_OK (noout not yet set)
+# CHECK 1: Ceph - require HEALTH_OK on a fresh start; allow noout on resume
+# (caller passes preflight_allow_noout=true when resuming after maintenance_setup_done)
 - name: Preflight - Ceph health
   ansible.builtin.include_tasks: ops-upgrade-cluster-ceph-health.yaml
   vars:
-    allow_noout: false
+    allow_noout: "{{ preflight_allow_noout | default(false) }}"
     ceph_health_retries: 5
     ceph_health_delay: 15
 

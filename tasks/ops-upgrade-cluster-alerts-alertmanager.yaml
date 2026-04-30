@@ -27,7 +27,7 @@
         body:
           matchers:
             - name: alertname
-              value: ".*"
+              value: ".+"
               isRegex: true
               isEqual: true
           startsAt: "{{ silence_start }}"

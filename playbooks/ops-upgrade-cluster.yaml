@@ -184,16 +184,21 @@
         - interactive_mode | bool
         - top_confirm.user_input | lower not in ['yes', 'y']
 
-    # PRE-FLIGHT: health gate (always runs, even on resume)
-    - name: Pre-flight health gate
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-preflight.yaml
-
-    # MAINTENANCE SETUP: skip if already completed on a previous run
+    # Check whether maintenance setup already ran (resume scenario).
+    # Must happen before the preflight so we can pass allow_noout correctly —
+    # if noout is already set, the preflight must accept HEALTH_WARN/noout.
     - name: Check maintenance setup checkpoint
       ansible.builtin.stat:
         path: "{{ upgrade_state_dir }}/maintenance_setup_done"
       register: maintenance_setup_checkpoint
 
+    # PRE-FLIGHT: health gate (always runs, even on resume)
+    - name: Pre-flight health gate
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-preflight.yaml
+      vars:
+        preflight_allow_noout: "{{ maintenance_setup_checkpoint.stat.exists }}"
+
+    # MAINTENANCE SETUP: skip if already completed on a previous run
     - name: Maintenance setup already complete — skipping
       ansible.builtin.debug:
         msg: "Checkpoint found: maintenance setup already done. Skipping to paired upgrades."
