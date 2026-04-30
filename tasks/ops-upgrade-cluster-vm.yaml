@@ -39,10 +39,9 @@
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
         api_host: "{{ pve_node }}"
-        node: "{{ pve_node }}"
+        node: "{{ item.target_node }}"
         vmid: "{{ item.vm_id }}"
         migrate: true
-        target: "{{ item.target_node }}"
         timeout: 600
       loop: "{{ vm_migrations }}"
       loop_control:
@@ -76,10 +75,9 @@
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
         api_host: "{{ item.target_node }}"
-        node: "{{ item.target_node }}"
+        node: "{{ pve_node }}"
         vmid: "{{ item.vm_id }}"
         migrate: true
-        target: "{{ pve_node }}"
         timeout: 600
       loop: "{{ vm_migrations }}"
       loop_control:
