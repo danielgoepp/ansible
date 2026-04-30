@@ -10,14 +10,13 @@
 #
 # Pre-flight (once):
 #   1. Validate inputs
-#   2. Health gate (Ceph HEALTH_OK, no Alertmanager alerts, no down Uptime Kuma
-#      monitors, opnsense on pve11)
+#   2. Health gate (Ceph HEALTH_OK, opnsense on pve11)
 #   3. [PAUSE] Confirm before any cluster-wide changes
-#   4. Stop iotawatt-sync
-#   5. Shutdown shared VMs/LXCs (ui-network, dev, smb, backup) for the entire window
-#   6. Set Ceph noout flag
-#   7. Set CNPG maintenance mode
-#   8. Mute alerts (Graylog, Alertmanager, Uptime Kuma)
+#   4. Mute alerts (Graylog, Alertmanager, Uptime Kuma)
+#   5. Stop iotawatt-sync
+#   6. Shutdown shared VMs/LXCs (ui-network, dev, smb, backup) for the entire window
+#   7. Set Ceph noout flag
+#   8. Set CNPG maintenance mode
 #
 # Per pair:
 #   See tasks/ops-upgrade-cluster-paired.yaml
@@ -25,12 +24,12 @@
 # Post-flight:
 #   1. Cluster health summary
 #   2. [PAUSE] Confirm before reversing maintenance gates
-#   3. Unmute alerts
-#   4. Disable CNPG maintenance mode (displays kubectl get cluster -A)
-#   5. Disable Ceph noout flag
-#   6. Wait for Ceph HEALTH_OK
-#   7. Start shared VMs/LXCs (verified running via Proxmox API)
-#   8. Re-apply iotawatt-sync
+#   3. Disable CNPG maintenance mode (displays kubectl get cluster -A)
+#   4. Disable Ceph noout flag
+#   5. Wait for Ceph HEALTH_OK
+#   6. Start shared VMs/LXCs (verified running via Proxmox API)
+#   7. Re-apply iotawatt-sync
+#   8. Unmute alerts
 #
 # Required:
 #   -e k3s_target_version=v1.31.5+k3s1
@@ -75,6 +74,63 @@
           Example: -e k3s_target_version=v1.31.5+k3s1
       when: k3s_target_version is not defined or k3s_target_version | length == 0
 
+    - name: Set upgrade state directory
+      ansible.builtin.set_fact:
+        upgrade_state_dir: "/tmp/cluster-upgrade-{{ ansible_date_time.date }}"
+
+    - name: Create upgrade state directory
+      ansible.builtin.file:
+        path: "{{ upgrade_state_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Check for existing upgrade checkpoint
+      ansible.builtin.find:
+        paths: "{{ upgrade_state_dir }}"
+        file_type: file
+      register: upgrade_checkpoint_files
+
+    - name: Display checkpoint notice
+      ansible.builtin.debug:
+        msg: "{{ _msg.split('\n') }}"
+      vars:
+        _completed: "{{ upgrade_checkpoint_files.files | map(attribute='path') | map('basename') | map('replace', '_done', '') | list }}"
+        _msg: |
+          ===================================================
+          CHECKPOINT FOUND — UPGRADE IN PROGRESS
+          ===================================================
+          Completed steps: {{ _completed | join(', ') }}
+      when: upgrade_checkpoint_files.matched > 0
+
+    - name: Prompt to resume or restart
+      ansible.builtin.pause:
+        prompt: |
+
+          [r]esume from checkpoint, or [s]tart over (clears all progress)?
+      register: resume_decision
+      when:
+        - upgrade_checkpoint_files.matched > 0
+        - interactive_mode | bool
+
+    - name: Clear checkpoint for fresh start
+      ansible.builtin.file:
+        path: "{{ upgrade_state_dir }}"
+        state: absent
+      when:
+        - upgrade_checkpoint_files.matched > 0
+        - interactive_mode | bool
+        - resume_decision.user_input | lower not in ['r', 'resume']
+
+    - name: Recreate state directory after restart
+      ansible.builtin.file:
+        path: "{{ upgrade_state_dir }}"
+        state: directory
+        mode: '0755'
+      when:
+        - upgrade_checkpoint_files.matched > 0
+        - interactive_mode | bool
+        - resume_decision.user_input | lower not in ['r', 'resume']
+
     # Persist play vars as facts so they survive across plays (play vars are
     # scoped to a single play; facts persist on the host for the run).
     - name: Persist cross-play configuration as facts
@@ -86,6 +142,7 @@
         opnsense_vm_id: "{{ opnsense_vm_id }}"
         opnsense_home_node: "{{ opnsense_home_node }}"
         opnsense_failover_node: "{{ opnsense_failover_node }}"
+        upgrade_state_dir: "{{ upgrade_state_dir }}"
 
     - name: Display upgrade plan
       ansible.builtin.debug:
@@ -128,64 +185,83 @@
         - interactive_mode | bool
         - top_confirm.user_input | lower not in ['yes', 'y']
 
-    # PRE-FLIGHT: health gate
+    # PRE-FLIGHT: health gate (always runs, even on resume)
     - name: Pre-flight health gate
       ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-preflight.yaml
 
-    - name: Confirm pre-flight passed — proceed with maintenance setup
-      ansible.builtin.pause:
-        prompt: |
+    # MAINTENANCE SETUP: skip if already completed on a previous run
+    - name: Check maintenance setup checkpoint
+      ansible.builtin.stat:
+        path: "{{ upgrade_state_dir }}/maintenance_setup_done"
+      register: maintenance_setup_checkpoint
 
-          Pre-flight passed. About to make cluster-wide changes:
-            - Shutdown shared VMs (ui-network, dev, smb, backup)
-            - Set Ceph noout flag
-            - Enable CNPG maintenance mode
-            - Mute alerts (Graylog, Alertmanager, Uptime Kuma)
-          Proceed? (yes/no)
-      register: preflight_proceed_confirm
-      when: interactive_mode | bool
-
-    - name: Abort if pre-flight proceed not confirmed
-      ansible.builtin.fail:
-        msg: "Cluster upgrade cancelled before maintenance setup"
-      when:
-        - interactive_mode | bool
-        - preflight_proceed_confirm.user_input | lower not in ['yes', 'y']
-
-    # PRE-FLIGHT: stop iotawatt-sync
-    - name: Stop iotawatt-sync
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
-      vars:
-        iotawatt_action: stop
-
-    # PRE-FLIGHT: shutdown shared VMs (entire window)
-    - name: Shutdown shared VMs/LXCs for the maintenance window
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-vm.yaml
-      vars:
-        vm_action: shutdown
-        vm_shutdowns: "{{ shared_shutdowns }}"
-
-    # PRE-FLIGHT: enable Ceph noout
-    - name: Enable Ceph noout flag
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
-      vars:
-        maintenance_action: enable
-
-    # PRE-FLIGHT: enable CNPG maintenance
-    - name: Enable CNPG maintenance mode
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
-      vars:
-        maintenance_action: enable
-
-    # PRE-FLIGHT: mute alerts
-    - name: Mute alerts (Graylog / Alertmanager / Uptime Kuma)
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
-      vars:
-        maintenance_action: enable
-
-    - name: Pre-flight complete
+    - name: Maintenance setup already complete — skipping
       ansible.builtin.debug:
-        msg: "=== Pre-flight done. Beginning paired upgrades. ==="
+        msg: "Checkpoint found: maintenance setup already done. Skipping to paired upgrades."
+      when: maintenance_setup_checkpoint.stat.exists
+
+    - block:
+        - name: Confirm pre-flight passed — proceed with maintenance setup
+          ansible.builtin.pause:
+            prompt: |
+
+              Pre-flight passed. About to make cluster-wide changes:
+                - Mute alerts (Graylog, Alertmanager, Uptime Kuma)
+                - Stop iotawatt-sync
+                - Shutdown shared VMs (ui-network, dev, smb, backup)
+                - Set Ceph noout flag
+                - Enable CNPG maintenance mode
+              Proceed? (yes/no)
+          register: preflight_proceed_confirm
+          when: interactive_mode | bool
+
+        - name: Abort if pre-flight proceed not confirmed
+          ansible.builtin.fail:
+            msg: "Cluster upgrade cancelled before maintenance setup"
+          when:
+            - interactive_mode | bool
+            - preflight_proceed_confirm.user_input | lower not in ['yes', 'y']
+
+        # PRE-FLIGHT: mute alerts
+        - name: Mute alerts (Graylog / Alertmanager / Uptime Kuma)
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
+          vars:
+            maintenance_action: enable
+
+        # PRE-FLIGHT: stop iotawatt-sync
+        - name: Stop iotawatt-sync
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
+          vars:
+            iotawatt_action: stop
+
+        # PRE-FLIGHT: shutdown shared VMs (entire window)
+        - name: Shutdown shared VMs/LXCs for the maintenance window
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-vm.yaml
+          vars:
+            vm_action: shutdown
+            vm_shutdowns: "{{ shared_shutdowns }}"
+
+        # PRE-FLIGHT: enable Ceph noout
+        - name: Enable Ceph noout flag
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
+          vars:
+            maintenance_action: enable
+
+        # PRE-FLIGHT: enable CNPG maintenance
+        - name: Enable CNPG maintenance mode
+          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
+          vars:
+            maintenance_action: enable
+
+        - name: Mark maintenance setup complete
+          ansible.builtin.file:
+            path: "{{ upgrade_state_dir }}/maintenance_setup_done"
+            state: touch
+
+        - name: Pre-flight complete
+          ansible.builtin.debug:
+            msg: "=== Pre-flight done. Beginning paired upgrades. ==="
+      when: not maintenance_setup_checkpoint.stat.exists
 
 # PAIRED LOOP
 - name: Cluster Upgrade - Paired Upgrades
@@ -230,11 +306,11 @@
           ALL PAIRS COMPLETE — REVIEW CLUSTER STATUS ABOVE
           ===================================================
           About to begin post-flight cleanup:
-            - Unmute alerts (Graylog, Alertmanager, Uptime Kuma)
             - Disable CNPG maintenance mode
             - Disable Ceph noout flag (rebalancing will resume)
             - Start shared VMs (ui-network, dev, smb, backup)
             - Re-apply iotawatt-sync
+            - Unmute alerts (Graylog, Alertmanager, Uptime Kuma)
           Proceed? (yes/no)
       register: postflight_confirm
       when: interactive_mode | bool
@@ -245,11 +321,6 @@
       when:
         - interactive_mode | bool
         - postflight_confirm.user_input | lower not in ['yes', 'y']
-
-    - name: Unmute alerts
-      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
-      vars:
-        maintenance_action: disable
 
     - name: Disable CNPG maintenance mode
       ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
@@ -278,6 +349,16 @@
       ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
       vars:
         iotawatt_action: start
+
+    - name: Unmute alerts
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
+      vars:
+        maintenance_action: disable
+
+    - name: Cleanup upgrade state directory
+      ansible.builtin.file:
+        path: "{{ hostvars['localhost']['upgrade_state_dir'] }}"
+        state: absent
 
     - name: Cluster maintenance complete
       ansible.builtin.debug:

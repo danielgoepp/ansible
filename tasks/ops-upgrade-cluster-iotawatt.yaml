@@ -19,7 +19,7 @@
 
 - name: Stop iotawatt-sync
   ansible.builtin.command:
-    cmd: kubectl delete -f {{ iotawatt_manifest }} --ignore-not-found
+    cmd: kubectl delete deployment iotawatt-sync -n management --ignore-not-found
   register: iotawatt_stop
   changed_when: "'deleted' in iotawatt_stop.stdout"
   when: iotawatt_action == 'stop'

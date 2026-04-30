@@ -1,7 +1,8 @@
 ---
 # Ceph Health Check with retry-and-prompt-on-failure
 # HEALTH_OK or HEALTH_WARN-with-only-noout count as healthy.
-# Anything else: retry with backoff, then pause for operator with continue/retry/abort.
+# Anything else (scrubbing, cleaning, degraded, etc.) blocks and retries.
+# After all retries: pause for operator with continue/retry/abort.
 #
 # Parameters:
 #   ceph_host: PVE host to delegate the check to (default: groups['pve'][0])
@@ -26,13 +27,17 @@
       become: true
       register: ceph_health_result
       changed_when: false
+      # ceph health exits rc=1 for HEALTH_WARN; failed_when: false lets until
+      # evaluate the condition rather than dropping straight to rescue.
+      failed_when: false
       # Healthy = HEALTH_OK, or (when noout is allowed) HEALTH_WARN where the
       # only listed condition involves noout (no semicolons => single condition).
+      # Any other warning (scrubbing, cleaning, degraded, etc.) blocks until resolved.
       until: >
         (ceph_health_result.stdout | trim) == 'HEALTH_OK' or
         (
           allow_noout | bool and
-          ceph_health_result.stdout is match('^HEALTH_WARN[^;]*noout[^;]*$')
+          (ceph_health_result.stdout | trim) is match('^HEALTH_WARN[^;]*noout[^;]*$')
         )
       retries: "{{ ceph_health_retries | int }}"
       delay: "{{ ceph_health_delay | int }}"

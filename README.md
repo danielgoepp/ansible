@@ -71,15 +71,21 @@ ansible-playbook playbooks/ops-upgrade-cluster.yaml \
   -e k3s_target_version=<version> -e interactive_mode=false
 ```
 
-Pre-flight checks cluster health, then pauses for operator confirmation before
-making any changes (shutdown shared VMs, set Ceph noout, enable CNPG
-maintenance, mute alerts). Each pair opens with a Ceph health check, a
-pre-pair status snapshot, and an operator pause; after drain a pod snapshot is
-shown before the Ubuntu upgrade begins; and a second pause gates the PVE
-reboot. The pve11 pair additionally migrates opnsense to pve12 with a network
-connectivity test before and after. Post-flight pauses for a final cluster
-review before reversing all maintenance gates, and waits for Ceph HEALTH_OK
-after noout is cleared.
+Pre-flight checks Ceph health and opnsense location, then pauses for operator
+confirmation before making any changes. Setup order: mute alerts first, then
+stop iotawatt-sync, shutdown shared VMs, set Ceph noout, enable CNPG
+maintenance. Each pair opens with a Ceph health check, a pre-pair status
+snapshot, and an operator pause; after drain a pod snapshot is shown before
+the Ubuntu upgrade begins; a second pause gates the PVE reboot; after the PVE
+reboots, shared VMs on that node are started before the k3s VM to ensure
+mounts are available. The pve11 pair additionally migrates opnsense to pve12
+with a network connectivity test before and after. Post-flight pauses for a
+final cluster review, then reverses maintenance gates and waits for Ceph
+HEALTH_OK; alerts are unmuted last.
+
+If the playbook is interrupted, re-running it detects the checkpoint in
+`/tmp/cluster-upgrade-YYYY-MM-DD/` and prompts to resume from where it left
+off or start over.
 
 ### Maintenance Mode
 

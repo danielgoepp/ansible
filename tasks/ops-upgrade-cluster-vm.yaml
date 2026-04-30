@@ -33,7 +33,7 @@
 - name: Migrate VMs away from {{ pve_node | default('') }}
   when: vm_action == 'migrate-away'
   block:
-    - name: Online-migrate {{ item.vm_name }} ({{ item.vm_id }}) -> {{ item.target_node }}
+    - name: Online-migrate VM to target node
       community.proxmox.proxmox_kvm:
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
@@ -70,7 +70,7 @@
 - name: Migrate VMs back to {{ pve_node | default('') }}
   when: vm_action == 'migrate-back'
   block:
-    - name: Online-migrate {{ item.vm_name }} ({{ item.vm_id }}) back -> {{ pve_node }}
+    - name: Online-migrate VM back to home node
       community.proxmox.proxmox_kvm:
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
@@ -85,7 +85,7 @@
       loop_control:
         label: "{{ item.vm_name }} ({{ item.vm_id }}) back to {{ pve_node }}"
 
-    - name: Verify VMs are back on {{ pve_node }}
+    - name: Verify VMs are back on {{ pve_node | default('home node') }}
       community.proxmox.proxmox_vm_info:
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"

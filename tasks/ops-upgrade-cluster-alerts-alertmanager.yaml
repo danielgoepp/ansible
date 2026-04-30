@@ -26,9 +26,9 @@
         body_format: json
         body:
           matchers:
-            - name: grafana_folder
-              value: Goepp Alerts
-              isRegex: false
+            - name: alertname
+              value: ".*"
+              isRegex: true
               isEqual: true
           startsAt: "{{ silence_start }}"
           endsAt: "{{ silence_end }}"
