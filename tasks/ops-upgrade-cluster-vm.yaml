@@ -42,6 +42,7 @@
         node: "{{ item.target_node }}"
         vmid: "{{ item.vm_id }}"
         migrate: true
+        with_local_disks: true
         timeout: 600
       loop: "{{ vm_migrations }}"
       loop_control:
@@ -78,6 +79,7 @@
         node: "{{ pve_node }}"
         vmid: "{{ item.vm_id }}"
         migrate: true
+        with_local_disks: true
         timeout: 600
       loop: "{{ vm_migrations }}"
       loop_control:
