@@ -14,9 +14,8 @@
 #   3. [PAUSE] Confirm before any cluster-wide changes
 #   4. Mute alerts (Graylog, Alertmanager, Uptime Kuma)
 #   5. Stop iotawatt-sync
-#   6. Shutdown shared VMs/LXCs (ui-network, dev, smb, backup) for the entire window
-#   7. Set Ceph noout flag
-#   8. Set CNPG maintenance mode
+#   6. Set Ceph noout flag
+#   7. Set CNPG maintenance mode
 #
 # Per pair:
 #   See tasks/ops-upgrade-cluster-paired.yaml
@@ -27,7 +26,7 @@
 #   3. Disable CNPG maintenance mode (displays kubectl get cluster -A)
 #   4. Disable Ceph noout flag
 #   5. Wait for Ceph HEALTH_OK
-#   6. Start shared VMs/LXCs (verified running via Proxmox API)
+#   6. Verify shared VMs running (started during pve15 pair)
 #   7. Re-apply iotawatt-sync
 #   8. Unmute alerts
 #
@@ -208,7 +207,6 @@
               Pre-flight passed. About to make cluster-wide changes:
                 - Mute alerts (Graylog, Alertmanager, Uptime Kuma)
                 - Stop iotawatt-sync
-                - Shutdown shared VMs (ui-network, dev, smb, backup)
                 - Set Ceph noout flag
                 - Enable CNPG maintenance mode
               Proceed? (yes/no)
@@ -233,13 +231,6 @@
           ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
           vars:
             iotawatt_action: stop
-
-        # PRE-FLIGHT: shutdown shared VMs (entire window)
-        - name: Shutdown shared VMs/LXCs for the maintenance window
-          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-vm.yaml
-          vars:
-            vm_action: shutdown
-            vm_shutdowns: "{{ shared_shutdowns }}"
 
         # PRE-FLIGHT: enable Ceph noout
         - name: Enable Ceph noout flag
@@ -308,7 +299,7 @@
           About to begin post-flight cleanup:
             - Disable CNPG maintenance mode
             - Disable Ceph noout flag (rebalancing will resume)
-            - Start shared VMs (ui-network, dev, smb, backup)
+            - Verify shared VMs running (started during pve15 pair)
             - Re-apply iotawatt-sync
             - Unmute alerts (Graylog, Alertmanager, Uptime Kuma)
           Proceed? (yes/no)

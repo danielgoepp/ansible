@@ -56,6 +56,10 @@
           ===================================================
           PAIRED UPGRADE: {{ pve_node }} + {{ k3s_node }}
           ===================================================
+          {% set _local_shutdowns = hostvars['localhost']['shared_shutdowns'] | selectattr('host_node', 'equalto', pve_node) | list %}
+          {% if _local_shutdowns | length > 0 %}
+          0.  Shutdown shared VMs on {{ pve_node }}: {{ _local_shutdowns | map(attribute='vm_name') | join(', ') }}
+          {% endif %}
           {% if is_opnsense_pair %}
           0a. Migrate opnsense {{ opnsense_home_node }} -> {{ opnsense_failover_node }}
           {% endif %}
@@ -125,6 +129,18 @@
       when:
         - interactive_mode | bool
         - pair_confirm.user_input | lower not in ['yes', 'y']
+
+    # STEP 0: shutdown shared VMs/LXCs on this node before drain (pve15 only)
+    - name: Shutdown shared VMs/LXCs on {{ pve_node }} before drain
+      ansible.builtin.include_tasks: ops-upgrade-cluster-vm.yaml
+      vars:
+        vm_action: shutdown
+        vm_shutdowns: >-
+          {{ hostvars['localhost']['shared_shutdowns']
+             | selectattr('host_node', 'equalto', pve_node) | list }}
+      when: >-
+        hostvars['localhost']['shared_shutdowns']
+        | selectattr('host_node', 'equalto', pve_node) | list | length > 0
 
     # STEP 0a: opnsense migration away (only on pve11 pair)
     - name: Migrate opnsense to failover before pve11 upgrade
