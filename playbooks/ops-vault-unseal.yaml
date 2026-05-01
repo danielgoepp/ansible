@@ -1,0 +1,72 @@
+---
+# Unseal HashiCorp Vault via kubectl port-forward (bypasses Traefik, which blocks sealed Vault)
+#
+# Usage:
+#   Local:  ansible-playbook playbooks/ops-vault-unseal.yaml
+#   AWX:    Run as job template (no additional configuration required)
+
+- name: Unseal HashiCorp Vault
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    vault_k3s_context: "{{ awx_k3s_context | default(k3s_default_context) }}"
+    vault_local_port: 18200
+    vault_local_url: "http://localhost:{{ vault_local_port }}"
+    unseal_keys:
+      - "{{ awx_hashicorp_vault_unseal_key_1 | default(vault_hashicorp_vault_unseal_key_1) }}"
+      - "{{ awx_hashicorp_vault_unseal_key_2 | default(vault_hashicorp_vault_unseal_key_2) }}"
+      - "{{ awx_hashicorp_vault_unseal_key_3 | default(vault_hashicorp_vault_unseal_key_3) }}"
+      - "{{ awx_hashicorp_vault_unseal_key_4 | default(vault_hashicorp_vault_unseal_key_4) }}"
+      - "{{ awx_hashicorp_vault_unseal_key_5 | default(vault_hashicorp_vault_unseal_key_5) }}"
+
+  tasks:
+    - name: Vault unseal via port-forward
+      block:
+        - name: Start kubectl port-forward to Vault service
+          ansible.builtin.shell: |
+            kubectl --context {{ vault_k3s_context }} port-forward service/vault {{ vault_local_port }}:8200 -n vault >/dev/null 2>&1 &
+            echo $!
+          register: pf_pid
+
+        - name: Wait for port-forward to be ready
+          ansible.builtin.wait_for:
+            host: localhost
+            port: "{{ vault_local_port }}"
+            timeout: 15
+
+        - name: Check Vault seal status
+          ansible.builtin.uri:
+            url: "{{ vault_local_url }}/v1/sys/seal-status"
+            method: GET
+          register: seal_status
+
+        - name: Report already unsealed
+          ansible.builtin.debug:
+            msg: "Vault is already unsealed"
+          when: not seal_status.json.sealed
+
+        - name: Submit unseal keys
+          ansible.builtin.uri:
+            url: "{{ vault_local_url }}/v1/sys/unseal"
+            method: PUT
+            body_format: json
+            body:
+              key: "{{ item }}"
+            status_code: [200]
+          loop: "{{ unseal_keys }}"
+          loop_control:
+            index_var: key_index
+            label: "key {{ key_index + 1 }}"
+          register: unseal_result
+          when: seal_status.json.sealed
+
+        - name: Report unseal result
+          ansible.builtin.debug:
+            msg: "Vault unseal complete — sealed: {{ (unseal_result.results | last).json.sealed }}"
+          when: seal_status.json.sealed
+
+      always:
+        - name: Stop kubectl port-forward
+          ansible.builtin.shell: "kill {{ pf_pid.stdout | trim }} 2>/dev/null || true"
+          when: pf_pid.stdout is defined

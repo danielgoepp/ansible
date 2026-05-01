@@ -11,6 +11,7 @@ graylog_api_url: "https://graylog-prod.goepp.net/api"
 alertmanager_api_url: "https://alertmanager-prod.goepp.net/api/v2"
 alertmanager_created_by: "ansible-automation"
 uptime_kuma_url: "https://uptime-kuma-prod.goepp.net"
+hashicorp_vault_url: "https://vault-prod.goepp.net"
 
 # Backup directories
 todoist_backup_dir: "~/Downloads"
