@@ -1,9 +1,14 @@
 ---
-# Unseal HashiCorp Vault via kubectl port-forward (bypasses Traefik, which blocks sealed Vault)
+# Unseal HashiCorp Vault
+#
+# Local execution uses kubectl port-forward to bypass Traefik (which blocks
+# requests to a sealed Vault pod). AWX execution uses the in-cluster service
+# URL directly, set via awx_vault_api_url in the job template extra vars.
 #
 # Usage:
 #   Local:  ansible-playbook playbooks/ops-vault-unseal.yaml
-#   AWX:    Run as job template (no additional configuration required)
+#   AWX:    Run as job template with extra var:
+#             awx_vault_api_url: http://vault.vault.svc.cluster.local:8200
 
 - name: Unseal HashiCorp Vault
   hosts: localhost
@@ -12,7 +17,8 @@
   vars:
     vault_k3s_context: "{{ awx_k3s_context | default(k3s_default_context) }}"
     vault_local_port: 18200
-    vault_local_url: "http://localhost:{{ vault_local_port }}"
+    vault_api_url: "{{ awx_vault_api_url | default('http://localhost:' + vault_local_port | string) }}"
+    use_port_forward: "{{ awx_vault_api_url is not defined }}"
     unseal_keys:
       - "{{ awx_hashicorp_vault_unseal_key_1 | default(vault_hashicorp_vault_unseal_key_1) }}"
       - "{{ awx_hashicorp_vault_unseal_key_2 | default(vault_hashicorp_vault_unseal_key_2) }}"
@@ -21,23 +27,25 @@
       - "{{ awx_hashicorp_vault_unseal_key_5 | default(vault_hashicorp_vault_unseal_key_5) }}"
 
   tasks:
-    - name: Vault unseal via port-forward
+    - name: Vault unseal
       block:
         - name: Start kubectl port-forward to Vault service
           ansible.builtin.shell: |
             kubectl --context {{ vault_k3s_context }} port-forward service/vault {{ vault_local_port }}:8200 -n vault >/dev/null 2>&1 &
             echo $!
           register: pf_pid
+          when: use_port_forward
 
         - name: Wait for port-forward to be ready
           ansible.builtin.wait_for:
             host: localhost
             port: "{{ vault_local_port }}"
             timeout: 15
+          when: use_port_forward
 
         - name: Check Vault seal status
           ansible.builtin.uri:
-            url: "{{ vault_local_url }}/v1/sys/seal-status"
+            url: "{{ vault_api_url }}/v1/sys/seal-status"
             method: GET
           register: seal_status
 
@@ -48,7 +56,7 @@
 
         - name: Submit unseal keys
           ansible.builtin.uri:
-            url: "{{ vault_local_url }}/v1/sys/unseal"
+            url: "{{ vault_api_url }}/v1/sys/unseal"
             method: PUT
             body_format: json
             body:
@@ -69,4 +77,4 @@
       always:
         - name: Stop kubectl port-forward
           ansible.builtin.shell: "kill {{ pf_pid.stdout | trim }} 2>/dev/null || true"
-          when: pf_pid.stdout is defined
+          when: use_port_forward and pf_pid.stdout is defined
