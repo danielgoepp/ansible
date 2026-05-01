@@ -238,6 +238,7 @@
               ALL PAIRS COMPLETE — REVIEW CLUSTER STATUS ABOVE
               ===================================================
               About to begin post-flight cleanup:
+                - Rebalance pods across nodes (rollout restart all deployments)
                 - Disable CNPG maintenance mode
                 - Disable Ceph noout flag (rebalancing will resume)
                 - Verify shared VMs running (started during pve15 pair)
@@ -253,6 +254,75 @@
           when:
             - interactive_mode | bool
             - postflight_confirm.user_input | lower not in ['yes', 'y']
+
+        - name: Confirm pod rebalancing
+          ansible.builtin.pause:
+            prompt: |
+
+              ===================================================
+              UPGRADE COMPLETE — READY TO REBALANCE PODS
+              ===================================================
+              About to restart all deployments so the scheduler
+              can redistribute pods evenly across nodes.
+              Proceed? (yes/no)
+          register: rebalance_confirm
+          when: interactive_mode | bool
+
+        - name: Abort if pod rebalancing not confirmed
+          ansible.builtin.fail:
+            msg: "Pod rebalancing cancelled by operator"
+          when:
+            - interactive_mode | bool
+            - rebalance_confirm.user_input | lower not in ['yes', 'y']
+
+        - name: Get deployments for pod rebalancing
+          kubernetes.core.k8s_info:
+            api_version: apps/v1
+            kind: Deployment
+            context: "{{ k3s_default_context }}"
+          register: rebalance_all_deployments
+
+        - name: Set rebalance deployment list
+          ansible.builtin.set_fact:
+            rebalance_deployments: >-
+              {{ rebalance_all_deployments.resources
+                 | rejectattr('metadata.namespace', 'equalto', 'kube-system')
+                 | selectattr('spec.replicas', 'defined')
+                 | selectattr('spec.replicas', 'ge', 1)
+                 | sort(attribute='metadata.namespace')
+                 | list }}
+
+        - name: Restart deployments to rebalance pods across nodes
+          kubernetes.core.k8s_json_patch:
+            api_version: apps/v1
+            kind: Deployment
+            name: "{{ item.metadata.name }}"
+            namespace: "{{ item.metadata.namespace }}"
+            context: "{{ k3s_default_context }}"
+            patch:
+              - op: add
+                path: /spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt
+                value: "{{ now(utc=True, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+          loop: "{{ rebalance_deployments }}"
+          loop_control:
+            label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
+            pause: 3
+
+        - name: Wait for deployments to become available after rebalancing
+          kubernetes.core.k8s_info:
+            api_version: apps/v1
+            kind: Deployment
+            name: "{{ item.metadata.name }}"
+            namespace: "{{ item.metadata.namespace }}"
+            context: "{{ k3s_default_context }}"
+            wait: true
+            wait_condition:
+              type: Available
+              status: "True"
+            wait_timeout: 300
+          loop: "{{ rebalance_deployments }}"
+          loop_control:
+            label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
 
         - name: Disable CNPG maintenance mode
           ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
