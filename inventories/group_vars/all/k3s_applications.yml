@@ -214,6 +214,13 @@ k3s_applications:
     helm_repo_url: https://traefik.github.io/charts
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/traefik/helm/traefik3-prod-values.yaml"
 
+  uptime-kuma-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/uptime-kuma/manifests/uptime-kuma-prod.yaml"
+    service_namespace: uptime-kuma
+    deployment_name: uptime-kuma
+    app_label: uptime-kuma
+
   unpoller-prod:
     deployment_method: manifest
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/unpoller/manifests/unpoller-prod.yaml"
