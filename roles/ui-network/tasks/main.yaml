@@ -1,4 +1,17 @@
 ---
+- name: Check if UniFi OS Server is installed
+  ansible.builtin.stat:
+    path: /usr/bin/uosserver
+  register: uosserver_binary
+
+# - name: Install UniFi OS Server
+#   ansible.builtin.shell:
+#     cmd: "curl -sO {{ ui_network_install_script_url }} && bash {{ ui_network_install_script_url | basename }} --skip"
+#     chdir: /tmp
+#   register: ui_network_install_result
+#   changed_when: ui_network_install_result.rc == 0
+#   when: not uosserver_binary.stat.exists
+
 - name: Download unifi-easy-encrypt.sh script
   ansible.builtin.get_url:
     url: "{{ ui_network_encrypt_script_url }}"
@@ -14,39 +27,6 @@
     mode: '0600'
     owner: root
     group: root
-
-- name: Run initial Let's Encrypt certificate setup
-  ansible.builtin.command:
-    cmd: >
-      {{ ui_network_encrypt_script_path }}
-      --skip
-      --email {{ ui_network_email }}
-      --fqdn {{ ui_network_fqdn }}
-      --dns-challenge
-      --dns-provider cloudflare
-      --dns-provider-credentials {{ ui_network_cloudflare_credentials_path }}
-      --server-ip {{ ui_network_server_ip }}
-      --external-dns {{ ui_network_external_dns }}
-    creates: "/etc/letsencrypt/live/{{ ui_network_fqdn }}/fullchain.pem"
-  register: ui_network_initial_setup
-  changed_when: ui_network_initial_setup.rc == 0
-
-- name: Download unifi-update.sh script
-  ansible.builtin.get_url:
-    url: "{{ ui_network_update_script_url }}"
-    dest: "{{ ui_network_update_script_path }}"
-    mode: '0755'
-    owner: root
-    group: root
-  when: ui_network_upgrade | default(false) | bool
-
-- name: Upgrade UniFi Network application
-  ansible.builtin.command:
-    cmd: "{{ ui_network_update_script_path }} --skip --unifi-version latest"
-  register: ui_network_upgrade_result
-  changed_when: ui_network_upgrade_result.rc == 0
-  failed_when: ui_network_upgrade_result.rc != 0
-  when: ui_network_upgrade | default(false) | bool
 
 - name: Create cron job for certificate renewal
   ansible.builtin.cron:
