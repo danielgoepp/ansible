@@ -7,32 +7,7 @@
     k8s_context: "{{ k8s_context | default(k3s_default_context) }}"
     service_namespace: "{{ service_namespace | default(service_name) }}"
     cluster_name: "{{ cluster_name | default(service_name + '-prod') }}"
-    base_path: "{{ k3s_config_base_path }}"
     field_manager: "ansible-{{ service_name }}-cnpg-upgrade"
-
-- name: Display upgrade parameters
-  debug:
-    msg:
-      - "{{ service_name | title }} CNPG Cluster Upgrade Parameters:"
-      - "  Service: {{ service_name }}"
-      - "  Manifest Path: {{ manifest_path }}"
-      - "  Kubernetes Context: {{ k8s_context }}"
-      - "  Namespace: {{ service_namespace }}"
-      - "  Cluster Name: {{ cluster_name }}"
-
-- name: Get current CNPG cluster (before upgrade)
-  kubernetes.core.k8s_info:
-    api_version: postgresql.cnpg.io/v1
-    kind: Cluster
-    name: "{{ cluster_name }}"
-    namespace: "{{ service_namespace }}"
-    context: "{{ k8s_context }}"
-  register: current_cluster
-  ignore_errors: true
-
-- name: Display current CNPG cluster status
-  debug:
-    msg: "{{ service_name | title }}: {% if current_cluster.resources | length > 0 %}image={{ current_cluster.resources[0].spec.imageName }}, instances={{ current_cluster.resources[0].spec.instances }}, phase={{ current_cluster.resources[0].status.phase }}{% else %}not found (will create){% endif %}"
 
 - name: Apply manifest from local file (server-side)
   kubernetes.core.k8s:
@@ -41,16 +16,6 @@
     context: "{{ k8s_context }}"
     server_side_apply:
       field_manager: "{{ field_manager }}"
-  register: apply_result
-
-- name: Display manifest application result
-  debug:
-    msg: "{{ service_name | title }} manifest applied: changed={{ apply_result.changed }}"
-
-- name: Wait for manifest application to complete
-  ansible.builtin.wait_for:
-    timeout: 5
-  delegate_to: localhost
 
 - name: Wait for CNPG cluster to be ready
   kubernetes.core.k8s_info:
@@ -64,36 +29,3 @@
       type: Ready
       status: "True"
     wait_timeout: 600
-  register: cluster_ready
-
-- name: Get updated CNPG cluster (after upgrade)
-  kubernetes.core.k8s_info:
-    api_version: postgresql.cnpg.io/v1
-    kind: Cluster
-    name: "{{ cluster_name }}"
-    namespace: "{{ service_namespace }}"
-    context: "{{ k8s_context }}"
-  register: updated_cluster
-
-- name: Display updated CNPG cluster status
-  debug:
-    msg:
-      - "Updated {{ service_name | title }} CNPG Cluster:"
-      - "  Name: {{ updated_cluster.resources[0].metadata.name }}"
-      - "  Image: {{ updated_cluster.resources[0].spec.imageName }}"
-      - "  Instances: {{ updated_cluster.resources[0].spec.instances }}"
-      - "  Phase: {{ updated_cluster.resources[0].status.phase }}"
-
-- name: Extract version information
-  set_fact:
-    previous_image: "{{ current_cluster.resources[0].spec.imageName | default('Unknown') }}"
-    current_image: "{{ updated_cluster.resources[0].spec.imageName }}"
-
-- name: Display upgrade summary
-  debug:
-    msg:
-      - "{{ service_name | title }} CNPG cluster upgrade completed successfully!"
-      - "Previous image: {{ previous_image }}"
-      - "Current image: {{ current_image }}"
-      - "Manifest applied: {{ apply_result.changed }}"
-      - "Cluster ready: {{ cluster_ready.resources[0].status.phase == 'Cluster in healthy state' }}"

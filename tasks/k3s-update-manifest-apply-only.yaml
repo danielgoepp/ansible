@@ -12,15 +12,6 @@
     field_manager: "ansible-{{ service_name }}-upgrade"
     default_manifest_path: "{{ k3s_config_base_path }}/{{ service_name }}/manifests/{{ service_name }}-{{ context_suffix }}.yaml"
 
-- name: Display apply parameters
-  debug:
-    msg:
-      - "{{ service_name | title }} Apply Parameters:"
-      - "  Service: {{ service_name }}"
-      - "  Manifest Path: {{ manifest_path | default(default_manifest_path) }}"
-      - "  Kubernetes Context: {{ k8s_context }}"
-      - "  Namespace: {{ service_namespace }}"
-
 - name: Apply manifest from local file (server-side)
   kubernetes.core.k8s:
     state: present
@@ -28,8 +19,3 @@
     context: "{{ k8s_context }}"
     server_side_apply:
       field_manager: "{{ field_manager }}"
-  register: apply_result
-
-- name: Display manifest application result
-  debug:
-    msg: "{{ service_name | title }} manifest applied: changed={{ apply_result.changed }}"

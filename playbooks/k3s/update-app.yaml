@@ -12,17 +12,6 @@
       set_fact:
         k3s_config_base_path: "{{ playbook_dir }}/../../files/k3s-config"
 
-    - name: Check if k3s-config is a valid git repository
-      stat:
-        path: "{{ k3s_config_base_path }}/.git"
-      register: k3s_config_git_dir
-
-    - name: Remove k3s-config directory if not a valid git repo
-      file:
-        path: "{{ k3s_config_base_path }}"
-        state: absent
-      when: not k3s_config_git_dir.stat.exists
-
     - name: Pull latest k3s-config manifests
       git:
         repo: "https://github.com/danielgoepp/k3s-config"
@@ -35,12 +24,6 @@
       set_fact:
         app_config: "{{ k3s_applications[app_name] }}"
         service_name: "{{ app_name }}"
-
-    - name: Display update information
-      debug:
-        msg:
-          - "Application: {{ app_name }}"
-          - "Deployment Method: {{ app_config.deployment_method }}"
 
     # Helm deployment path
     - name: Update application using Helm

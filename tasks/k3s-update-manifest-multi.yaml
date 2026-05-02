@@ -19,14 +19,6 @@
   set_fact:
     filtered_instances: "{{ instances | selectattr('name', 'equalto', target_instance) | list }}"
 
-- name: Display upgrade parameters
-  debug:
-    msg:
-      - "{{ service_name | title }} Multi-Instance Upgrade Parameters:"
-      - "  Target: {{ target_instance }}"
-      - "  Instances: {{ filtered_instances | map(attribute='name') | list | join(', ') }}"
-      - "  Total: {{ filtered_instances | length }}"
-
 - name: Upgrade {{ service_name | title }} instances
   include_tasks: k3s-update-manifest.yaml
   vars:

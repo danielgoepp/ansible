@@ -11,31 +11,6 @@
   set_fact:
     default_manifest_path: "{{ k3s_config_base_path }}/{{ service_name }}/manifests/{{ service_name }}-{{ context_suffix }}.yaml"
 
-- name: Display upgrade parameters
-  debug:
-    msg:
-      - "{{ service_name | title }} Upgrade Parameters:"
-      - "  Service: {{ service_name }}"
-      - "  Manifest Path: {{ manifest_path | default(default_manifest_path) }}"
-      - "  Kubernetes Context: {{ k8s_context }}"
-      - "  Namespace: {{ service_namespace }}"
-      - "  Deployment: {{ deployment_name }}"
-      - "  App Label: {{ app_label }}"
-
-- name: Get current deployment (before upgrade)
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: "{{ deployment_name }}"
-    namespace: "{{ service_namespace }}"
-    context: "{{ k8s_context }}"
-  register: current_deployment
-  ignore_errors: true
-
-- name: Display current deployment status
-  debug:
-    msg: "{{ service_name | title }}: {% if current_deployment.failed | default(false) %}fetch failed ({{ current_deployment.msg | default('unknown error') }}){% elif current_deployment.resources | length > 0 %}image={{ current_deployment.resources[0].spec.template.spec.containers[0].image }}, replicas={{ current_deployment.resources[0].status.readyReplicas | default(0) }}/{{ current_deployment.resources[0].status.replicas | default(0) }}{% else %}not found (will create){% endif %}"
-
 - name: Apply manifest from local file (server-side)
   kubernetes.core.k8s:
     state: present
@@ -44,24 +19,6 @@
     server_side_apply:
       field_manager: "{{ field_manager }}"
   register: apply_result
-
-- name: Display manifest application result
-  debug:
-    msg: "{{ service_name | title }} manifest applied: changed={{ apply_result.changed }}"
-
-- name: Wait for manifest application to complete
-  ansible.builtin.wait_for:
-    timeout: 5
-  delegate_to: localhost
-
-- name: Check if deployment was restarted by manifest application
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: "{{ deployment_name }}"
-    namespace: "{{ service_namespace }}"
-    context: "{{ k8s_context }}"
-  register: post_apply_deployment
 
 - name: Get current pods to check if restart is needed
   kubernetes.core.k8s_info:
@@ -89,15 +46,7 @@
     - current_pods.resources | length > 0
     - not apply_result.changed
     - pod_item.metadata.deletionTimestamp is not defined
-  register: pod_deletion_result
   no_log: true
-
-- name: Display pod restart action
-  debug:
-    msg:
-      - "Pod restart status:"
-      - "  Manifest caused restart: {{ apply_result.changed }}"
-      - "  Manual pod deletion performed: {{ pod_deletion_result.changed | default(false) }}"
 
 - name: Wait for deployment to be ready
   kubernetes.core.k8s_info:
@@ -111,37 +60,3 @@
       type: Available
       status: "True"
     wait_timeout: 300
-  register: deployment_ready
-
-- name: Get updated deployment (after upgrade)
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: "{{ deployment_name }}"
-    namespace: "{{ service_namespace }}"
-    context: "{{ k8s_context }}"
-  register: updated_deployment
-
-- name: Display updated deployment status
-  debug:
-    msg:
-      - "Updated {{ service_name | title }} Deployment:"
-      - "  Name: {{ updated_deployment.resources[0].metadata.name }}"
-      - "  Image: {{ updated_deployment.resources[0].spec.template.spec.containers[0].image }}"
-      - "  Ready Replicas: {{ updated_deployment.resources[0].status.readyReplicas }}/{{ updated_deployment.resources[0].status.replicas }}"
-      - "  Status: {{ updated_deployment.resources[0].status.conditions[-1].type }}"
-
-- name: Extract version information from container images
-  set_fact:
-    previous_image: "{{ (current_deployment.resources | default([]) | length > 0) | ternary(current_deployment.resources[0].spec.template.spec.containers[0].image, 'Unknown') }}"
-    current_image: "{{ updated_deployment.resources[0].spec.template.spec.containers[0].image }}"
-
-- name: Display upgrade summary
-  debug:
-    msg:
-      - "{{ service_name | title }} upgrade completed successfully!"
-      - "Previous image: {{ previous_image }}"
-      - "Current image: {{ current_image }}"
-      - "Manifest applied: {{ apply_result.changed }}"
-      - "Pod restart triggered: {{ apply_result.changed or (pod_deletion_result.changed | default(false)) }}"
-      - "Deployment ready: {{ deployment_ready.resources[0].status.conditions[-1].status == 'True' }}"

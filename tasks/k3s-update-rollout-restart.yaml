@@ -18,38 +18,6 @@
   set_fact:
     rollout_kind: "{{ _kind_map[rollout_resource_type] }}"
 
-- name: Display rollout restart parameters
-  debug:
-    msg:
-      - "{{ service_name | title }} Rollout Restart Parameters:"
-      - "  Service: {{ service_name }}"
-      - "  Resource: {{ rollout_resource_type }}/{{ rollout_resource_name }}"
-      - "  Namespace: {{ rollout_namespace }}"
-      - "  Kubernetes Context: {{ rollout_context }}"
-
-- name: Get current resource status (before restart)
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: "{{ rollout_kind }}"
-    name: "{{ rollout_resource_name }}"
-    namespace: "{{ rollout_namespace }}"
-    context: "{{ rollout_context }}"
-  register: current_resource
-
-- name: Display current resource status
-  debug:
-    msg:
-      - "Current {{ service_name | title }} {{ rollout_kind }}:"
-      - "  Name: {{ current_resource.resources[0].metadata.name }}"
-      - "  Image: {{ current_resource.resources[0].spec.template.spec.containers[0].image }}"
-      - "  Ready Replicas: {{ current_resource.resources[0].status.readyReplicas | default(0) }}/{{ current_resource.resources[0].status.replicas | default(0) }}"
-  when: current_resource.resources is defined and current_resource.resources | length > 0
-
-- name: Fail if resource not found
-  fail:
-    msg: "{{ rollout_kind }} '{{ rollout_resource_name }}' not found in namespace '{{ rollout_namespace }}'"
-  when: current_resource.resources is not defined or current_resource.resources | length == 0
-
 - name: Perform rollout restart
   kubernetes.core.k8s_json_patch:
     api_version: apps/v1
@@ -74,7 +42,6 @@
       type: Available
       status: "True"
     wait_timeout: 300
-  register: rollout_status_result
   when: rollout_resource_type == 'deployment'
 
 - name: Wait for StatefulSet/DaemonSet rollout to complete
@@ -93,11 +60,3 @@
   retries: 30
   delay: 10
   when: rollout_resource_type != 'deployment'
-
-- name: Display rollout restart summary
-  debug:
-    msg:
-      - "{{ service_name | title }} rollout restart completed successfully!"
-      - "  Resource: {{ rollout_resource_type }}/{{ rollout_resource_name }}"
-      - "  Image: {{ rollout_status_result.resources[0].spec.template.spec.containers[0].image }}"
-      - "  Ready Replicas: {{ rollout_status_result.resources[0].status.readyReplicas | default(0) }}/{{ rollout_status_result.resources[0].status.replicas | default(0) }}"
