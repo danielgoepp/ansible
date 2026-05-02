@@ -1,8 +1,8 @@
 ---
 - name: Set CIFS credentials variables
   ansible.builtin.set_fact:
-    cifs_user: "{{ awx_cifs_username | default(cifs_username) }}"
-    cifs_pass: "{{ awx_cifs_password | default(cifs_password) }}"
+    cifs_user: "{{ awx_cifs_username | default(vault_cifs_username) }}"
+    cifs_pass: "{{ awx_cifs_password | default(vault_cifs_password) }}"
   when: ansible_hostname != 'adambalm'
 
 - name: Create CIFS credentials file

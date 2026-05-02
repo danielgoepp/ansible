@@ -29,7 +29,7 @@
 
 - name: Set SSH public key variable
   ansible.builtin.set_fact:
-    lxc_ssh_public_key: "{{ awx_ssh_public_key | default(ssh_public_key) }}"
+    lxc_ssh_public_key: "{{ awx_ssh_public_key | default(vault_ssh_public_key) }}"
   when: inventory_hostname in groups['lxc']
 
 - name: Add SSH public key for dang

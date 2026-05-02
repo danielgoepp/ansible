@@ -51,7 +51,7 @@
 
 - name: Set SSH public key variable
   ansible.builtin.set_fact:
-    ui_network_ssh_public_key: "{{ awx_ssh_public_key | default(ssh_public_key) }}"
+    ui_network_ssh_public_key: "{{ awx_ssh_public_key | default(vault_ssh_public_key) }}"
 
 - name: Add backup server SSH public key for root
   ansible.builtin.authorized_key:
