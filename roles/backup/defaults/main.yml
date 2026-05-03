@@ -20,6 +20,7 @@ backup_directories:
   - victoriametrics
   - unifi
   - todoist
+  - birdnet
 
 # Credential variables are set dynamically in tasks/main.yml
 # from AWX variables or vault variables via set_fact

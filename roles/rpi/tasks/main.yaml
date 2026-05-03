@@ -1,4 +1,14 @@
 ---
+- name: Set SSH public key variable
+  ansible.builtin.set_fact:
+    rpi_ssh_public_key: "{{ awx_ssh_public_key | default(vault_ssh_public_key) }}"
+
+- name: Add backup server SSH public key for root
+  ansible.builtin.authorized_key:
+    user: root
+    key: "{{ rpi_ssh_public_key }}"
+    comment: "backup server access"
+
 - name: Install rpi packages
   ansible.builtin.apt:
     name:
@@ -13,12 +23,12 @@
     hour: "5"
     minute: "0"
     job: "rsync -ah /k3s/homeassistant/config/backups/ /mnt/backups/homeassistant/{{ ansible_hostname }} --delete"
-  when: "'homeassistant' in (services)"
+  when: "'homeassistant' in (services | default([]))"
 
 - name: Include install nut tasks
   ansible.builtin.include_tasks: setup-rpi-nut.yaml
-  when: "'nut' in (services)"
+  when: "'nut' in (services | default([]))"
 
 - name: Include install wyoming satellite tasks
   ansible.builtin.include_tasks: setup-rpi-wyoming-satellite.yaml
-  when: "'wyoming' in (services)"
+  when: "'wyoming' in (services | default([]))"

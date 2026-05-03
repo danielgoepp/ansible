@@ -110,3 +110,4 @@
     state: mounted
     fstype: ceph
     opts: "{{ ceph_opts_base }}"
+  when: inventory_hostname != 'probepi'

@@ -45,7 +45,7 @@ rsync -ah /mnt/k3s-prod-data/homeassistant/backups/ /mnt/backups/homeassistant/p
 
 ## backup unifi
 echo "Processing backup for unifi"
-rsync -ah root@ui-network:/home/uosserver/.local/share/containers/storage/volumes/uosserver_var_lib_unifi/_data/backup/autobackup/ /mnt/backups/unifi/ --delete
+rsync -ah --no-owner --no-group --no-perms root@ui-network:/home/uosserver/.local/share/containers/storage/volumes/uosserver_var_lib_unifi/_data/backup/autobackup/ /mnt/backups/unifi/ --delete
 
 ## backup victoriametrics
 echo "Processing backup for victoriametrics"
@@ -76,3 +76,8 @@ if [[ ! -f $TODOIST_DEST ]]; then
     curl -s -H "Authorization: Bearer $TODOIST_API_TOKEN" "$TODOIST_URL" -o "$TODOIST_DEST"
 fi
 find $BKUPDIR/todoist -mtime +7 -delete
+
+## backup birdnet
+echo "Processing backup for birdnet"
+rsync -ah probepi:/home/dang/BirdNET-Pi/birdnet.conf $BKUPDIR/birdnet/
+rsync -ah probepi:/home/dang/BirdNET-Pi/scripts/birds.db $BKUPDIR/birdnet/
