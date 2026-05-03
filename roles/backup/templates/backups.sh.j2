@@ -8,6 +8,9 @@ OPNSENSE_KEY={{ backup_opnsense_key }}
 OPNSENSE_SECRET={{ backup_opnsense_secret }}
 OPNSENSE_HOST={{ backup_opnsense_host }}
 
+TODOIST_OAUTH_TOKEN={{ backup_todoist_oauth_token }}
+TODOIST_API_TOKEN={{ backup_todoist_api_token }}
+
 # disabled uptime kuma until I can improve it - no need to backup data, just config - some kind of custom sqlite export perhaps?
 
 # for service in "esphome" "zigbee2mqtt" "uptime-kuma" "kopia"; do
@@ -42,7 +45,7 @@ rsync -ah /mnt/k3s-prod-data/homeassistant/backups/ /mnt/backups/homeassistant/p
 
 ## backup unifi
 echo "Processing backup for unifi"
-rsync -ah root@ui-network:/var/lib/unifi/backup/autobackup/ /mnt/backups/unifi/ --delete
+rsync -ah root@ui-network:/home/uosserver/.local/share/containers/storage/volumes/uosserver_var_lib_unifi/_data/backup/autobackup/ /mnt/backups/unifi/ --delete
 
 ## backup victoriametrics
 echo "Processing backup for victoriametrics"
@@ -61,3 +64,15 @@ find $BKUPDIR/unifi -mtime +7 -delete
 # rsync -ah --exclude '.*' /mnt/k3s-prod-data/transmission/ /mnt/backups/torrent/transmission --delete
 # cp /mnt/k3s-prod-data/plex/Library/Application\ Support/Plex\ Media\ Server/Preferences.xml /mnt/backups/torrent/plex/
 find /mnt/smb_media -type d | egrep -v "Plex Versions" > /mnt/backups/torrent/media_list.txt
+
+## backup todoist
+echo "Processing backup for todoist"
+TODOIST_JSON=$(curl -s -H "Authorization: Bearer $TODOIST_OAUTH_TOKEN" https://api.todoist.com/api/v1/backups)
+TODOIST_VERSION=$(echo "$TODOIST_JSON" | python3 -c "import json,sys; print(sorted(json.load(sys.stdin),key=lambda b:b['version'],reverse=True)[0]['version'])")
+TODOIST_URL=$(echo "$TODOIST_JSON" | python3 -c "import json,sys; print(sorted(json.load(sys.stdin),key=lambda b:b['version'],reverse=True)[0]['url'])")
+TODOIST_SAFE_VERSION=$(echo "$TODOIST_VERSION" | tr ' ' '_' | tr ':' '-')
+TODOIST_DEST="$BKUPDIR/todoist/todoist-backup-$TODOIST_SAFE_VERSION.zip"
+if [[ ! -f $TODOIST_DEST ]]; then
+    curl -s -H "Authorization: Bearer $TODOIST_API_TOKEN" "$TODOIST_URL" -o "$TODOIST_DEST"
+fi
+find $BKUPDIR/todoist -mtime +7 -delete

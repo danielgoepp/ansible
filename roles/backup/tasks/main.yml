@@ -6,6 +6,8 @@
     backup_opnsense_secret: "{{ awx_opnsense_secret | default(vault_opnsense_secret) }}"
     backup_opnsense_host: "{{ awx_opnsense_host | default(vault_opnsense_host) }}"
     backup_ssh_private_key: "{{ awx_ssh_private_key | default(vault_ssh_private_key) }}"
+    backup_todoist_oauth_token: "{{ awx_todoist_oauth_token | default(vault_todoist_oauth_token) }}"
+    backup_todoist_api_token: "{{ awx_todoist_api_token | default(vault_todoist_api_token) }}"
 
 # Create backup directories
 - name: Create backup directories
