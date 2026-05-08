@@ -50,6 +50,25 @@
     var: ubuntu_upgrade_result.stdout_lines
   when: ubuntu_upgrade_result is not skipped
 
+- name: Check for packages still held back due to phasing
+  ansible.builtin.shell:
+    cmd: apt list --upgradable 2>/dev/null | grep -v '^Listing' | awk -F'/' '{print $1}'
+  delegate_to: "{{ k3s_node }}"
+  become: true
+  register: phased_packages
+  changed_when: false
+
+- name: Force upgrade phased packages on {{ k3s_node }}
+  ansible.builtin.apt:
+    name: "{{ phased_packages.stdout_lines }}"
+    state: latest
+    dpkg_options: force-confdef,force-confold
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  delegate_to: "{{ k3s_node }}"
+  become: true
+  when: phased_packages.stdout_lines | length > 0
+
 - name: Ubuntu upgrade complete
   ansible.builtin.debug:
     msg: "=== Ubuntu upgrade on {{ k3s_node }} complete ==="
