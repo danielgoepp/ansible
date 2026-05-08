@@ -1,9 +1,5 @@
 ---
 # Ubuntu apt dist-upgrade on a k3s VM
-# Runs apt update + dist-upgrade with the same flags as the planning notes:
-#   apt update && DEBIAN_FRONTEND=noninteractive apt-get -q -y \
-#     -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dist-upgrade
-#
 # Does NOT reboot - the VM is shut down by the next step.
 #
 # Parameters:
@@ -13,61 +9,14 @@
   ansible.builtin.debug:
     msg: "=== apt dist-upgrade on {{ k3s_node }} ==="
 
-- name: apt update on {{ k3s_node }}
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 0
-  delegate_to: "{{ k3s_node }}"
-  become: true
-
-- name: List upgradable packages on {{ k3s_node }}
-  ansible.builtin.shell:
-    cmd: apt list --upgradable 2>/dev/null | grep -v '^Listing' | wc -l
-  delegate_to: "{{ k3s_node }}"
-  become: true
-  register: ubuntu_upgradable
-  changed_when: false
-
-- name: Display upgradable count
-  ansible.builtin.debug:
-    msg: "{{ ubuntu_upgradable.stdout }} packages available for upgrade on {{ k3s_node }}"
-
 - name: apt dist-upgrade on {{ k3s_node }}
-  ansible.builtin.apt:
-    upgrade: dist
-    autoclean: true
-    autoremove: true
-    dpkg_options: force-confdef,force-confold
-  environment:
-    DEBIAN_FRONTEND: noninteractive
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: apt-dist-upgrade
   delegate_to: "{{ k3s_node }}"
   become: true
-  register: ubuntu_upgrade_result
-  when: ubuntu_upgradable.stdout | int > 0
-
-- name: Display Ubuntu upgrade result
-  ansible.builtin.debug:
-    var: ubuntu_upgrade_result.stdout_lines
-  when: ubuntu_upgrade_result is not skipped
-
-- name: Check for packages still held back due to phasing
-  ansible.builtin.shell:
-    cmd: apt list --upgradable 2>/dev/null | grep -v '^Listing' | awk -F'/' '{print $1}'
-  delegate_to: "{{ k3s_node }}"
-  become: true
-  register: phased_packages
-  changed_when: false
-
-- name: Force upgrade phased packages on {{ k3s_node }}
-  ansible.builtin.apt:
-    name: "{{ phased_packages.stdout_lines }}"
-    state: latest
-    dpkg_options: force-confdef,force-confold
-  environment:
-    DEBIAN_FRONTEND: noninteractive
-  delegate_to: "{{ k3s_node }}"
-  become: true
-  when: phased_packages.stdout_lines | length > 0
+  vars:
+    apt_dist_upgrade_reboot: false
 
 - name: Ubuntu upgrade complete
   ansible.builtin.debug:

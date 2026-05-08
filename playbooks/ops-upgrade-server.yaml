@@ -1,5 +1,5 @@
 ---
-# Upgrade a single Ubuntu or Raspberry Pi server
+# Upgrade Ubuntu or Raspberry Pi servers
 #
 # Usage:
 #   Local:  ansible-playbook playbooks/ops-upgrade-server.yaml -e target_host=<hostname>
@@ -9,56 +9,9 @@
 - name: Upgrade server
   hosts: "{{ awx_target_host | default(target_host) }}"
   become: true
-  gather_facts: false
 
   tasks:
-    - name: Update package cache
-      apt:
-        update_cache: true
-        cache_valid_time: 0
-
-    - name: Check for available upgrades
-      shell: apt list --upgradable 2>/dev/null | grep -c '/' || true
-      register: upgrades_available
-      changed_when: false
-
-    - name: Display upgrade count
-      debug:
-        msg: "{{ upgrades_available.stdout }} packages available for upgrade on {{ inventory_hostname }}"
-
-    - name: Upgrade all packages
-      apt:
-        upgrade: dist
-        autoclean: true
-        autoremove: true
-      register: apt_upgrade_result
-      when: upgrades_available.stdout | int > 0
-
-    - name: Check for packages held back due to phasing
-      shell: apt list --upgradable 2>/dev/null | grep -v '^Listing' | awk -F'/' '{print $1}'
-      register: phased_packages
-      changed_when: false
-
-    - name: Force upgrade phased packages
-      apt:
-        name: "{{ phased_packages.stdout_lines }}"
-        state: latest
-        autoclean: true
-        autoremove: true
-      when: phased_packages.stdout_lines | length > 0
-
-    - name: Check if reboot is required
-      stat:
-        path: /var/run/reboot-required
-      register: reboot_required
-
-    - name: Reboot if required
-      reboot:
-        reboot_timeout: 600
-        post_reboot_delay: 30
-        msg: "Rebooting {{ inventory_hostname }} after package upgrades"
-      when: reboot_required.stat.exists
-
-    - name: Server upgrade completed
-      debug:
-        msg: "=== {{ inventory_hostname }} upgrade completed{{ ' and rebooted' if reboot_required.stat.exists else '' }} ==="
+    - name: Run apt dist-upgrade
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: apt-dist-upgrade

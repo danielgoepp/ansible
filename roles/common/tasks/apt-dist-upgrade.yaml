@@ -1,12 +1,17 @@
 ---
 # System updates and maintenance
 # This should only be run when explicitly requested
+#
+# Variables:
+#   apt_dist_upgrade_reboot: true (default) — set false to skip reboot (e.g. cluster upgrade shuts down VM instead)
 
 - name: Upgrade all packages to latest
   ansible.builtin.apt:
     upgrade: dist
     update_cache: true
-    dpkg_options: 'force-confnew'
+    dpkg_options: 'force-confdef,force-confold'
+  environment:
+    DEBIAN_FRONTEND: noninteractive
 
 - name: Check for packages held back due to phasing
   ansible.builtin.shell:
@@ -18,7 +23,9 @@
   ansible.builtin.apt:
     name: "{{ phased_packages.stdout_lines }}"
     state: latest
-    dpkg_options: 'force-confnew'
+    dpkg_options: 'force-confdef,force-confold'
+  environment:
+    DEBIAN_FRONTEND: noninteractive
   when: phased_packages.stdout_lines | length > 0
 
 - name: Clean apt cache and autoremove
@@ -35,4 +42,6 @@
   ansible.builtin.reboot:
     msg: "Reboot initiated by Ansible for kernel updates"
     reboot_timeout: 3600
-  when: common_reboot_required_file.stat.exists
+  when:
+    - common_reboot_required_file.stat.exists
+    - apt_dist_upgrade_reboot | default(true) | bool
