@@ -34,6 +34,19 @@
       register: apt_upgrade_result
       when: upgrades_available.stdout | int > 0
 
+    - name: Check for packages held back due to phasing
+      shell: apt list --upgradable 2>/dev/null | grep -v '^Listing' | awk -F'/' '{print $1}'
+      register: phased_packages
+      changed_when: false
+
+    - name: Force upgrade phased packages
+      apt:
+        name: "{{ phased_packages.stdout_lines }}"
+        state: latest
+        autoclean: true
+        autoremove: true
+      when: phased_packages.stdout_lines | length > 0
+
     - name: Check if reboot is required
       stat:
         path: /var/run/reboot-required
