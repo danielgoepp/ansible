@@ -12,13 +12,16 @@
       set_fact:
         k3s_config_base_path: "{{ playbook_dir }}/../../files/k3s-config"
 
+    - name: Remove stale k3s-config directory if present
+      file:
+        path: "{{ k3s_config_base_path }}"
+        state: absent
+
     - name: Pull latest k3s-config manifests
       git:
         repo: "https://github.com/danielgoepp/k3s-config"
         dest: "{{ k3s_config_base_path }}"
         version: main
-        update: yes
-        force: no
 
     - name: Set application configuration
       set_fact:
