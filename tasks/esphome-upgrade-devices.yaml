@@ -5,20 +5,20 @@
 #   - upgrade_description: Description for logging (optional, defaults to "ESPHome devices")
 
 - name: Set default upgrade description
-  set_fact:
+  ansible.builtin.set_fact:
     upgrade_description: "ESPHome devices"
   when: upgrade_description is not defined
 
 - name: Display upgrade plan header
-  debug:
+  ansible.builtin.debug:
     msg: "{{ upgrade_description }} Upgrade Plan:"
 
 - name: Display upgrade plan details
-  debug:
+  ansible.builtin.debug:
     msg: "Pod: {{ esphome_pod_name }} | Namespace: {{ esphome_namespace }} | Context: {{ k3s_context }} | Devices: {{ devices_to_upgrade | length }}"
 
 - name: List devices to upgrade
-  debug:
+  ansible.builtin.debug:
     msg: "- {{ item.name }} ({{ item.config_file }}.yaml)"
   loop: "{{ devices_to_upgrade }}"
 
@@ -50,18 +50,30 @@
   timeout: "{{ esphome_timeout | default(600) }}"
 
 - name: Display upgrade results
-  debug:
-    msg: "Device: {{ item.item.name }} | Config: {{ item.item.config_file | default(item.item.name) }}.yaml | Success: {{ item.rc == 0 }}{% if item.rc != 0 %} | Error: {{ (item.stderr | default('Unknown error') | trim | regex_replace('\n.*', '') | truncate(80)) }}{% endif %}"
+  ansible.builtin.debug:
+    msg: >-
+      Device: {{ item.item.name }} |
+      Config: {{ item.item.config_file | default(item.item.name) }}.yaml |
+      Success: {{ item.rc == 0
+      }}{%- if item.rc != 0 %} | Error: {{ (item.stderr |
+      default('Unknown error') | trim |
+      regex_replace('\n.*', '') | truncate(80)) }}{% endif %}
   loop: "{{ esphome_upgrade_result.results }}"
   loop_control:
     label: "{{ item.item.name }}"
 
 - name: Summary of upgrade results
-  debug:
-    msg: "{{ upgrade_description }} Upgrade Summary: {{ devices_to_upgrade | length }} total, {{ esphome_upgrade_result.results | selectattr('rc', 'equalto', 0) | list | length }} successful, {{ esphome_upgrade_result.results | rejectattr('rc', 'equalto', 0) | list | length }} failed"
+  ansible.builtin.debug:
+    msg: >-
+      {{ upgrade_description }} Upgrade Summary:
+      {{ devices_to_upgrade | length }} total,
+      {{ esphome_upgrade_result.results | selectattr('rc', 'equalto', 0) |
+      list | length }} successful,
+      {{ esphome_upgrade_result.results | rejectattr('rc', 'equalto', 0) |
+      list | length }} failed
 
 - name: Failed device details
-  debug:
+  ansible.builtin.debug:
     msg: "Failed: {{ item.item.name }} - {{ (item.stderr | default('No error details available') | trim | regex_replace('\n.*', '')) }}"
   loop: "{{ esphome_upgrade_result.results }}"
   loop_control:
