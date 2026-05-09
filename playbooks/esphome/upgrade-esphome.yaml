@@ -24,7 +24,7 @@
     # Options
     esphome_no_logs: true
     esphome_clean_build: true
-    esphome_timeout: 600  # 10 minutes
+    esphome_timeout: 1800  # 30 minutes (M5Stack devices have large firmware)
 
     # Targeting
     target_pattern: "all"
