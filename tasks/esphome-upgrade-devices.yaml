@@ -41,6 +41,7 @@
     command: >
       esphome -q run {{ item.config_file | default(item.name) }}.yaml
       {% if esphome_no_logs | default(true) %}--no-logs{% endif %}
+      --device {{ item.name }}
     context: "{{ k3s_context }}"
   register: esphome_upgrade_result
   loop: "{{ devices_to_upgrade }}"
@@ -51,14 +52,14 @@
 
 - name: Display upgrade results
   debug:
-    msg: "Device: {{ item.item.name }} | Config: {{ item.item.config_file | default(item.item.name) }}.yaml | Success: {{ item.rc == 0 }}{% if item.rc != 0 %} | Error: {{ (item.stderr | default('Unknown error') | trim | regex_replace('\n.*', '') | truncate(80)) }}{% endif %}"
+    msg: "Device: {{ item.item.name }} | Config: {{ item.item.config_file | default(item.item.name) }}.yaml | Success: {{ item.return_code == 0 }}{% if item.return_code != 0 %} | Error: {{ (item.stderr | default('Unknown error') | trim | regex_replace('\n.*', '') | truncate(80)) }}{% endif %}"
   loop: "{{ esphome_upgrade_result.results }}"
   loop_control:
     label: "{{ item.item.name }}"
 
 - name: Summary of upgrade results
   debug:
-    msg: "{{ upgrade_description }} Upgrade Summary: {{ devices_to_upgrade | length }} total, {{ esphome_upgrade_result.results | selectattr('rc', 'equalto', 0) | list | length }} successful, {{ esphome_upgrade_result.results | rejectattr('rc', 'equalto', 0) | list | length }} failed"
+    msg: "{{ upgrade_description }} Upgrade Summary: {{ devices_to_upgrade | length }} total, {{ esphome_upgrade_result.results | selectattr('return_code', 'equalto', 0) | list | length }} successful, {{ esphome_upgrade_result.results | rejectattr('return_code', 'equalto', 0) | list | length }} failed"
 
 - name: Failed device details
   debug:
@@ -66,4 +67,4 @@
   loop: "{{ esphome_upgrade_result.results }}"
   loop_control:
     label: "{{ item.item.name }}"
-  when: item.rc != 0
+  when: item.return_code != 0
