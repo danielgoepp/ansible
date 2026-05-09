@@ -60,22 +60,22 @@
 
     # --- Discover and upgrade devices ---
     - name: Discover ESPHome devices
-      ansible.builtin.include_tasks: ../../tasks/esphome-discover-devices.yaml
+      include_tasks: ../../tasks/esphome-discover-devices.yaml
 
     - name: Use all devices
-      ansible.builtin.set_fact:
+      set_fact:
         devices_to_upgrade: "{{ esphome_devices }}"
         filter_description: "all devices"
       when: target_pattern == "all"
 
     - name: Filter devices by pattern
-      ansible.builtin.set_fact:
+      set_fact:
         devices_to_upgrade: "{{ esphome_devices | selectattr('name', 'search', target_pattern) | list }}"
         filter_description: "pattern '{{ target_pattern }}'"
       when: target_pattern != "all"
 
     - name: Validate pattern match found devices
-      ansible.builtin.fail:
+      fail:
         msg: |
           No devices found matching {{ filter_description }}.
           Available devices: {{ esphome_devices | map(attribute='name') | list | join(', ') }}
@@ -84,6 +84,6 @@
         - devices_to_upgrade | length == 0
 
     - name: Run ESPHome upgrade
-      ansible.builtin.include_tasks: ../../tasks/esphome-upgrade-devices.yaml
+      include_tasks: ../../tasks/esphome-upgrade-devices.yaml
       vars:
         upgrade_description: "ESPHome {{ filter_description }}"
