@@ -100,21 +100,20 @@ Pair upgrade order is hardcoded: `pve15+k3s-prod-15` → `pve13+k3s-prod-13` →
 `pve12+k3s-prod-12` → `pve11+k3s-prod-11`. opnsense is migrated `pve11→pve12`
 before the pve11 pair, then back after.
 
-Pre-flight runs once: a health gate (Ceph HEALTH_OK, opnsense on pve11), then
-an operator pause before any changes, then mutes alerts (Graylog, Alertmanager,
-Uptime Kuma), stops iotawatt-sync, shuts down shared VMs (ui-network, dev,
-smb, backup) for the entire window, sets Ceph `noout`, and sets CNPG
-maintenance. The Alertmanager silence matches all alerts. iotawatt-sync is
-stopped via `kubectl delete deployment` (not `kubectl delete -f`) to avoid
-cascading deletion of the management namespace.
+Pre-flight runs once: a health gate (opnsense on pve11), then an operator
+pause before any changes. At the pause the operator can answer `yes` to run
+the full maintenance setup (mute alerts, stop iotawatt-sync, set Ceph `noout`,
+enable CNPG maintenance) or `skip` to bypass setup when resuming after a
+failure where maintenance is already active. iotawatt-sync is stopped via
+`kubectl delete deployment` (not `kubectl delete -f`) to avoid cascading
+deletion of the management namespace.
 
-Per pair: Ceph health check (allow noout) → operator pause to confirm → drain
-→ post-drain pod snapshot + operator pause → apt dist-upgrade on the k3s VM →
-in-place k3s install (no `--server` flag, upgrade only) → shutdown VM →
-operator pause before PVE upgrade → apt dist-upgrade + reboot PVE (waits for
-Ceph HEALTH_WARN-noout-only after reboot) → start shared VMs/LXCs on this
-PVE node (ensures SMB mount is available) → start k3s VM → uncordon → wait
-for pods ready (operator prompt on timeout). On the pve11 pair only: opnsense
+Per pair: operator pause to confirm → drain → post-drain pod snapshot +
+operator pause → apt dist-upgrade on the k3s VM → in-place k3s install
+(no `--server` flag, upgrade only) → shutdown VM → operator pause before PVE
+upgrade → apt dist-upgrade + reboot PVE → start shared VMs/LXCs on this PVE
+node (ensures SMB mount is available) → start k3s VM → uncordon → wait for
+pods ready (operator prompt on timeout). On the pve11 pair only: opnsense
 migrates `pve11→pve12` with a `ping google.com` connectivity test and operator
 pause before the drain, then migrates back after uncordon with another
 connectivity test. Post-flight: operator pause with cluster-wide health
@@ -122,17 +121,12 @@ snapshot → disable CNPG maintenance (displays `kubectl get cluster -A`) →
 disable Ceph `noout` → wait for Ceph HEALTH_OK → start shared VMs (verified
 running via Proxmox API) → re-apply iotawatt-sync → unmute alerts.
 
-The Ceph health check treats `HEALTH_WARN` whose only condition involves
-`noout` as healthy (only after `noout` is set). Any other warning (scrubbing,
-cleaning, degraded, etc.) blocks and retries — the check waits for those to
-resolve. The final post-flight check sets `allow_noout: false`, requiring
-strict `HEALTH_OK` to confirm the noout flag is truly gone. Any unhealthy
-state retries with backoff and then prompts the operator with
-continue/retry/abort.
+Note: the per-pair and post-PVE-reboot Ceph health checks are currently
+disabled (`tasks/ops-upgrade-cluster-ceph-health.yaml` is a no-op).
 
-Interactive mode (default) has approximately 21 operator pause points across
-the full run (19 for non-pve11 pairs + 2 extra for opnsense network tests on
-the pve11 pair), plus additional prompts for any Ceph or pods-ready failures.
+Interactive mode (default) has approximately 17 operator pause points across
+the full run (15 for non-pve11 pairs + 2 extra for opnsense network tests on
+the pve11 pair), plus additional prompts for pods-ready failures.
 
 ### Maintenance Mode
 
@@ -398,7 +392,7 @@ All cluster upgrade task files use the prefix `ops-upgrade-cluster-` for consist
 **Task Categories**:
 
 - Alert and monitoring management (alerts wrapper + per-system: graylog, alertmanager, uptime-kuma)
-- Ceph storage operations (`ceph-noout`, `ceph-health` reusable healthy-or-noout-only check)
+- Ceph storage operations (`ceph-noout`, `ceph-health` disabled no-op placeholder)
 - Database maintenance mode (`cnpg-maintenance`)
 - Node lifecycle (drain, shutdown via Proxmox API, startup via Proxmox API, uncordon)
 - Health validation (`health` for k3s, `preflight` for full cluster gate)

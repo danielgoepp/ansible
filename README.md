@@ -58,8 +58,8 @@ ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<devic
 ### Cluster Upgrade
 
 Rolling upgrade of the Proxmox cluster, the Ubuntu k3s VMs, and k3s itself.
-Includes a pre-flight health gate, Ceph health checks before every drain,
-post-drain pod snapshots, and operator confirmation prompts throughout.
+Includes a pre-flight health gate, post-drain pod snapshots, and operator
+confirmation prompts throughout.
 
 ```bash
 # Required: target k3s version
@@ -69,23 +69,24 @@ ansible-playbook playbooks/ops-upgrade-cluster.yaml \
 # Run unattended (skip pause prompts)
 ansible-playbook playbooks/ops-upgrade-cluster.yaml \
   -e k3s_target_version=<version> -e interactive_mode=false
+
+# Resume after a failure (maintenance already active)
+ansible-playbook playbooks/ops-upgrade-cluster.yaml \
+  -e k3s_target_version=<version> -e skip_preflight=true
 ```
 
-Pre-flight checks Ceph health and opnsense location, then pauses for operator
-confirmation before making any changes. Setup order: mute alerts first, then
-stop iotawatt-sync, shutdown shared VMs, set Ceph noout, enable CNPG
-maintenance. Each pair opens with a Ceph health check, a pre-pair status
-snapshot, and an operator pause; after drain a pod snapshot is shown before
-the Ubuntu upgrade begins; a second pause gates the PVE reboot; after the PVE
-reboots, shared VMs on that node are started before the k3s VM to ensure
-mounts are available. The pve11 pair additionally migrates opnsense to pve12
-with a network connectivity test before and after. Post-flight pauses for a
-final cluster review, then reverses maintenance gates and waits for Ceph
-HEALTH_OK; alerts are unmuted last.
-
-If the playbook is interrupted, re-running it detects the checkpoint in
-`/tmp/cluster-upgrade-YYYY-MM-DD/` and prompts to resume from where it left
-off or start over.
+Pre-flight checks opnsense location, then pauses for operator confirmation.
+At the pre-flight pause, answer `skip` if resuming after a failure where
+maintenance setup (alerts muted, noout set, etc.) is already active. Setup
+order: mute alerts, stop iotawatt-sync, set Ceph noout, enable CNPG
+maintenance. Each pair opens with a pre-pair status snapshot and an operator
+pause; after drain a pod snapshot is shown before the Ubuntu upgrade begins;
+a second pause gates the PVE reboot; after the PVE reboots, shared VMs on
+that node are started before the k3s VM to ensure mounts are available. The
+pve11 pair additionally migrates opnsense to pve12 with a network connectivity
+test before and after. Post-flight pauses for a final cluster review, then
+reverses maintenance gates and waits for Ceph HEALTH_OK; alerts are unmuted
+last.
 
 ### Maintenance Mode
 
