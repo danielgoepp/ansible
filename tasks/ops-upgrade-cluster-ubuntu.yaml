@@ -10,7 +10,7 @@
     msg: "=== apt dist-upgrade on {{ k3s_node }} ==="
 
 - name: apt dist-upgrade on {{ k3s_node }}
-  ansible.builtin.include_role:
+  ansible.builtin.import_role:
     name: common
     tasks_from: apt-dist-upgrade
   delegate_to: "{{ k3s_node }}"

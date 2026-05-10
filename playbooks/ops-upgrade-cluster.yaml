@@ -148,7 +148,8 @@
                 - Stop iotawatt-sync
                 - Set Ceph noout flag
                 - Enable CNPG maintenance mode
-              Proceed? (yes/no)
+              Proceed? (yes/skip/no)
+              (skip = maintenance setup already done, resuming after failure)
           register: preflight_proceed_confirm
           when: interactive_mode | bool
 
@@ -157,31 +158,36 @@
             msg: "Cluster upgrade cancelled before maintenance setup"
           when:
             - interactive_mode | bool
-            - preflight_proceed_confirm.user_input | lower not in ['yes', 'y']
+            - preflight_proceed_confirm.user_input | lower not in ['yes', 'y', 'skip', 's']
 
-        # PRE-FLIGHT: mute alerts
-        - name: Mute alerts (Graylog / Alertmanager / Uptime Kuma)
-          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
-          vars:
-            maintenance_action: enable
+        - name: Run maintenance setup
+          when: >-
+            not interactive_mode | bool or
+            preflight_proceed_confirm.user_input | lower in ['yes', 'y']
+          block:
+            # PRE-FLIGHT: mute alerts
+            - name: Mute alerts (Graylog / Alertmanager / Uptime Kuma)
+              ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
+              vars:
+                maintenance_action: enable
 
-        # PRE-FLIGHT: stop iotawatt-sync
-        - name: Stop iotawatt-sync
-          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
-          vars:
-            iotawatt_action: stop
+            # PRE-FLIGHT: stop iotawatt-sync
+            - name: Stop iotawatt-sync
+              ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml
+              vars:
+                iotawatt_action: stop
 
-        # PRE-FLIGHT: enable Ceph noout
-        - name: Enable Ceph noout flag
-          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
-          vars:
-            maintenance_action: enable
+            # PRE-FLIGHT: enable Ceph noout
+            - name: Enable Ceph noout flag
+              ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-ceph-noout.yaml
+              vars:
+                maintenance_action: enable
 
-        # PRE-FLIGHT: enable CNPG maintenance
-        - name: Enable CNPG maintenance mode
-          ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
-          vars:
-            maintenance_action: enable
+            # PRE-FLIGHT: enable CNPG maintenance
+            - name: Enable CNPG maintenance mode
+              ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
+              vars:
+                maintenance_action: enable
 
         - name: Pre-flight complete
           ansible.builtin.debug:
@@ -216,7 +222,7 @@
   vars:
     shared_shutdowns: "{{ hostvars['localhost']['shared_shutdowns'] }}"
     interactive_mode: "{{ hostvars['localhost']['interactive_mode'] | default(true) }}"
-    skip_postflight: "{{ skip_postflight | default(false) }}"
+    skip_postflight: false
 
   tasks:
     - name: Skipping post-flight cleanup
