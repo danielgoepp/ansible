@@ -77,7 +77,8 @@ k3s_applications:
     app_label: grafana
 
   graylog-prod:
-    deployment_method: rollout-restart
+    deployment_method: manifest-rollout-restart
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/graylog/manifests/graylog-prod.yaml"
     resource_type: statefulset
     resource_name: graylog
     service_namespace: graylog
