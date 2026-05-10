@@ -21,7 +21,7 @@
     owner: root
     group: root
     mode: '0640'
-  when: ansible_hostname != 'adambalm'
+  when: ansible_hostname != 'adambalm' and ansible_hostname != 'gru'
 
 - name: Create /mnt/k3s-prod-data
   ansible.builtin.file:
