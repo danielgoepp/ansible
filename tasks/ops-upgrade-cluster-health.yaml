@@ -57,6 +57,7 @@
       until: not_ready_pods.stdout == ""
       retries: 24
       delay: 10
+      changed_when: false
 
     - name: Display final pods status on node
       delegate_to: localhost
@@ -84,6 +85,7 @@
       ansible.builtin.command: kubectl get pods --all-namespaces --field-selector spec.nodeName={{ node_name }}
       register: node_pods_timeout
       changed_when: false
+      failed_when: false
 
     - name: Display all pods on node after timeout
       ansible.builtin.debug:
@@ -94,6 +96,10 @@
         prompt: |
 
           Some pods on {{ node_name }} are not ready after the wait timeout.
+
+          Not-ready pods:
+          {{ not_ready_pods.stdout | default('(unable to retrieve)') }}
+
           If these are expected to be down for this maintenance window, continue.
           [c]ontinue  (proceed despite non-ready pods)
           [a]bort     (fail the playbook)
@@ -109,7 +115,10 @@
 
     - name: Fail if non-interactive and pods not ready
       ansible.builtin.fail:
-        msg: "Pods not ready on {{ node_name }} after timeout and interactive_mode=false"
+        msg: |
+          Pods not ready on {{ node_name }} after timeout (interactive_mode=false).
+          Not-ready pods:
+          {{ not_ready_pods.stdout | default('(unable to retrieve)') }}
       when: not (interactive_mode | bool)
 
   when: health_action == 'pods-ready'
