@@ -113,13 +113,15 @@ operator pause → apt dist-upgrade on the k3s VM → in-place k3s install
 (no `--server` flag, upgrade only) → shutdown VM → operator pause before PVE
 upgrade → apt dist-upgrade + reboot PVE → start shared VMs/LXCs on this PVE
 node (ensures SMB mount is available) → start k3s VM → uncordon → wait for
-pods ready (operator prompt on timeout). On the pve11 pair only: opnsense
-migrates `pve11→pve12` with a `ping google.com` connectivity test and operator
-pause before the drain, then migrates back after uncordon with another
-connectivity test. Post-flight: operator pause with cluster-wide health
-snapshot → disable CNPG maintenance (displays `kubectl get cluster -A`) →
-disable Ceph `noout` → wait for Ceph HEALTH_OK → start shared VMs (verified
-running via Proxmox API) → re-apply iotawatt-sync → unmute alerts.
+pods ready (operator prompt on timeout). If the drained node hosted the Vault
+pod, the Vault unseal AWX job template is triggered automatically after
+uncordon. On the pve11 pair only: opnsense migrates `pve11→pve12` with a
+`ping google.com` connectivity test and operator pause before the drain, then
+migrates back after uncordon with another connectivity test. Post-flight:
+operator pause with cluster-wide health snapshot → disable CNPG maintenance
+(displays `kubectl get cluster -A`) → disable Ceph `noout` → wait for Ceph
+HEALTH_OK → start shared VMs (verified running via Proxmox API) → re-apply
+iotawatt-sync → unmute alerts.
 
 Note: the per-pair and post-PVE-reboot Ceph health checks are currently
 disabled (`tasks/ops-upgrade-cluster-ceph-health.yaml` is a no-op).
@@ -371,6 +373,7 @@ K3s application updates use a unified, configuration-driven approach:
 - **tasks/k3s-update-manifest-multi-cnpg.yaml**: Reusable task file for multi-instance CNPG deployments
 - **tasks/k3s-update-helm.yaml**: Reusable task file for Helm deployments
 - **tasks/k3s-update-rollout-restart.yaml**: Reusable task file for rollout restart deployments
+- **tasks/ops-vault-unseal-awx.yaml**: Triggers the Vault unseal AWX job template and waits for completion; called after `vault-prod` Helm upgrades and during cluster node drains when the Vault pod is affected
 - **Benefits**: Single playbook for all updates, eliminates code duplication, consistent behavior, configuration-driven, easy to add new applications
 - **Pattern**: Applications are referenced by name (`app_name=<application>`), configuration is automatically loaded and used
 
@@ -408,6 +411,10 @@ All cluster upgrade task files use the prefix `ops-upgrade-cluster-` for consist
 - Proxmox node upgrade (`proxmox`)
 - Pre-upgrade snapshot of k3s-prod VMs (`snapshot-k3s`, called as first step of preflight)
 - Orchestration (`paired` for per-pair sequencing)
+
+**Supporting task (not `ops-upgrade-cluster-` prefixed)**:
+
+- `tasks/ops-vault-unseal-awx.yaml`: Triggers the Vault unseal AWX job template; called from `paired` after uncordon when Vault pod was on the drained node, and from `update-app.yaml` after `vault-prod` upgrades
 
 Use `ls tasks/ops-upgrade-cluster-*.yaml` to see all cluster upgrade tasks.
 
