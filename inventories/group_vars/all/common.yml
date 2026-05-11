@@ -13,6 +13,7 @@ alertmanager_created_by: "ansible-automation"
 uptime_kuma_url: "https://uptime-kuma-prod.goepp.net"
 hashicorp_vault_url: "https://vault-prod.goepp.net"
 awx_api_url: "https://awx-prod.goepp.net"
+vault_unseal_awx_job_template_id: 49
 
 # Backup directories
 todoist_backup_dir: "~/Downloads"

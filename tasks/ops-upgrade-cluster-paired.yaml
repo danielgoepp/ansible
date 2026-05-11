@@ -193,6 +193,24 @@
             - interactive_mode | bool
             - post_migrate_away_confirm.user_input | lower not in ['yes', 'y']
 
+        # PRE-DRAIN: note whether Vault is on this node so we can unseal after migration
+        - name: Check if Vault pod is on {{ k3s_node }}
+          ansible.builtin.command: >
+            kubectl get pod vault-0 -n vault -o jsonpath='{.spec.nodeName}'
+          delegate_to: localhost
+          register: vault_pod_node
+          changed_when: false
+          failed_when: false
+
+        - name: Set vault-on-this-node flag
+          ansible.builtin.set_fact:
+            vault_on_this_node: "{{ vault_pod_node.stdout | trim == k3s_node }}"
+
+        - name: Note Vault will need unsealing after migration
+          ansible.builtin.debug:
+            msg: "Vault pod is on {{ k3s_node }} — will trigger unseal after uncordon"
+          when: vault_on_this_node | bool
+
         # STEP 1: drain
         - name: Drain k3s node
           ansible.builtin.include_tasks: ops-upgrade-cluster-k3s.yaml
@@ -293,6 +311,11 @@
           ansible.builtin.include_tasks: ops-upgrade-cluster-k3s.yaml
           vars:
             k3s_action: uncordon
+
+        # POST-UNCORDON: unseal Vault if it was evicted from this node during drain
+        - name: Trigger Vault unseal via AWX after pod migration
+          ansible.builtin.include_tasks: ops-vault-unseal-awx.yaml
+          when: vault_on_this_node | default(false) | bool
 
         # STEP 9: opnsense migration back (only on pve11 pair)
         - name: Migrate opnsense back to {{ opnsense_home_node }}

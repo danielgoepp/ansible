@@ -96,3 +96,8 @@
         service_namespace: "{{ app_config.service_namespace | default(service_name) }}"
         k8s_context: "{{ app_config.k8s_context | default(k3s_default_context) }}"
       when: app_config.deployment_method == 'manifest-rollout-restart'
+
+    # Vault-specific: unseal after upgrade (Vault restarts sealed after a Helm upgrade)
+    - name: Trigger Vault unseal via AWX after upgrade
+      include_tasks: ../../tasks/ops-vault-unseal-awx.yaml
+      when: app_name == 'vault-prod'

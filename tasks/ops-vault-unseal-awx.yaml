@@ -1,0 +1,44 @@
+---
+# Trigger the Vault unseal AWX job template and wait for completion
+#
+# Requires (from group_vars):
+#   vault_unseal_awx_job_template_id: AWX job template ID (common.yml)
+#   awx_api_url: AWX API base URL (common.yml)
+#   vault_awx_api_token: AWX API token (vault.yml)
+
+- name: Set AWX API token
+  ansible.builtin.set_fact:
+    _awx_api_token: "{{ awx_api_token | default(vault_awx_api_token) }}"
+
+- name: Launch Vault unseal AWX job
+  ansible.builtin.uri:
+    url: "{{ awx_api_url }}/api/v2/job_templates/{{ vault_unseal_awx_job_template_id }}/launch/"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _awx_api_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body: {}
+    status_code: [201]
+  register: awx_vault_unseal_job
+
+- name: Wait for Vault unseal AWX job to complete
+  ansible.builtin.uri:
+    url: "{{ awx_api_url }}/api/v2/jobs/{{ awx_vault_unseal_job.json.id }}/"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ _awx_api_token }}"
+    status_code: [200]
+  register: awx_vault_unseal_status
+  until: awx_vault_unseal_status.json.status in ['successful', 'failed', 'error', 'canceled']
+  retries: 20
+  delay: 15
+
+- name: Fail if Vault unseal job did not succeed
+  ansible.builtin.fail:
+    msg: "Vault unseal AWX job {{ awx_vault_unseal_job.json.id }} ended with status: {{ awx_vault_unseal_status.json.status }}"
+  when: awx_vault_unseal_status.json.status != 'successful'
+
+- name: Report Vault unseal complete
+  ansible.builtin.debug:
+    msg: "Vault unseal AWX job {{ awx_vault_unseal_job.json.id }} completed successfully"
