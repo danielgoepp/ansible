@@ -10,12 +10,13 @@
 #
 # Pre-flight (once):
 #   1. Validate inputs
-#   2. Health gate (Ceph HEALTH_OK, opnsense on pve11)
-#   3. [PAUSE] Confirm before any cluster-wide changes
-#   4. Mute alerts (Graylog, Alertmanager, Uptime Kuma)
-#   5. Stop iotawatt-sync
-#   6. Set Ceph noout flag
-#   7. Set CNPG maintenance mode
+#   2. Snapshot k3s-prod VMs (pre-upgrade-YYYYMMDD)
+#   3. Health gate (Ceph HEALTH_OK, opnsense on pve11)
+#   4. [PAUSE] Confirm before any cluster-wide changes
+#   5. Mute alerts (Graylog, Alertmanager, Uptime Kuma)
+#   6. Stop iotawatt-sync
+#   7. Set Ceph noout flag
+#   8. Set CNPG maintenance mode
 #
 # Per pair:
 #   See tasks/ops-upgrade-cluster-paired.yaml

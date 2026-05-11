@@ -1,0 +1,13 @@
+---
+# Usage:
+#   Local: ansible-playbook playbooks/ops-proxmox-snapshot-k3s.yaml
+#   AWX:   Run as job template (no additional configuration required)
+
+- name: Create pre-upgrade snapshots on k3s-prod VMs
+  hosts: localhost
+  become: false
+  gather_facts: false
+
+  tasks:
+    - name: Snapshot k3s-prod VMs
+      ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-snapshot-k3s.yaml

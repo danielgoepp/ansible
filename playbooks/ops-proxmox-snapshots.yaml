@@ -1,0 +1,153 @@
+---
+# Usage:
+#   Local (list only):  ansible-playbook playbooks/ops-proxmox-snapshots.yaml
+#   Local (delete all): ansible-playbook playbooks/ops-proxmox-snapshots.yaml -e delete_snapshots=true
+#   AWX:                Run as job template; set delete_snapshots=true in survey to enable deletion
+
+- name: Proxmox snapshot audit and cleanup
+  hosts: localhost
+  become: false
+  gather_facts: false
+  vars:
+    delete_snapshots: false
+    proxmox_api_host: pve15
+
+  tasks:
+    - name: Set Proxmox API credentials
+      ansible.builtin.set_fact:
+        proxmox_api_token_id: "{{ awx_proxmox_api_token_id | default(vault_proxmox_api_token_id | default('')) }}"
+        proxmox_api_token_secret: "{{ awx_proxmox_api_token_secret | default(vault_proxmox_api_token_secret | default('')) }}"
+
+    - name: Set Proxmox auth header
+      ansible.builtin.set_fact:
+        proxmox_auth_header: "PVEAPIToken=root@pam!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+
+    - name: Get all VMs and LXCs from cluster
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/cluster/resources?type=vm"
+        method: GET
+        headers:
+          Authorization: "{{ proxmox_auth_header }}"
+        validate_certs: false
+      register: cluster_resources
+
+    - name: Separate QEMU VMs and LXC containers
+      ansible.builtin.set_fact:
+        all_qemu: "{{ cluster_resources.json.data | selectattr('type', 'equalto', 'qemu') | list }}"
+        all_lxc: "{{ cluster_resources.json.data | selectattr('type', 'equalto', 'lxc') | list }}"
+        vms_with_snapshots: []
+
+    - name: Get snapshots for QEMU VMs
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ item.node }}/qemu/{{ item.vmid }}/snapshot"
+        method: GET
+        headers:
+          Authorization: "{{ proxmox_auth_header }}"
+        validate_certs: false
+      loop: "{{ all_qemu }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.vmid }}) on {{ item.node }}"
+      register: qemu_snap_results
+
+    - name: Get snapshots for LXC containers
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ item.node }}/lxc/{{ item.vmid }}/snapshot"
+        method: GET
+        headers:
+          Authorization: "{{ proxmox_auth_header }}"
+        validate_certs: false
+      loop: "{{ all_lxc }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.vmid }}) on {{ item.node }}"
+      register: lxc_snap_results
+
+    - name: Collect QEMU VMs with real snapshots
+      ansible.builtin.set_fact:
+        vms_with_snapshots: >-
+          {{
+            vms_with_snapshots + [{
+              'node': item.item.node,
+              'vmid': item.item.vmid,
+              'name': item.item.name,
+              'type': 'qemu',
+              'snapshots': item.json.data | rejectattr('name', 'equalto', 'current') | list
+            }]
+          }}
+      loop: "{{ qemu_snap_results.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: (item.json.data | rejectattr('name', 'equalto', 'current') | list | length) > 0
+
+    - name: Collect LXC containers with real snapshots
+      ansible.builtin.set_fact:
+        vms_with_snapshots: >-
+          {{
+            vms_with_snapshots + [{
+              'node': item.item.node,
+              'vmid': item.item.vmid,
+              'name': item.item.name,
+              'type': 'lxc',
+              'snapshots': item.json.data | rejectattr('name', 'equalto', 'current') | list
+            }]
+          }}
+      loop: "{{ lxc_snap_results.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: (item.json.data | rejectattr('name', 'equalto', 'current') | list | length) > 0
+
+    - name: Report - no snapshots found
+      ansible.builtin.debug:
+        msg: "No snapshots found across the cluster. All nodes are at current state."
+      when: vms_with_snapshots | length == 0
+
+    - name: Report - snapshot inventory
+      ansible.builtin.debug:
+        msg: "[{{ item.node }}] {{ item.type | upper }} {{ item.vmid }} ({{ item.name }}): {{ item.snapshots | map(attribute='name') | join(', ') }}"
+      loop: "{{ vms_with_snapshots | sort(attribute='node') }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: vms_with_snapshots | length > 0
+
+    - name: Confirm deletion
+      ansible.builtin.pause:
+        prompt: "Found {{ vms_with_snapshots | length }} VM(s)/LXC(s) with snapshots. Press ENTER to delete all or Ctrl+C to abort"
+      when:
+        - delete_snapshots | bool
+        - vms_with_snapshots | length > 0
+
+    - name: Delete QEMU snapshots
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ item.0.node }}/qemu/{{ item.0.vmid }}/snapshot/{{ item.1.name }}"
+        method: DELETE
+        headers:
+          Authorization: "{{ proxmox_auth_header }}"
+        validate_certs: false
+        status_code: [200]
+      loop: "{{ vms_with_snapshots | selectattr('type', 'equalto', 'qemu') | list | subelements('snapshots') }}"
+      loop_control:
+        label: "{{ item.0.name }} ({{ item.0.vmid }}) / {{ item.1.name }}"
+      when:
+        - delete_snapshots | bool
+        - vms_with_snapshots | length > 0
+
+    - name: Delete LXC snapshots
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ item.0.node }}/lxc/{{ item.0.vmid }}/snapshot/{{ item.1.name }}"
+        method: DELETE
+        headers:
+          Authorization: "{{ proxmox_auth_header }}"
+        validate_certs: false
+        status_code: [200]
+      loop: "{{ vms_with_snapshots | selectattr('type', 'equalto', 'lxc') | list | subelements('snapshots') }}"
+      loop_control:
+        label: "{{ item.0.name }} ({{ item.0.vmid }}) / {{ item.1.name }}"
+      when:
+        - delete_snapshots | bool
+        - vms_with_snapshots | length > 0
+
+    - name: Deletion complete
+      ansible.builtin.debug:
+        msg: "All snapshot deletions initiated. Re-run without -e delete_snapshots=true to verify cluster is clean."
+      when:
+        - delete_snapshots | bool
+        - vms_with_snapshots | length > 0

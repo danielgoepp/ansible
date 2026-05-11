@@ -1,0 +1,91 @@
+---
+# Pre-upgrade Snapshot — k3s-prod VMs
+# Creates a timestamped snapshot on all k3s-prod QEMU VMs before maintenance.
+# Snapshot name: pre-upgrade-YYYYMMDD
+#
+# Parameters:
+#   k3s_snapshot_nodes: list of VM names to snapshot
+#                       (default: derived from upgrade_pairs if present,
+#                        else ['k3s-prod-11', 'k3s-prod-12', 'k3s-prod-13', 'k3s-prod-15'])
+#   proxmox_api_host:   API entry point (default: pve15)
+
+- name: Set snapshot defaults
+  ansible.builtin.set_fact:
+    proxmox_api_token_id: "{{ awx_proxmox_api_token_id | default(vault_proxmox_api_token_id | default('')) }}"
+    proxmox_api_token_secret: "{{ awx_proxmox_api_token_secret | default(vault_proxmox_api_token_secret | default('')) }}"
+    proxmox_api_host: "{{ proxmox_api_host | default('pve15') }}"
+    snapshot_name: "pre-upgrade-{{ now(utc=True, fmt='%Y%m%d') }}"
+    k3s_snapshot_nodes: >-
+      {{ (upgrade_pairs | default([]) | map(attribute='k3s') | list)
+         if (upgrade_pairs | default([]) | length > 0)
+         else ['k3s-prod-11', 'k3s-prod-12', 'k3s-prod-13', 'k3s-prod-15'] }}
+
+- name: Set Proxmox auth header
+  ansible.builtin.set_fact:
+    proxmox_auth_header: "PVEAPIToken=root@pam!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+
+- name: Display snapshot banner
+  ansible.builtin.debug:
+    msg: "=== Creating pre-upgrade snapshots: {{ snapshot_name }} on {{ k3s_snapshot_nodes | join(', ') }} ==="
+
+- name: Get all VMs from cluster
+  ansible.builtin.uri:
+    url: "https://{{ proxmox_api_host }}:8006/api2/json/cluster/resources?type=vm"
+    method: GET
+    headers:
+      Authorization: "{{ proxmox_auth_header }}"
+    validate_certs: false
+  register: cluster_resources
+
+- name: Build k3s VM list from cluster resources
+  ansible.builtin.set_fact:
+    k3s_vms_to_snapshot: >-
+      {{ cluster_resources.json.data
+         | selectattr('name', 'in', k3s_snapshot_nodes)
+         | selectattr('type', 'equalto', 'qemu')
+         | list }}
+
+- name: Fail if any expected k3s VMs are missing
+  ansible.builtin.fail:
+    msg: >-
+      Expected {{ k3s_snapshot_nodes | length }} k3s VMs but found
+      {{ k3s_vms_to_snapshot | length }}
+      ({{ k3s_vms_to_snapshot | map(attribute='name') | list }}).
+      Missing: {{ k3s_snapshot_nodes | difference(k3s_vms_to_snapshot | map(attribute='name') | list) }}
+  when: k3s_vms_to_snapshot | length != k3s_snapshot_nodes | length
+
+- name: Create pre-upgrade snapshot on each k3s VM
+  ansible.builtin.uri:
+    url: "https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ item.node }}/qemu/{{ item.vmid }}/snapshot"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      snapname: "{{ snapshot_name }}"
+      description: "Pre-upgrade snapshot {{ now(utc=True, fmt='%Y-%m-%d %H:%M UTC') }}"
+      vmstate: 0
+    headers:
+      Authorization: "{{ proxmox_auth_header }}"
+    validate_certs: false
+    status_code: [200]
+  loop: "{{ k3s_vms_to_snapshot }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.vmid }}) on {{ item.node }}"
+
+- name: Verify snapshot exists on each k3s VM
+  ansible.builtin.uri:
+    url: "https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ item.node }}/qemu/{{ item.vmid }}/snapshot"
+    method: GET
+    headers:
+      Authorization: "{{ proxmox_auth_header }}"
+    validate_certs: false
+  loop: "{{ k3s_vms_to_snapshot }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: verify_snap
+  until: verify_snap.json.data | selectattr('name', 'equalto', snapshot_name) | list | length > 0
+  retries: 12
+  delay: 10
+
+- name: Snapshot creation complete
+  ansible.builtin.debug:
+    msg: "Snapshot '{{ snapshot_name }}' verified on: {{ k3s_vms_to_snapshot | map(attribute='name') | join(', ') }}"

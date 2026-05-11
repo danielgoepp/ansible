@@ -175,6 +175,11 @@ ansible-playbook <playbook>.yaml --syntax-check
 # Operational playbooks (cluster upgrades, maintenance, testing)
 ls playbooks/ops-*.yaml
 ansible-playbook playbooks/ops-<operation>.yaml
+
+# Proxmox snapshot management
+ansible-playbook playbooks/ops-proxmox-snapshot-k3s.yaml           # Snapshot all k3s-prod VMs (pre-upgrade-YYYYMMDD)
+ansible-playbook playbooks/ops-proxmox-snapshots.yaml               # List all VM/LXC snapshots cluster-wide
+ansible-playbook playbooks/ops-proxmox-snapshots.yaml -e delete_snapshots=true  # Delete all snapshots
 ```
 
 ## Architecture
@@ -401,6 +406,7 @@ All cluster upgrade task files use the prefix `ops-upgrade-cluster-` for consist
 - K3s in-place version install (`k3s-install`)
 - iotawatt-sync deployment management (`iotawatt`)
 - Proxmox node upgrade (`proxmox`)
+- Pre-upgrade snapshot of k3s-prod VMs (`snapshot-k3s`, called as first step of preflight)
 - Orchestration (`paired` for per-pair sequencing)
 
 Use `ls tasks/ops-upgrade-cluster-*.yaml` to see all cluster upgrade tasks.

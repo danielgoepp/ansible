@@ -3,9 +3,10 @@
 # Runs before any destructive operation. All checks support a retry/continue/abort
 # operator prompt on failure; defaults to retry.
 #
-# Checks:
-#   1. Ceph healthy (HEALTH_OK only - noout shouldn't be set yet)
-#   2. opnsense (VM 101) is running on pve11
+# Steps:
+#   1. Snapshot k3s-prod VMs (pre-upgrade-YYYYMMDD)
+#   2. Ceph healthy (HEALTH_OK only - noout shouldn't be set yet)
+#   3. opnsense (VM 101) is running on pve11
 #
 # Parameters:
 #   interactive_mode (default true): prompt on failure
@@ -30,7 +31,11 @@
       ========================================
       Verifying cluster is healthy before starting maintenance.
 
-# CHECK 1: Ceph - require HEALTH_OK on a fresh start; allow noout on resume
+# STEP 1: Snapshot k3s-prod VMs
+- name: Preflight - snapshot k3s-prod VMs
+  ansible.builtin.include_tasks: ops-upgrade-cluster-snapshot-k3s.yaml
+
+# CHECK 2: Ceph - require HEALTH_OK on a fresh start; allow noout on resume
 # (caller passes preflight_allow_noout=true when resuming after maintenance_setup_done)
 - name: Preflight - Ceph health
   ansible.builtin.include_tasks: ops-upgrade-cluster-ceph-health.yaml
@@ -39,7 +44,7 @@
     ceph_health_retries: 5
     ceph_health_delay: 15
 
-# CHECK 2: opnsense location
+# CHECK 3: opnsense location
 - name: Preflight - opnsense location
   block:
     - name: Get opnsense VM info from pve11
