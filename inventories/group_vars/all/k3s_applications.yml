@@ -167,6 +167,7 @@ k3s_applications:
     helm_chart_name: opensearch/opensearch
     helm_repo_name: opensearch
     helm_repo_url: https://opensearch-project.github.io/helm-charts/
+    helm_chart_version: "2.37.0"
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/opensearch/helm/opensearch-prod-values.yaml"
 
   pgadmin-prod:

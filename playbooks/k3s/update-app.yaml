@@ -38,6 +38,7 @@
         helm_repo_name: "{{ app_config.helm_repo_name | default(omit) }}"
         helm_repo_url: "{{ app_config.helm_repo_url | default(omit) }}"
         helm_namespace: "{{ app_config.helm_namespace | default(service_name) }}"
+        helm_chart_version: "{{ app_config.helm_chart_version | default(omit) }}"
         helm_values_file: "{{ app_config.helm_values_file }}"
         k8s_context: "{{ app_config.k8s_context | default(k3s_default_context) }}"
       when: app_config.deployment_method == 'helm'
