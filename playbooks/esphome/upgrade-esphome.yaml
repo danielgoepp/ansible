@@ -25,6 +25,7 @@
     esphome_no_logs: true
     esphome_clean_build: true
     esphome_timeout: 1800  # 30 minutes (M5Stack devices have large firmware)
+    esphome_device_domain: "goepp.net"
 
     # Targeting
     target_pattern: "all"
