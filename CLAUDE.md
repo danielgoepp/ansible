@@ -51,6 +51,7 @@ ansible-playbook playbooks/esphome/upgrade-esphome.yaml                         
 ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<device-name>          # Specific device
 ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<regex>                # Devices matching pattern
 ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e esphome_clean_build=false             # Skip build cache cleanup
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e esphome_device_domain=<domain>        # Override DNS domain for OTA upload (default: goepp.net)
 ```
 
 ### K3s Application Operations
