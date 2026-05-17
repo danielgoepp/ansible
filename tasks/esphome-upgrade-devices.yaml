@@ -52,7 +52,7 @@
 
 - name: Display upgrade results
   debug:
-    msg: "Device: {{ item.item.name }} | Config: {{ item.item.config_file | default(item.item.name) }}.yaml | Success: {{ item.return_code == 0 }}{% if item.return_code != 0 %} | Error: {{ (item.stderr | default('Unknown error') | trim | regex_replace('\n.*', '') | truncate(80)) }}{% endif %}"
+    msg: "Device: {{ item.item.name }} | Config: {{ item.item.config_file | default(item.item.name) }}.yaml | Success: {{ item.return_code == 0 }}"
   loop: "{{ esphome_upgrade_result.results }}"
   loop_control:
     label: "{{ item.item.name }}"
@@ -63,7 +63,7 @@
 
 - name: Failed device details
   debug:
-    msg: "Failed: {{ item.item.name }} - {{ (item.stderr | default('No error details available') | trim | regex_replace('\n.*', '')) }}"
+    msg: "Failed: {{ item.item.name }}\nSTDOUT:\n{{ item.stdout | default('') | trim }}\nSTDERR:\n{{ item.stderr | default('') | trim }}"
   loop: "{{ esphome_upgrade_result.results }}"
   loop_control:
     label: "{{ item.item.name }}"
