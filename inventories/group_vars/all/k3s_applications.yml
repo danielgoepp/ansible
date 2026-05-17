@@ -48,6 +48,11 @@ k3s_applications:
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-grafana-prod.yaml"
     service_namespace: cnpg-grafana
 
+  cnpg-doholm-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-doholm-prod.yaml"
+    service_namespace: cnpg-doholm
+
   cnpg-homeassistant-prod:
     deployment_method: manifest
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-homeassistant-prod.yaml"
