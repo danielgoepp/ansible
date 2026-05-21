@@ -43,7 +43,7 @@ k3s_applications:
     helm_namespace: cnpg-system
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/cnpg/helm/cnpg-operator-prod-values.yaml"
 
-  plugin-barman-cloud-prod:
+  cnpg-plugin-barman-cloud:
     deployment_method: helm
     helm_release_name: cnpg-plugin-barman-cloud
     helm_chart_name: cnpg/plugin-barman-cloud
