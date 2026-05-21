@@ -49,9 +49,10 @@ k3s_applications:
     service_namespace: cnpg-grafana
 
   cnpg-doholm-prod:
-    deployment_method: manifest
+    deployment_method: manifest-cnpg
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-doholm-prod.yaml"
     service_namespace: cnpg-doholm
+    cluster_name: doholm-prod
 
   cnpg-homeassistant-prod:
     deployment_method: manifest

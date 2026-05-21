@@ -63,6 +63,16 @@
         service_namespace: "{{ app_config.service_namespace | default(service_name) }}"
       when: app_config.deployment_method == 'manifest-apply-only'
 
+    # Single CNPG cluster deployment path
+    - name: Update application using CNPG cluster manifest
+      include_tasks: ../../tasks/k3s-update-manifest-cnpg.yaml
+      vars:
+        manifest_path: "{{ app_config.manifest_path }}"
+        k8s_context: "{{ app_config.k8s_context | default(k3s_default_context) }}"
+        service_namespace: "{{ app_config.service_namespace | default(service_name) }}"
+        cluster_name: "{{ app_config.cluster_name | default(service_name) }}"
+      when: app_config.deployment_method == 'manifest-cnpg'
+
     # Multi-instance manifest deployment path
     - name: Update application using multi-instance manifests
       include_tasks: ../../tasks/k3s-update-manifest-multi.yaml
