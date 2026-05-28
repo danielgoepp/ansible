@@ -238,6 +238,13 @@ k3s_applications:
     deployment_name: uptime-kuma
     app_label: uptime-kuma
 
+  garage-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/garage/manifests/garage-prod.yaml"
+    service_namespace: garage
+    deployment_name: garage
+    app_label: garage
+
   unpoller-prod:
     deployment_method: manifest
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/unpoller/manifests/unpoller-prod.yaml"
