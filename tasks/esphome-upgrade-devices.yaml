@@ -41,7 +41,6 @@
     command: >
       esphome -q run {{ item.config_file | default(item.name) }}.yaml
       {% if esphome_no_logs | default(true) %}--no-logs{% endif %}
-      --device {{ item.name + '.' + esphome_device_domain if esphome_device_domain is defined else item.name }}
     context: "{{ k3s_context }}"
   register: esphome_upgrade_result
   loop: "{{ devices_to_upgrade }}"
