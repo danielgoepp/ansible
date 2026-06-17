@@ -41,6 +41,7 @@
   ansible.builtin.set_fact:
     k3s_vms_to_snapshot: >-
       {{ cluster_resources.json.data
+         | selectattr('name', 'defined')
          | selectattr('name', 'in', k3s_snapshot_nodes)
          | selectattr('type', 'equalto', 'qemu')
          | list }}
