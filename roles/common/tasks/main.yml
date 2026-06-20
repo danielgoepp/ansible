@@ -2,6 +2,20 @@
 # Main tasks for common role
 # Base configuration applied to all servers
 
+# Phased updates let Canonical/apt roll out package versions to a subset of
+# users first; always including them keeps these hosts in sync with the
+# latest available version instead of waiting out the phased rollout.
+- name: Always include phased updates in apt upgrades
+  ansible.builtin.copy:
+    content: |
+      APT::Get::Always-Include-Phased-Updates "true";
+    dest: /etc/apt/apt.conf.d/99-phased-updates
+    mode: '0644'
+  when: >
+    inventory_hostname in groups['ubuntu'] or
+    inventory_hostname in groups['rpi'] or
+    inventory_hostname in groups['k3s_prod']
+
 # Optional: Run apt dist-upgrade if apt_dist_upgrade is true
 - name: Run system updates and upgrades
   ansible.builtin.include_tasks: apt-dist-upgrade.yaml
