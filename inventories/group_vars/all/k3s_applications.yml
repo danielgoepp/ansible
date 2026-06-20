@@ -75,6 +75,13 @@ k3s_applications:
     deployment_name: esphome
     app_label: esphome
 
+  esphome-build-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/esphome/manifests/esphome-build-prod.yaml"
+    service_namespace: esphome
+    deployment_name: esphome-build
+    app_label: esphome-build
+
   fluent-bit-prod:
     deployment_method: helm
     helm_release_name: fluent-bit
