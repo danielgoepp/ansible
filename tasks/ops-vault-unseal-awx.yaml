@@ -8,7 +8,7 @@
 
 - name: Set AWX API token
   ansible.builtin.set_fact:
-    _awx_api_token: "{{ awx_api_token | default(vault_awx_api_token) }}"
+    _awx_api_token: "{{ awx_api_token | default(vault_awx_api_token | default('')) }}"
 
 - name: Launch Vault unseal AWX job
   ansible.builtin.uri:
