@@ -1,12 +1,13 @@
 ---
 # Trigger the Vault unseal AWX job template and wait for completion
 #
-# Connection vars (loaded explicitly below so this works whether group_vars
-# auto-load — local Ansible against the project inventory — or not — AWX, where
-# the calling play runs on localhost against AWX's own inventory):
-#   awx_api_url, vault_unseal_awx_job_template_id   (common.yml)
-#   vault_awx_api_token                             (vault.yml; or awx_api_token
-#                                                    injected by AWX)
+# Connection vars:
+#   awx_api_url, vault_unseal_awx_job_template_id  — loaded from common.yml
+#     below (the calling play may run on localhost against AWX's own inventory,
+#     where the project's group_vars do not auto-load).
+#   API token — from awx_api_token (inject via an AWX credential/extra var when
+#     running on AWX; vault.yml is gitignored and is NOT present on the AWX
+#     runner) or from vault_awx_api_token (auto-loaded group_var locally).
 
 - name: Load AWX connection vars (awx_api_url, unseal job template id)
   ansible.builtin.include_vars:
@@ -18,20 +19,17 @@
         - "{{ playbook_dir }}/../inventories/group_vars/all"
         - "{{ playbook_dir }}/../../inventories/group_vars/all"
 
-- name: Load AWX API token from vault
-  ansible.builtin.include_vars:
-    file: "{{ lookup('ansible.builtin.first_found', _find) }}"
-  vars:
-    _find:
-      files: [vault.yml]
-      paths:
-        - "{{ playbook_dir }}/../inventories/group_vars/all"
-        - "{{ playbook_dir }}/../../inventories/group_vars/all"
-  when: awx_api_token is not defined
-
 - name: Set AWX API token
   ansible.builtin.set_fact:
     _awx_api_token: "{{ awx_api_token | default(vault_awx_api_token | default('')) }}"
+
+- name: Fail if no AWX API token is available
+  ansible.builtin.fail:
+    msg: >-
+      No AWX API token available. On AWX, inject awx_api_token via a credential
+      or extra var (vault.yml is gitignored and not present on the runner).
+      Locally, ensure vault_awx_api_token is set in vault.yml.
+  when: _awx_api_token | length == 0
 
 - name: Launch Vault unseal AWX job
   ansible.builtin.uri:
