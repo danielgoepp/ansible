@@ -1,10 +1,33 @@
 ---
 # Trigger the Vault unseal AWX job template and wait for completion
 #
-# Requires (from group_vars):
-#   vault_unseal_awx_job_template_id: AWX job template ID (common.yml)
-#   awx_api_url: AWX API base URL (common.yml)
-#   vault_awx_api_token: AWX API token (vault.yml)
+# Connection vars (loaded explicitly below so this works whether group_vars
+# auto-load — local Ansible against the project inventory — or not — AWX, where
+# the calling play runs on localhost against AWX's own inventory):
+#   awx_api_url, vault_unseal_awx_job_template_id   (common.yml)
+#   vault_awx_api_token                             (vault.yml; or awx_api_token
+#                                                    injected by AWX)
+
+- name: Load AWX connection vars (awx_api_url, unseal job template id)
+  ansible.builtin.include_vars:
+    file: "{{ lookup('ansible.builtin.first_found', _find) }}"
+  vars:
+    _find:
+      files: [common.yml]
+      paths:
+        - "{{ playbook_dir }}/../inventories/group_vars/all"
+        - "{{ playbook_dir }}/../../inventories/group_vars/all"
+
+- name: Load AWX API token from vault
+  ansible.builtin.include_vars:
+    file: "{{ lookup('ansible.builtin.first_found', _find) }}"
+  vars:
+    _find:
+      files: [vault.yml]
+      paths:
+        - "{{ playbook_dir }}/../inventories/group_vars/all"
+        - "{{ playbook_dir }}/../../inventories/group_vars/all"
+  when: awx_api_token is not defined
 
 - name: Set AWX API token
   ansible.builtin.set_fact:
