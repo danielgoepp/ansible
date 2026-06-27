@@ -1,0 +1,63 @@
+---
+# Force Vault onto the new version after a Helm upgrade.
+#
+# The HashiCorp Vault StatefulSet uses an OnDelete update strategy, so a Helm
+# upgrade stages the new pod spec but does NOT recreate the running Vault pod.
+# This playbook deletes the Vault server pod(s) so the StatefulSet recreates
+# them on the new version. The new pod comes up sealed; it is unsealed by the
+# next node in the AWX workflow (the Vault unseal job template).
+#
+# AWX workflow order: vault-prod update -> THIS (delete pod) -> Vault unseal
+#
+# Usage:
+#   Local:  ansible-playbook playbooks/k3s/delete-vault-pod.yaml
+#   AWX:    Run as a job template, placed as a workflow node between the
+#           vault-prod update and the Vault unseal job.
+
+- name: Delete Vault pod to force upgrade onto the new version
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Load common variables (k3s_default_context)
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../inventories/group_vars/all/common.yml"
+
+    - name: Set Vault pod deletion variables
+      ansible.builtin.set_fact:
+        vault_namespace: "{{ awx_vault_namespace | default('vault') }}"
+        vault_context: "{{ awx_k3s_context | default(k3s_default_context) }}"
+        vault_label_selectors:
+          - "app.kubernetes.io/name=vault"
+          - "component=server"
+
+    - name: Delete Vault server pod(s)
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ vault_namespace }}"
+        context: "{{ vault_context }}"
+        label_selectors: "{{ vault_label_selectors }}"
+        state: absent
+        wait: true
+        wait_timeout: 180
+
+    - name: Wait for Vault pod(s) to be recreated and Running
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ vault_namespace }}"
+        context: "{{ vault_context }}"
+        label_selectors: "{{ vault_label_selectors }}"
+      register: vault_pods
+      until: >-
+        vault_pods.resources | length > 0 and
+        (vault_pods.resources | map(attribute='status.phase') | list | unique) == ['Running']
+      retries: 30
+      delay: 10
+
+    - name: Report Vault pod recreated
+      ansible.builtin.debug:
+        msg: >-
+          Vault pod(s) {{ vault_pods.resources | map(attribute='metadata.name') | list }}
+          recreated and Running (sealed; the unseal node runs next).
