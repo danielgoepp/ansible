@@ -108,7 +108,8 @@
         k8s_context: "{{ app_config.k8s_context | default(k3s_default_context) }}"
       when: app_config.deployment_method == 'manifest-rollout-restart'
 
-    # Vault-specific: unseal after upgrade (Vault restarts sealed after a Helm upgrade)
-    - name: Trigger Vault unseal via AWX after upgrade
-      include_tasks: ../../tasks/ops-vault-unseal-awx.yaml
-      when: app_name == 'vault-prod'
+    # Vault restarts sealed after a Helm upgrade and must be unsealed afterward.
+    # This is handled outside this playbook by an AWX Workflow Job Template:
+    # node 1 runs this update (app_name=vault-prod), node 2 runs the Vault
+    # unseal job template on success. Chaining the unseal as a workflow node
+    # means the job never has to authenticate back to AWX with a token.

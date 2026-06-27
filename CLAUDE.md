@@ -373,7 +373,7 @@ K3s application updates use a unified, configuration-driven approach:
 - **tasks/k3s-update-manifest-multi-cnpg.yaml**: Reusable task file for multi-instance CNPG deployments
 - **tasks/k3s-update-helm.yaml**: Reusable task file for Helm deployments
 - **tasks/k3s-update-rollout-restart.yaml**: Reusable task file for rollout restart deployments
-- **tasks/ops-vault-unseal-awx.yaml**: Triggers the Vault unseal AWX job template and waits for completion; called after `vault-prod` Helm upgrades and during cluster node drains when the Vault pod is affected
+- **tasks/ops-vault-unseal-awx.yaml**: Triggers the Vault unseal AWX job template and waits for completion; called during cluster node drains when the Vault pod is affected. (The `vault-prod` app upgrade no longer calls this inline — unseal is chained as a second node in an AWX Workflow Job Template after the `vault-prod` update, so the running job never authenticates back to AWX.)
 - **Benefits**: Single playbook for all updates, eliminates code duplication, consistent behavior, configuration-driven, easy to add new applications
 - **Pattern**: Applications are referenced by name (`app_name=<application>`), configuration is automatically loaded and used
 
@@ -414,7 +414,7 @@ All cluster upgrade task files use the prefix `ops-upgrade-cluster-` for consist
 
 **Supporting task (not `ops-upgrade-cluster-` prefixed)**:
 
-- `tasks/ops-vault-unseal-awx.yaml`: Triggers the Vault unseal AWX job template; called from `paired` after uncordon when Vault pod was on the drained node, and from `update-app.yaml` after `vault-prod` upgrades
+- `tasks/ops-vault-unseal-awx.yaml`: Triggers the Vault unseal AWX job template; called from `paired` after uncordon when Vault pod was on the drained node. (Not used by `update-app.yaml`; the `vault-prod` upgrade unseal is chained as a second node in an AWX Workflow Job Template instead.)
 
 Use `ls tasks/ops-upgrade-cluster-*.yaml` to see all cluster upgrade tasks.
 
