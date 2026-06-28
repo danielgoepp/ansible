@@ -130,6 +130,27 @@ Interactive mode (default) has approximately 17 operator pause points across
 the full run (15 for non-pve11 pairs + 2 extra for opnsense network tests on
 the pve11 pair), plus additional prompts for pods-ready failures.
 
+### Standalone K3s Upgrade
+
+In-place k3s version upgrade with no drain and no reboot. The upstream installer
+stages the new binary and restarts the k3s service in place; the embedded
+containerd reattaches to running container shims, so workloads keep running
+across the restart (brief control-plane blip only). Use this when only k3s needs
+upgrading; use the full cluster upgrade when the Ubuntu VMs also need a kernel/
+apt dist-upgrade (which requires a reboot). Nodes upgrade one at a time
+(`serial: 1`), each waiting for cluster Ready before the next.
+
+```bash
+# Upgrade all k3s_prod nodes in place (required: target version)
+ansible-playbook playbooks/ops-k3s-upgrade.yaml -e k3s_target_version=v1.31.5+k3s1
+
+# Target a single node (or comma-separated list)
+ansible-playbook playbooks/ops-k3s-upgrade.yaml -e k3s_target_version=v1.31.5+k3s1 -l k3s-prod-13
+```
+
+This reuses `tasks/ops-upgrade-cluster-k3s-install.yaml` with `k3s_skip_start=false`
+(the cluster upgrade keeps the default `true` and restarts k3s via the VM reboot).
+
 ### Maintenance Mode
 
 Manage alerts across monitoring systems (Graylog, Alertmanager, Uptime Kuma).

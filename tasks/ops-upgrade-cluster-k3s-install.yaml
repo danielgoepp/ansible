@@ -1,13 +1,19 @@
 ---
 # K3s in-place version upgrade on a k3s VM
-# Runs the upstream installer with INSTALL_K3S_VERSION and INSTALL_K3S_SKIP_START=true.
+# Runs the upstream installer with INSTALL_K3S_VERSION.
 # The --server flag is intentionally omitted - it's an upgrade, not a fresh install,
 # so the existing server URL is retained from the prior install.
+#
+# By default INSTALL_K3S_SKIP_START=true is passed: the new binary is staged but the
+# k3s service is NOT restarted (the cluster upgrade restarts it via a full VM reboot).
+# For a standalone in-place upgrade, set k3s_skip_start=false so the installer restarts
+# the k3s service immediately and the node comes up on the new version with no reboot.
 #
 # Parameters:
 #   k3s_node: hostname of the k3s VM
 #   k3s_target_version: target k3s version (e.g. v1.31.5+k3s1) - REQUIRED, no default
 #   k3s_token: cluster token (default: k3s-prod)
+#   k3s_skip_start: pass INSTALL_K3S_SKIP_START=true (default: true)
 
 - name: Validate k3s_target_version is set
   ansible.builtin.fail:
@@ -17,6 +23,7 @@
 - name: Set k3s install defaults
   ansible.builtin.set_fact:
     k3s_token: "{{ k3s_token | default('k3s-prod') }}"
+    k3s_skip_start: "{{ k3s_skip_start | default(true) }}"
 
 - name: Display k3s upgrade target
   ansible.builtin.debug:
@@ -33,13 +40,13 @@
   ansible.builtin.debug:
     msg: "Current: {{ k3s_current_version.stdout_lines[0] }}  Target: {{ k3s_target_version }}"
 
-- name: Run k3s installer (INSTALL_K3S_SKIP_START=true)
+- name: Run k3s installer (skip_start={{ k3s_skip_start }})
   ansible.builtin.shell:
     cmd: >-
       curl -sfL https://get.k3s.io |
       K3S_TOKEN={{ k3s_token }}
       INSTALL_K3S_VERSION={{ k3s_target_version }}
-      INSTALL_K3S_SKIP_START=true
+      {% if k3s_skip_start | bool %}INSTALL_K3S_SKIP_START=true{% endif %}
       INSTALL_K3S_EXEC="server"
       sh -s -
       --disable servicelb
