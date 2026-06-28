@@ -302,7 +302,7 @@ k3s_applications:
     helm_chart_name: hashicorp/vault
     helm_repo_name: hashicorp
     helm_repo_url: https://helm.releases.hashicorp.com
-    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/hashicorp/helm/hashicorp-prod-values.yaml"
+    helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/vault/helm/vault-prod-values.yaml"
 
   zigbee2mqtt-zigbee11:
     deployment_method: manifest
