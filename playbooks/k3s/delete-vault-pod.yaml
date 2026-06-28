@@ -10,7 +10,7 @@
 # AWX workflow order: vault-prod update -> THIS (delete pod) -> Vault unseal
 #
 # Usage:
-#   Local:  ansible-playbook playbooks/k3s/delete-vault-pod.yaml
+#   Local:  ansible-playbook playbooks/k3s/ops-vault-delete.yaml
 #   AWX:    Run as a job template, placed as a workflow node between the
 #           vault-prod update and the Vault unseal job.
 
