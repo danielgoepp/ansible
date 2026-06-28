@@ -208,6 +208,21 @@ k3s_applications:
     deployment_name: postfix
     app_label: postfix
 
+  syncthing-morgspi:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/syncthing/manifests/syncthing-morgspi.yaml"
+    k8s_context: k3s-morgspi
+    service_namespace: syncthing
+    deployment_name: syncthing
+    app_label: syncthing
+
+  syncthing-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/syncthing/manifests/syncthing-prod.yaml"
+    service_namespace: syncthing
+    deployment_name: syncthing
+    app_label: syncthing
+
   telegraf-mqtt-to-graylog:
     deployment_method: manifest
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/telegraf/manifests/telegraf-mqtt-to-graylog.yaml"
