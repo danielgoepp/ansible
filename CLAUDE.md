@@ -155,14 +155,16 @@ This reuses `tasks/ops-upgrade-cluster-k3s-install.yaml` with `k3s_skip_start=fa
 
 Upgrades Calico following Tigera's operator-based Kubernetes upgrade procedure
 (CRDs + operator manifest applied server-side with force-conflicts, from the
-`projectcalico/calico` GitHub repo at the target tag). Runs against the
-cluster via `kubectl` context from `localhost`, like the Vault playbooks —
-it does not go through `update-app.yaml` since this procedure doesn't match
-any of the existing `deployment_method` types.
+`projectcalico/calico` GitHub repo at the target tag). Routed through the
+unified `update-app.yaml` framework like any other app, via the
+`calico-operator` deployment method (`tasks/k3s-update-calico.yaml`) — the
+`calico` entry in `k3s_applications.yml` has no other parameters since the
+manifest URLs are computed from `calico_target_version` at runtime.
 
 ```bash
 # Required: target Calico version (no default)
 ansible-playbook playbooks/k3s/update-calico.yaml -e calico_target_version=v3.32.0
+# Equivalent: ansible-playbook playbooks/k3s/update-app.yaml -e app_name=calico -e calico_target_version=v3.32.0
 ```
 
 Steps: delete stale (0-replica) ReplicaSets in the `tigera-operator` and
@@ -406,7 +408,7 @@ Playbooks typically have multiple plays:
 
 K3s application updates use a unified, configuration-driven approach:
 
-- **inventories/group_vars/all/k3s_applications.yml**: Centralized application configuration defining all K3s applications, their deployment methods (helm, manifest, manifest-multi, manifest-cnpg, manifest-multi-cnpg, rollout-restart), and deployment-specific parameters
+- **inventories/group_vars/all/k3s_applications.yml**: Centralized application configuration defining all K3s applications, their deployment methods (helm, manifest, manifest-multi, manifest-cnpg, manifest-multi-cnpg, rollout-restart, calico-operator), and deployment-specific parameters
 - **playbooks/k3s/update-app.yaml**: Unified playbook that loads application config and routes to appropriate task file based on deployment method
 - **tasks/k3s-update-manifest.yaml**: Reusable task file for single manifest deployments
 - **tasks/k3s-update-manifest-multi.yaml**: Reusable task file for multi-instance manifest deployments
@@ -414,9 +416,10 @@ K3s application updates use a unified, configuration-driven approach:
 - **tasks/k3s-update-manifest-multi-cnpg.yaml**: Reusable task file for multi-instance CNPG deployments
 - **tasks/k3s-update-helm.yaml**: Reusable task file for Helm deployments
 - **tasks/k3s-update-rollout-restart.yaml**: Reusable task file for rollout restart deployments
+- **tasks/k3s-update-calico.yaml**: Reusable task file for the Calico CNI operator-based upgrade (stale ReplicaSet cleanup, versioned CRD + operator manifest apply with server-side force-conflicts, wait for TigeraStatus `Available`); see [Calico CNI Upgrade](#calico-cni-upgrade).
 - **tasks/ops-vault-unseal-awx.yaml**: Triggers the Vault unseal AWX job template and waits for completion; called during cluster node drains when the Vault pod is affected. (The `vault-prod` app upgrade no longer calls this inline — it is chained in an AWX Workflow Job Template: `vault-prod` update → `delete-vault-pod` → Vault unseal, so the running job never authenticates back to AWX.)
 - **playbooks/k3s/delete-vault-pod.yaml**: Deletes the Vault server pod(s) so the StatefulSet (OnDelete update strategy) recreates them on the new version after a Helm upgrade. The new pod comes up sealed; runs as the middle node of the Vault upgrade workflow, between the `vault-prod` update and the unseal.
-- **playbooks/k3s/update-calico.yaml**: Standalone Calico CNI upgrade following Tigera's operator-based procedure (stale ReplicaSet cleanup, versioned CRD + operator manifest apply with server-side force-conflicts, wait for TigeraStatus `Available`). Not routed through `update-app.yaml`; see [Calico CNI Upgrade](#calico-cni-upgrade).
+- **playbooks/k3s/update-calico.yaml**: Thin wrapper around `update-app.yaml` with `app_name: calico` (same pattern as `update-cnpg-operator.yaml`), for CLI convenience.
 - **Benefits**: Single playbook for all updates, eliminates code duplication, consistent behavior, configuration-driven, easy to add new applications
 - **Pattern**: Applications are referenced by name (`app_name=<application>`), configuration is automatically loaded and used
 

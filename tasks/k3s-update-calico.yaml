@@ -1,0 +1,93 @@
+---
+# Calico CNI upgrade tasks (operator-based install)
+# Requires calico_target_version and k8s_context to be set by the calling playbook
+#
+# Follows Tigera's operator-based Kubernetes upgrade procedure:
+# https://docs.tigera.io/calico/latest/operations/upgrading/kubernetes-upgrade#upgrading-an-installation-that-uses-the-operator
+
+- name: Validate calico_target_version is set
+  ansible.builtin.fail:
+    msg: "calico_target_version is required (e.g. -e calico_target_version=v3.32.0)"
+  when: calico_target_version is not defined or calico_target_version | length == 0
+
+- name: Find ReplicaSets in Calico namespaces
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: ReplicaSet
+    namespace: "{{ calico_ns }}"
+    context: "{{ k8s_context }}"
+  loop:
+    - tigera-operator
+    - calico-system
+  loop_control:
+    loop_var: calico_ns
+  register: calico_replicasets_raw
+
+- name: Delete stale (0-replica) ReplicaSets
+  kubernetes.core.k8s:
+    api_version: apps/v1
+    kind: ReplicaSet
+    name: "{{ calico_rs.metadata.name }}"
+    namespace: "{{ calico_rs.metadata.namespace }}"
+    context: "{{ k8s_context }}"
+    state: absent
+  loop: "{{ calico_replicasets_raw.results | map(attribute='resources') | flatten | selectattr('spec.replicas', 'equalto', 0) | list }}"
+  loop_control:
+    loop_var: calico_rs
+    label: "{{ calico_rs.metadata.namespace }}/{{ calico_rs.metadata.name }}"
+
+- name: Create temp directory for Calico manifests
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: calico-upgrade-
+  register: calico_tmp_dir
+
+- name: Download operator CRDs manifest
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_target_version }}/manifests/operator-crds.yaml"
+    dest: "{{ calico_tmp_dir.path }}/operator-crds.yaml"
+
+- name: Download tigera-operator manifest
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_target_version }}/manifests/tigera-operator.yaml"
+    dest: "{{ calico_tmp_dir.path }}/tigera-operator.yaml"
+
+- name: Apply operator CRDs (server-side, force conflicts)
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ calico_tmp_dir.path }}/operator-crds.yaml"
+    context: "{{ k8s_context }}"
+    server_side_apply:
+      field_manager: ansible-calico-upgrade
+      force_conflicts: true
+
+- name: Apply tigera-operator manifest (server-side, force conflicts)
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ calico_tmp_dir.path }}/tigera-operator.yaml"
+    context: "{{ k8s_context }}"
+    server_side_apply:
+      field_manager: ansible-calico-upgrade
+      force_conflicts: true
+
+- name: Wait for TigeraStatus calico to be Available
+  kubernetes.core.k8s_info:
+    api_version: operator.tigera.io/v1
+    kind: TigeraStatus
+    name: calico
+    context: "{{ k8s_context }}"
+  register: calico_status
+  until: >-
+    calico_status.resources | length > 0 and
+    (calico_status.resources[0].status.conditions | selectattr('type', 'equalto', 'Available') | map(attribute='status') | list | first) == 'True'
+  retries: 30
+  delay: 10
+
+- name: Remove temp directory
+  ansible.builtin.file:
+    path: "{{ calico_tmp_dir.path }}"
+    state: absent
+
+- name: Report upgrade complete
+  ansible.builtin.debug:
+    msg: "Calico upgraded to {{ calico_target_version }} and TigeraStatus reports Available"

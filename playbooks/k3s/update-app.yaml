@@ -108,6 +108,13 @@
         k8s_context: "{{ app_config.k8s_context | default(k3s_default_context) }}"
       when: app_config.deployment_method == 'manifest-rollout-restart'
 
+    # Calico CNI upgrade path (operator-based install)
+    - name: Update Calico CNI using operator-based upgrade
+      include_tasks: ../../tasks/k3s-update-calico.yaml
+      vars:
+        k8s_context: "{{ app_config.k8s_context | default(k3s_default_context) }}"
+      when: app_config.deployment_method == 'calico-operator'
+
     # Vault restarts sealed after a Helm upgrade and must be unsealed afterward.
     # This is handled outside this playbook by an AWX Workflow Job Template:
     # node 1 runs this update (app_name=vault-prod), node 2 runs the Vault

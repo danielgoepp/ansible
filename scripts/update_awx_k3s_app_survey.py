@@ -137,6 +137,17 @@ def build_survey_spec(applications: Dict[str, Any]) -> Dict[str, Any]:
                 "default": "",
                 "choices": app_names,
                 "new_question": True
+            },
+            {
+                "question_name": "Calico Target Version",
+                "question_description": "Only required when Application Name is 'calico' (e.g. v3.32.0). Leave blank otherwise.",
+                "required": False,
+                "type": "text",
+                "variable": "calico_target_version",
+                "min": None,
+                "max": None,
+                "default": "",
+                "new_question": True
             }
         ]
     }

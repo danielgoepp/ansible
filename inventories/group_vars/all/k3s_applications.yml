@@ -24,6 +24,11 @@ k3s_applications:
     helm_repo_url: https://prometheus-community.github.io/helm-charts
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/alertmanager/helm/alertmanager-prod-values.yaml"
 
+  # calico: operator-based CNI upgrade, not a standard deployment method.
+  # Requires -e calico_target_version=vX.Y.Z at launch (no default).
+  calico:
+    deployment_method: calico-operator
+
   cert-manager-prod:
     deployment_method: helm
     helm_release_name: cert-manager
