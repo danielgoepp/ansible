@@ -151,6 +151,26 @@ ansible-playbook playbooks/ops-k3s-upgrade.yaml -e k3s_target_version=v1.31.5+k3
 This reuses `tasks/ops-upgrade-cluster-k3s-install.yaml` with `k3s_skip_start=false`
 (the cluster upgrade keeps the default `true` and restarts k3s via the VM reboot).
 
+### Calico CNI Upgrade
+
+Upgrades Calico following Tigera's operator-based Kubernetes upgrade procedure
+(CRDs + operator manifest applied server-side with force-conflicts, from the
+`projectcalico/calico` GitHub repo at the target tag). Runs against the
+cluster via `kubectl` context from `localhost`, like the Vault playbooks —
+it does not go through `update-app.yaml` since this procedure doesn't match
+any of the existing `deployment_method` types.
+
+```bash
+# Required: target Calico version (no default)
+ansible-playbook playbooks/k3s/update-calico.yaml -e calico_target_version=v3.32.0
+```
+
+Steps: delete stale (0-replica) ReplicaSets in the `tigera-operator` and
+`calico-system` namespaces → download `operator-crds.yaml` and
+`tigera-operator.yaml` for the target version → apply both server-side with
+`force_conflicts: true` → wait for the `calico` TigeraStatus to report
+`Available`.
+
 ### Maintenance Mode
 
 Manage alerts across monitoring systems (Graylog, Alertmanager, Uptime Kuma).
@@ -396,6 +416,7 @@ K3s application updates use a unified, configuration-driven approach:
 - **tasks/k3s-update-rollout-restart.yaml**: Reusable task file for rollout restart deployments
 - **tasks/ops-vault-unseal-awx.yaml**: Triggers the Vault unseal AWX job template and waits for completion; called during cluster node drains when the Vault pod is affected. (The `vault-prod` app upgrade no longer calls this inline — it is chained in an AWX Workflow Job Template: `vault-prod` update → `delete-vault-pod` → Vault unseal, so the running job never authenticates back to AWX.)
 - **playbooks/k3s/delete-vault-pod.yaml**: Deletes the Vault server pod(s) so the StatefulSet (OnDelete update strategy) recreates them on the new version after a Helm upgrade. The new pod comes up sealed; runs as the middle node of the Vault upgrade workflow, between the `vault-prod` update and the unseal.
+- **playbooks/k3s/update-calico.yaml**: Standalone Calico CNI upgrade following Tigera's operator-based procedure (stale ReplicaSet cleanup, versioned CRD + operator manifest apply with server-side force-conflicts, wait for TigeraStatus `Available`). Not routed through `update-app.yaml`; see [Calico CNI Upgrade](#calico-cni-upgrade).
 - **Benefits**: Single playbook for all updates, eliminates code duplication, consistent behavior, configuration-driven, easy to add new applications
 - **Pattern**: Applications are referenced by name (`app_name=<application>`), configuration is automatically loaded and used
 
