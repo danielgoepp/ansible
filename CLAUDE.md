@@ -37,6 +37,9 @@ ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_all=true
 ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_component=<component>
 # Available components: docker, ollama, openwebui, portainer
 
+# UniFi OS Server upgrade (ui-network host)
+ansible-playbook playbooks/ssh/host-ui-network.yaml -e ui_network_upgrade=true
+
 # Discovery commands
 ls playbooks/ssh/          # List all SSH playbooks
 ansible-inventory --graph  # View host organization

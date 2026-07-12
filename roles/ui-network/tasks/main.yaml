@@ -12,6 +12,14 @@
 #   changed_when: ui_network_install_result.rc == 0
 #   when: not uosserver_binary.stat.exists
 
+- name: Upgrade UniFi OS Server
+  ansible.builtin.shell:
+    cmd: "curl -sO {{ ui_network_update_script_url }} && bash {{ ui_network_update_script_url | basename }} --skip --uos-version latest < /dev/null"
+    chdir: /tmp
+  register: ui_network_upgrade_result
+  changed_when: ui_network_upgrade_result.rc == 0
+  when: ui_network_upgrade | default(false) | bool
+
 - name: Download unifi-easy-encrypt.sh script
   ansible.builtin.get_url:
     url: "{{ ui_network_encrypt_script_url }}"
