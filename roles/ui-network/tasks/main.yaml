@@ -1,17 +1,4 @@
 ---
-- name: Check if UniFi OS Server is installed
-  ansible.builtin.stat:
-    path: /usr/bin/uosserver
-  register: uosserver_binary
-
-# - name: Install UniFi OS Server
-#   ansible.builtin.shell:
-#     cmd: "curl -sO {{ ui_network_install_script_url }} && bash {{ ui_network_install_script_url | basename }} --skip"
-#     chdir: /tmp
-#   register: ui_network_install_result
-#   changed_when: ui_network_install_result.rc == 0
-#   when: not uosserver_binary.stat.exists
-
 - name: Upgrade UniFi OS Server
   ansible.builtin.shell:
     cmd: "curl -sO {{ ui_network_update_script_url }} && bash {{ ui_network_update_script_url | basename }} --skip --uos-version latest < /dev/null"
