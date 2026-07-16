@@ -103,6 +103,13 @@ k3s_applications:
     deployment_name: grafana
     app_label: grafana
 
+  grafana-mcp:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/grafana/manifests/grafana-mcp-prod.yaml"
+    service_namespace: grafana
+    deployment_name: grafana-mcp
+    app_label: grafana-mcp
+
   graylog-prod:
     deployment_method: manifest-rollout-restart
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/graylog/manifests/graylog-prod.yaml"
