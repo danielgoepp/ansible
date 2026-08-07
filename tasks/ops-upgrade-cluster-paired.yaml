@@ -268,7 +268,7 @@
 
         - name: Display post-drain snapshot
           ansible.builtin.debug:
-            msg: "{{ post_drain_snapshot.stdout }}"
+            msg: "{{ post_drain_snapshot.stdout_lines }}"
 
         - name: Confirm drain looks acceptable
           ansible.builtin.pause:
