@@ -4,6 +4,11 @@
 #
 # Variables:
 #   apt_dist_upgrade_reboot: true (default) — set false to skip reboot (e.g. cluster upgrade shuts down VM instead)
+#   interactive_mode: true (default) — prompt to kill stranded apt/dpkg lock holders before upgrading; see check-apt-lock.yaml
+#   apt_lock_stale_minutes: 5 (default) — informational threshold shown in the lock-holder prompt
+
+- name: Check for a stranded apt/dpkg lock before upgrading
+  ansible.builtin.include_tasks: check-apt-lock.yaml
 
 - name: Upgrade all packages to latest
   ansible.builtin.apt:

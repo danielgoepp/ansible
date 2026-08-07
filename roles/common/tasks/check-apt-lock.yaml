@@ -1,0 +1,106 @@
+---
+# Detect processes holding the apt/dpkg lock and offer to clean up stranded
+# ones before an upgrade attempt fails outright.
+#
+# A common real-world cause: prometheus-node-exporter-apt.timer runs
+# `apt-get update` every few minutes to feed metrics; if that hangs (e.g. a
+# network blip mid-fetch) it holds the lock indefinitely.
+#
+# Variables:
+#   interactive_mode: true (default) — prompt when a lock holder is found;
+#     when false, just report and fall through to let the upgrade task fail
+#     with its normal error (unattended/AWX runs).
+#   apt_lock_stale_minutes: 5 (default) — informational threshold shown to
+#     the operator; does not gate any automatic behavior.
+
+- name: Set apt lock check defaults
+  ansible.builtin.set_fact:
+    interactive_mode: "{{ interactive_mode | default(true) }}"
+    apt_lock_stale_minutes: "{{ apt_lock_stale_minutes | default(5) }}"
+
+- name: Check for processes holding the apt/dpkg lock
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      # fuser prints only the PID list to stdout; diagnostics go to stderr, so
+      # discard stderr here rather than merging it in - merged stderr text can
+      # contain stray digits (e.g. permission-denied /proc/<pid> messages) that
+      # get misparsed as PIDs.
+      for pid in $(fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock 2>/dev/null | grep -oE '[0-9]+' | sort -u); do
+        ps -o pid=,etimes=,args= -p "$pid" 2>/dev/null
+      done | grep -v ' \['
+    executable: /bin/bash
+  register: common_apt_lock_procs
+  changed_when: false
+  failed_when: false
+
+- name: Handle apt/dpkg lock held by another process
+  when: common_apt_lock_procs.stdout_lines | default([]) | length > 0
+  block:
+    - name: Display apt/dpkg lock holder details
+      ansible.builtin.debug:
+        msg: "{{ _msg.split('\n') }}"
+      vars:
+        _msg: |
+          ========================================
+          APT/DPKG LOCK HELD
+          ========================================
+          Process(es) below are holding the apt/dpkg lock (pid, elapsed seconds, cmd):
+          {{ common_apt_lock_procs.stdout_lines | join('\n') }}
+
+          Anything running longer than {{ apt_lock_stale_minutes }} minute(s) is likely
+          stranded (e.g. a hung prometheus-node-exporter-apt run) rather than a
+          legitimate in-progress apt operation.
+
+    - name: Prompt operator on apt/dpkg lock
+      ansible.builtin.pause:
+        prompt: |
+
+          [k]ill   - kill the process(es) above, then continue
+          [w]ait   - wait 30s and recheck
+          [s]kip   - continue anyway (the upgrade task will likely fail)
+          [a]bort  - abort the playbook
+      register: common_apt_lock_decision
+      when: interactive_mode | bool
+
+    - name: Abort on operator request (apt lock)
+      ansible.builtin.fail:
+        msg: "Operator aborted: apt/dpkg lock held by another process"
+      when:
+        - interactive_mode | bool
+        - common_apt_lock_decision.user_input | lower in ['a', 'abort']
+
+    - name: Wait before recheck
+      ansible.builtin.wait_for:
+        timeout: 30
+      when:
+        - interactive_mode | bool
+        - common_apt_lock_decision.user_input | lower in ['w', 'wait']
+
+    - name: Kill stranded apt/dpkg lock holders
+      ansible.builtin.command:
+        cmd: "kill -TERM {{ common_apt_lock_procs.stdout_lines | map('regex_replace', '^\\s*([0-9]+).*', '\\1') | join(' ') }}"
+      when:
+        - interactive_mode | bool
+        - common_apt_lock_decision.user_input | lower in ['k', 'kill']
+
+    - name: Give killed processes a moment to release the lock
+      ansible.builtin.wait_for:
+        timeout: 5
+      when:
+        - interactive_mode | bool
+        - common_apt_lock_decision.user_input | lower in ['k', 'kill']
+
+    - name: Reconcile dpkg state after clearing the lock
+      ansible.builtin.command: dpkg --configure -a
+      changed_when: false
+      failed_when: false
+      when:
+        - interactive_mode | bool
+        - common_apt_lock_decision.user_input | lower in ['k', 'kill']
+
+    - name: Recheck apt/dpkg lock
+      ansible.builtin.include_tasks: check-apt-lock.yaml
+      when:
+        - interactive_mode | bool
+        - common_apt_lock_decision.user_input | lower in ['k', 'kill', 'w', 'wait']
