@@ -105,7 +105,7 @@ k3s_applications:
 
   grafana-mcp:
     deployment_method: manifest
-    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/grafana/manifests/grafana-mcp-prod.yaml"
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/grafana/manifests/grafana-mcp.yaml"
     service_namespace: grafana
     deployment_name: grafana-mcp
     app_label: grafana-mcp
