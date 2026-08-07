@@ -135,12 +135,14 @@ iotawatt-sync → unmute alerts.
 Note: the per-pair and post-PVE-reboot Ceph health checks are currently
 disabled (`tasks/ops-upgrade-cluster-ceph-health.yaml` is a no-op).
 
-Interactive mode (default) has approximately 18 operator pause points across
+Interactive mode (default) has approximately 17 operator pause points across
 the full run (15 for non-pve11 pairs + 2 extra for opnsense network tests on
-the pve11 pair + 1 extra for the pve15 pair's VM shutdown-list confirmation),
-plus additional prompts for pods-ready failures. The VM shutdown-list pause
-is conditional — it only fires on whichever pair's Proxmox node actually has
-other running VMs/LXCs discovered on it (currently just pve15).
+the pve11 pair + 1 extra for the pve15 pair's VM shutdown-list confirmation,
+minus 1 because the last pair's "Continue to next pair?" pause is skipped —
+there's nothing left to confirm after the final pair), plus additional
+prompts for pods-ready failures. The VM shutdown-list pause is conditional —
+it only fires on whichever pair's Proxmox node actually has other running
+VMs/LXCs discovered on it (currently just pve15).
 
 ### Standalone K3s Upgrade
 

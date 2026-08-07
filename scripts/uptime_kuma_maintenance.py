@@ -32,13 +32,18 @@ except ImportError:
 
 
 def create_maintenance(api):
-    """Create a maintenance window for all monitor groups and status pages."""
-    # Get all groups (monitors within groups inherit maintenance status)
+    """Create a maintenance window covering every monitor and status page.
+
+    Every monitor is added directly (not just groups) - a child monitor's
+    "under maintenance" badge is inherited display state from its parent
+    group and can be left stale after the window is deleted, so each
+    monitor needs its own maintenance flag set explicitly.
+    """
     monitors = api.get_monitors()
-    monitor_ids = [{"id": m["id"]} for m in monitors if m.get("type") == "group"]
+    monitor_ids = [{"id": m["id"]} for m in monitors]
 
     if not monitor_ids:
-        print("No monitor groups found")
+        print("No monitors found")
         return True
 
     # Create manual maintenance window (stays active until cancelled)

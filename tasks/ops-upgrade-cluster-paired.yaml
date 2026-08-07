@@ -420,13 +420,16 @@
               Pair {{ pve_node }} + {{ k3s_node }} done. Status above.
               Continue to next pair? (yes/no)
           register: pair_done_confirm
-          when: interactive_mode | bool
+          when:
+            - interactive_mode | bool
+            - pair != upgrade_pairs[-1]
 
         - name: Stop if pair not confirmed healthy
           ansible.builtin.fail:
             msg: "Stopping after {{ pve_node }} + {{ k3s_node }} - manual intervention requested"
           when:
             - interactive_mode | bool
+            - pair != upgrade_pairs[-1]
             - pair_done_confirm.user_input | lower not in ['yes', 'y']
 
       when: not skip_this_pair | bool
