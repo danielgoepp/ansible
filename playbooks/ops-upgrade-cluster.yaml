@@ -27,7 +27,7 @@
 #   3. Disable CNPG maintenance mode (displays kubectl get cluster -A)
 #   4. Disable Ceph noout flag
 #   5. Wait for Ceph HEALTH_OK
-#   6. Verify shared VMs running (started during pve15 pair)
+#   6. Verify discovered VMs/LXCs running (safety net; each pair starts its own)
 #   7. Re-apply iotawatt-sync
 #   8. Unmute alerts
 #
@@ -59,13 +59,9 @@
       - { pve: pve13, k3s: k3s-prod-13 }
       - { pve: pve12, k3s: k3s-prod-12 }
       - { pve: pve11, k3s: k3s-prod-11 }
-    # Shared VMs/LXCs that stay shut down for the entire maintenance window.
-    # host_node = the PVE host that owns each VM under normal operation.
-    shared_shutdowns:
-      - { vm_id: 254, vm_name: ui-network, vm_type: qemu, host_node: pve15 }
-      - { vm_id: 105, vm_name: dev, vm_type: qemu, host_node: pve15 }
-      - { vm_id: 103, vm_name: backup, vm_type: qemu, host_node: pve15 }
-      - { vm_id: 106, vm_name: smb, vm_type: lxc, host_node: pve15 }
+    # Other VMs/LXCs sharing each Proxmox node are discovered dynamically
+    # (live query, not a hardcoded list) per pair in
+    # tasks/ops-upgrade-cluster-paired.yaml — see step 0 there.
     opnsense_vm_id: 101
     opnsense_home_node: pve11
     opnsense_failover_node: pve12
@@ -85,7 +81,6 @@
         interactive_mode: "{{ interactive_mode }}"
         verbose_status: "{{ verbose_status }}"
         upgrade_pairs: "{{ upgrade_pairs }}"
-        shared_shutdowns: "{{ shared_shutdowns }}"
         opnsense_vm_id: "{{ opnsense_vm_id }}"
         opnsense_home_node: "{{ opnsense_home_node }}"
         opnsense_failover_node: "{{ opnsense_failover_node }}"
@@ -109,10 +104,8 @@
             {{ loop.index }}. {{ p.pve }} + {{ p.k3s }}
           {% endfor %}
 
-          Shared VMs to shut down for the window:
-          {% for v in shared_shutdowns %}
-            - {{ v.vm_name }} ({{ v.vm_type }} {{ v.vm_id }}) on {{ v.host_node }}
-          {% endfor %}
+          Other VMs/LXCs on each Proxmox node will be discovered live and
+          confirmed with the operator before shutdown (per pair, step 0).
 
           opnsense (VM {{ opnsense_vm_id }}) will move {{ opnsense_home_node }} -> {{ opnsense_failover_node }}
           before the {{ opnsense_home_node }} pair, then back after.
@@ -221,7 +214,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    shared_shutdowns: "{{ hostvars['localhost']['shared_shutdowns'] }}"
+    all_discovered_shutdowns: "{{ hostvars['localhost']['all_discovered_shutdowns'] | default([]) }}"
     interactive_mode: "{{ hostvars['localhost']['interactive_mode'] | default(true) }}"
     skip_postflight: false
 
@@ -247,7 +240,8 @@
               About to begin post-flight cleanup:
                 - Disable CNPG maintenance mode
                 - Disable Ceph noout flag (rebalancing will resume)
-                - Verify shared VMs running (started during pve15 pair)
+                - Verify discovered VMs/LXCs running (safety net; each pair already
+                  starts its own node's VMs/LXCs back up)
                 - Re-apply iotawatt-sync
                 - Unmute alerts (Graylog, Alertmanager, Uptime Kuma)
               Proceed? (yes/no)
@@ -278,11 +272,12 @@
             ceph_health_retries: 60
             ceph_health_delay: 30
 
-        - name: Start shared VMs/LXCs
+        - name: Verify discovered VMs/LXCs are running (safety net)
           ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-vm.yaml
           vars:
             vm_action: startup
-            vm_shutdowns: "{{ shared_shutdowns }}"
+            vm_shutdowns: "{{ all_discovered_shutdowns }}"
+          when: all_discovered_shutdowns | length > 0
 
         - name: Re-apply iotawatt-sync
           ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-iotawatt.yaml

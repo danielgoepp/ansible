@@ -111,27 +111,36 @@ failure where maintenance is already active. iotawatt-sync is stopped via
 `kubectl delete deployment` (not `kubectl delete -f`) to avoid cascading
 deletion of the management namespace.
 
-Per pair: operator pause to confirm → drain → post-drain pod snapshot +
-operator pause → apt dist-upgrade on the k3s VM → in-place k3s install
-(no `--server` flag, upgrade only) → shutdown VM → operator pause before PVE
-upgrade → apt dist-upgrade + reboot PVE → start shared VMs/LXCs on this PVE
-node (ensures SMB mount is available) → start k3s VM → uncordon → wait for
-pods ready (operator prompt on timeout). If the drained node hosted the Vault
-pod, the Vault unseal AWX job template is triggered automatically after
-uncordon. On the pve11 pair only: opnsense migrates `pve11→pve12` with a
-`ping google.com` connectivity test and operator pause before the drain, then
-migrates back after uncordon with another connectivity test. Post-flight:
-operator pause with cluster-wide health snapshot → disable CNPG maintenance
-(displays `kubectl get cluster -A`) → disable Ceph `noout` → wait for Ceph
-HEALTH_OK → start shared VMs (verified running via Proxmox API) → re-apply
+Per pair: operator pause to confirm → discover other running VMs/LXCs on
+this Proxmox node (live query via `community.proxmox.proxmox_vm_info`, not a
+hardcoded list — excludes this pair's k3s VM and, on the opnsense pair,
+opnsense itself) → operator pause to confirm the discovered shutdown list
+(only shown when the list is non-empty) → shut them down → drain →
+post-drain pod snapshot + operator pause → apt dist-upgrade on the k3s VM →
+in-place k3s install (no `--server` flag, upgrade only) → shutdown VM →
+operator pause before PVE upgrade → apt dist-upgrade + reboot PVE → start
+this node's discovered VMs/LXCs back up (ensures SMB mount is available before
+the k3s VM starts) → start k3s VM → uncordon → wait for pods ready (operator
+prompt on timeout). If the drained node hosted the Vault pod, the Vault
+unseal AWX job template is triggered automatically after uncordon. On the
+pve11 pair only: opnsense migrates `pve11→pve12` with a `ping google.com`
+connectivity test and operator pause before the drain, then migrates back
+after uncordon with another connectivity test. Post-flight: operator pause
+with cluster-wide health snapshot → disable CNPG maintenance (displays
+`kubectl get cluster -A`) → disable Ceph `noout` → wait for Ceph HEALTH_OK →
+verify all VMs/LXCs discovered during the run are running (safety net; each
+pair already starts its own node's VMs/LXCs back up) → re-apply
 iotawatt-sync → unmute alerts.
 
 Note: the per-pair and post-PVE-reboot Ceph health checks are currently
 disabled (`tasks/ops-upgrade-cluster-ceph-health.yaml` is a no-op).
 
-Interactive mode (default) has approximately 17 operator pause points across
+Interactive mode (default) has approximately 18 operator pause points across
 the full run (15 for non-pve11 pairs + 2 extra for opnsense network tests on
-the pve11 pair), plus additional prompts for pods-ready failures.
+the pve11 pair + 1 extra for the pve15 pair's VM shutdown-list confirmation),
+plus additional prompts for pods-ready failures. The VM shutdown-list pause
+is conditional — it only fires on whichever pair's Proxmox node actually has
+other running VMs/LXCs discovered on it (currently just pve15).
 
 ### Standalone K3s Upgrade
 
@@ -421,7 +430,7 @@ K3s application updates use a unified, configuration-driven approach:
 - **tasks/k3s-update-rollout-restart.yaml**: Reusable task file for rollout restart deployments
 - **tasks/k3s-update-calico.yaml**: Reusable task file for the Calico CNI operator-based upgrade (stale ReplicaSet cleanup, versioned CRD + operator manifest apply with server-side force-conflicts, wait for TigeraStatus `Available`); see [Calico CNI Upgrade](#calico-cni-upgrade).
 - **tasks/ops-vault-unseal-awx.yaml**: Triggers the Vault unseal AWX job template and waits for completion; called during cluster node drains when the Vault pod is affected. (The `vault-prod` app upgrade no longer calls this inline — it is chained in an AWX Workflow Job Template: `vault-prod` update → `delete-vault-pod` → Vault unseal, so the running job never authenticates back to AWX.)
-- **playbooks/k3s/delete-vault-pod.yaml**: Deletes the Vault server pod(s) so the StatefulSet (OnDelete update strategy) recreates them on the new version after a Helm upgrade. The new pod comes up sealed; runs as the middle node of the Vault upgrade workflow, between the `vault-prod` update and the unseal.
+- **playbooks/k3s/delete-vault-pod.yaml**: Deletes the Vault server pod(s) so the StatefulSet (OnDelete update strategy) recreates them on the new version after a Helm upgrade. The new pod comes up sealed; runs as the middle node of the Vault upgrade workflow, between the `vault-prod` update and the unseal. The delete task intentionally does not `wait:` for the pod to disappear — the StatefulSet recreates a pod with the same name almost immediately, so a label-selector-based wait-for-absent check can keep matching the replacement and time out (a real false failure seen in production that silently blocked the downstream unseal step and left Vault sealed for hours). The next task polls for the replacement to come up `Running` instead.
 - **playbooks/k3s/update-calico.yaml**: Thin wrapper around `update-app.yaml` with `app_name: calico` (same pattern as `update-cnpg-operator.yaml`), for CLI convenience.
 - **Benefits**: Single playbook for all updates, eliminates code duplication, consistent behavior, configuration-driven, easy to add new applications
 - **Pattern**: Applications are referenced by name (`app_name=<application>`), configuration is automatically loaded and used

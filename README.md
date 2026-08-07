@@ -93,15 +93,17 @@ Pre-flight snapshots all k3s-prod VMs, checks opnsense location, then pauses
 for operator confirmation. At the pre-flight pause, answer `skip` if resuming
 after a failure where maintenance setup (alerts muted, noout set, etc.) is
 already active. Setup order: mute alerts, stop iotawatt-sync, set Ceph noout,
-enable CNPG maintenance. Each pair opens with a pre-pair status snapshot and
-an operator pause; after drain a pod snapshot is shown before the Ubuntu
-upgrade begins; a second pause gates the PVE reboot; after the PVE reboots,
-shared VMs on that node are started before the k3s VM to ensure mounts are
-available; if the drained node hosted the Vault pod, the Vault unseal AWX job
-is triggered automatically after uncordon. The pve11 pair additionally
-migrates opnsense to pve12 with a network connectivity test before and after.
-Post-flight pauses for a final cluster review, then reverses maintenance gates
-and waits for Ceph HEALTH_OK; alerts are unmuted last.
+enable CNPG maintenance. Each pair opens with a pre-pair status snapshot, a
+live discovery of any other running VMs/LXCs on that Proxmox node (with an
+operator confirmation before shutdown), and an operator pause; after drain a
+pod snapshot is shown before the Ubuntu upgrade begins; a second pause gates
+the PVE reboot; after the PVE reboots, the discovered VMs/LXCs on that node
+are started before the k3s VM to ensure mounts are available; if the drained
+node hosted the Vault pod, the Vault unseal AWX job is triggered automatically
+after uncordon. The pve11 pair additionally migrates opnsense to pve12 with a
+network connectivity test before and after. Post-flight pauses for a final
+cluster review, then reverses maintenance gates and waits for Ceph HEALTH_OK;
+alerts are unmuted last.
 
 ### Maintenance Mode
 

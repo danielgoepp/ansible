@@ -31,6 +31,11 @@
           - "app.kubernetes.io/name=vault"
           - "component=server"
 
+    # No wait: true here — the StatefulSet recreates a pod with the same name
+    # almost immediately, so a wait-for-absent check (which re-queries by this
+    # same label selector) can keep matching the replacement pod and time out
+    # even though the delete-and-recreate already succeeded. The next task
+    # polls for that replacement to come up Running instead.
     - name: Delete Vault server pod(s)
       kubernetes.core.k8s:
         api_version: v1
@@ -39,8 +44,6 @@
         context: "{{ vault_context }}"
         label_selectors: "{{ vault_label_selectors }}"
         state: absent
-        wait: true
-        wait_timeout: 180
 
     - name: Wait for Vault pod(s) to be recreated and Running
       kubernetes.core.k8s_info:

@@ -3,7 +3,9 @@
 # Per-pair sequence:
 #   PRE. Ceph health check (allow noout)
 #   PRE. [PAUSE] Confirm before starting pair (yes/skip/no)
-#   0.   (pve15 only) Shutdown shared VMs/LXCs on this node
+#   0.   Discover other running VMs/LXCs on this node, confirm, shut them down
+#        (dynamic query — not a hardcoded list; excludes this pair's k3s VM
+#        and, on the opnsense pair, opnsense itself)
 #   0a.  (pve11 only) Migrate opnsense pve11 -> pve12
 #   0b.  (pve11 only) ping google.com + [PAUSE] confirm network OK
 #   1.   Drain k3s node
@@ -13,7 +15,7 @@
 #   4.   Shutdown k3s VM
 #   4b.  [PAUSE] Confirm before Proxmox upgrade (CRITICAL)
 #   5.   Upgrade Proxmox node + reboot, wait for Ceph HEALTH_WARN-noout-only
-#   6a.  Start shared VMs/LXCs on this node (needed before k3s mounts)
+#   6a.  Start this node's discovered VMs/LXCs back up (needed before k3s mounts)
 #   6b.  Start k3s VM
 #   7.   Wait for k3s node Ready
 #   8.   Uncordon k3s node + wait for pods ready (operator prompt on timeout)
@@ -48,10 +50,8 @@
           ===================================================
           PAIRED UPGRADE: {{ pve_node }} + {{ k3s_node }}
           ===================================================
-          {% set _local_shutdowns = hostvars['localhost']['shared_shutdowns'] | selectattr('host_node', 'equalto', pve_node) | list %}
-          {% if _local_shutdowns | length > 0 %}
-          0.  Shutdown shared VMs on {{ pve_node }}: {{ _local_shutdowns | map(attribute='vm_name') | join(', ') }}
-          {% endif %}
+          0.  Any other running VMs/LXCs on {{ pve_node }} will be discovered
+              and confirmed with the operator before shutdown.
           {% if is_opnsense_pair %}
           0a. Migrate opnsense {{ opnsense_home_node }} -> {{ opnsense_failover_node }}
           {% endif %}
@@ -135,17 +135,53 @@
       when: skip_this_pair | bool
 
     - block:
-        # STEP 0: shutdown shared VMs/LXCs on this node before drain (pve15 only)
-        - name: Shutdown shared VMs/LXCs on {{ pve_node }} before drain
+        # STEP 0: discover + shutdown any other running VMs/LXCs on this node
+        # before drain. Dynamic (queries the node live) instead of a hardcoded
+        # list, so a VM added to the node later (e.g. GRU) isn't silently
+        # missed.
+        - name: Discover VMs/LXCs running on {{ pve_node }}
+          ansible.builtin.include_tasks: ops-upgrade-cluster-vm.yaml
+          vars:
+            vm_action: discover
+            discover_exclude_names: >-
+              {{ [k3s_node] + (['opnsense'] if is_opnsense_pair else []) }}
+
+        - name: Confirm VM/LXC shutdown list for {{ pve_node }}
+          ansible.builtin.pause:
+            prompt: |
+
+              About to shut down these VMs/LXCs on {{ pve_node }} before the Proxmox upgrade:
+              {% for v in discovered_shutdowns %}
+                - {{ v.vm_name }} ({{ v.vm_type }} {{ v.vm_id }})
+              {% endfor %}
+              Continue? (yes/no)
+          register: vm_shutdown_confirm
+          when:
+            - interactive_mode | bool
+            - discovered_shutdowns | length > 0
+
+        - name: Abort if VM/LXC shutdown list not confirmed
+          ansible.builtin.fail:
+            msg: "Pair upgrade cancelled — VM shutdown list not confirmed for {{ pve_node }}"
+          when:
+            - interactive_mode | bool
+            - discovered_shutdowns | length > 0
+            - vm_shutdown_confirm.user_input | lower not in ['yes', 'y']
+
+        - name: Persist this pair's VM shutdown list (for post-Proxmox-upgrade startup)
+          ansible.builtin.set_fact:
+            pair_discovered_shutdowns: "{{ discovered_shutdowns }}"
+
+        - name: Shutdown VMs/LXCs on {{ pve_node }} before drain
           ansible.builtin.include_tasks: ops-upgrade-cluster-vm.yaml
           vars:
             vm_action: shutdown
-            vm_shutdowns: >-
-              {{ hostvars['localhost']['shared_shutdowns']
-                 | selectattr('host_node', 'equalto', pve_node) | list }}
-          when: >-
-            hostvars['localhost']['shared_shutdowns']
-            | selectattr('host_node', 'equalto', pve_node) | list | length > 0
+            vm_shutdowns: "{{ pair_discovered_shutdowns }}"
+          when: pair_discovered_shutdowns | length > 0
+
+        - name: Accumulate discovered shutdowns across pairs (post-flight safety net)
+          ansible.builtin.set_fact:
+            all_discovered_shutdowns: "{{ (all_discovered_shutdowns | default([])) + pair_discovered_shutdowns }}"
 
         # STEP 0a: opnsense migration away (only on pve11 pair)
         - name: Migrate opnsense to failover before pve11 upgrade
@@ -288,17 +324,13 @@
         - name: Upgrade Proxmox node {{ pve_node }}
           ansible.builtin.include_tasks: ops-upgrade-cluster-proxmox.yaml
 
-        # STEP 6a: start shared VMs/LXCs on this node before k3s (needed for mounts)
-        - name: Start shared VMs/LXCs on {{ pve_node }} before k3s startup
+        # STEP 6a: start this node's VMs/LXCs back up before k3s (needed for mounts)
+        - name: Start VMs/LXCs on {{ pve_node }} before k3s startup
           ansible.builtin.include_tasks: ops-upgrade-cluster-vm.yaml
           vars:
             vm_action: startup
-            vm_shutdowns: >-
-              {{ hostvars['localhost']['shared_shutdowns']
-                 | selectattr('host_node', 'equalto', pve_node) | list }}
-          when: >-
-            hostvars['localhost']['shared_shutdowns']
-            | selectattr('host_node', 'equalto', pve_node) | list | length > 0
+            vm_shutdowns: "{{ pair_discovered_shutdowns }}"
+          when: pair_discovered_shutdowns | length > 0
 
         # STEP 6b: start k3s VM
         - name: Start k3s VM

@@ -4,7 +4,18 @@
 # collection per the planning notes.
 #
 # Parameters:
-#   vm_action: "migrate-away" | "migrate-back" | "shutdown" | "startup"
+#   vm_action: "discover" | "migrate-away" | "migrate-back" | "shutdown" | "startup"
+#
+#   For discover:
+#     pve_node:             PVE node to query for running VMs/LXCs
+#     discover_exclude_names: list of VM/LXC names to exclude (e.g. the k3s
+#       VM on this node, which is handled separately, and opnsense on its
+#       pair, which is migrated rather than shut down)
+#     Sets fact `discovered_shutdowns`: list of {vm_id, vm_name, vm_type,
+#       host_node} for every running, non-template guest on pve_node not in
+#       discover_exclude_names. Used to build vm_shutdowns dynamically instead
+#       of relying on a hardcoded list (which can silently drift, e.g. a VM
+#       added to a node after the list was written).
 #
 #   For migrate-away / migrate-back:
 #     pve_node:       source PVE node name (and the home of the VMs)
@@ -28,6 +39,43 @@
 - name: Display VM action
   ansible.builtin.debug:
     msg: "=== VM {{ vm_action | upper }} for {{ pve_node | default('shared') }} ==="
+
+# DISCOVER running VMs/LXCs on a node (replaces hardcoded shutdown lists)
+- name: Discover running VMs/LXCs on {{ pve_node | default('') }}
+  when: vm_action == 'discover'
+  block:
+    - name: Query all VMs/LXCs on {{ pve_node }}
+      community.proxmox.proxmox_vm_info:
+        api_user: root@pam
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ pve_node }}"
+        node: "{{ pve_node }}"
+      register: discover_vm_query
+
+    - name: Reset discovered shutdown list
+      ansible.builtin.set_fact:
+        discovered_shutdowns: []
+
+    - name: Build discovered shutdown list (running, non-template, not excluded)
+      ansible.builtin.set_fact:
+        discovered_shutdowns: >-
+          {{ discovered_shutdowns + [{'vm_id': item.vmid, 'vm_name': item.name,
+             'vm_type': item.type, 'host_node': pve_node}] }}
+      loop: >-
+        {{ discover_vm_query.proxmox_vms | default([])
+           | selectattr('status', 'equalto', 'running')
+           | rejectattr('template')
+           | rejectattr('name', 'in', discover_exclude_names | default([]))
+           | list }}
+      loop_control:
+        label: "{{ item.name }} ({{ item.vmid }})"
+
+    - name: Display discovered VMs/LXCs
+      ansible.builtin.debug:
+        msg: >-
+          {{ discovered_shutdowns | length }} VM(s)/LXC(s) discovered on {{ pve_node }}:
+          {{ discovered_shutdowns | map(attribute='vm_name') | list }}
 
 # MIGRATE VMs AWAY
 - name: Migrate VMs away from {{ pve_node | default('') }}
