@@ -2,7 +2,7 @@
 # Paired Proxmox + K3s Node Upgrade
 # Per-pair sequence:
 #   PRE. Ceph health check (allow noout)
-#   PRE. [PAUSE] Confirm before starting pair (yes/skip/no)
+#   PRE. [PAUSE] Confirm before starting pair [Y/n/skip] (Enter = yes)
 #   0.   Discover other running VMs/LXCs on this node, confirm, shut them down
 #        (dynamic query — not a hardcoded list; excludes this pair's k3s VM
 #        and, on the opnsense pair, opnsense itself)
@@ -20,8 +20,10 @@
 #   7.   Wait for k3s node Ready
 #   8.   Uncordon k3s node + wait for pods ready (operator prompt on timeout)
 #   9.   (pve11 only) Migrate opnsense pve12 -> pve11
-#   9b.  (pve11 only) ping google.com + [PAUSE] confirm network OK
-#   END. [PAUSE] Confirm pair complete before next pair
+#   9b.  (pve11 only) ping google.com, display result (no pause — this is the
+#        last pair in the hardcoded order, so there's nothing left to confirm
+#        before post-flight)
+#   END. [PAUSE] Confirm pair complete before next pair (skipped on the last pair)
 #
 # Parameters:
 #   pve_node: Proxmox host (e.g. pve11)
@@ -111,7 +113,7 @@
         prompt: |
 
           Ready to upgrade pair {{ pve_node }} + {{ k3s_node }}.
-          Continue? (yes/skip/no)
+          Continue? [Y/n/skip]
       register: pair_confirm
       when: interactive_mode | bool
 
@@ -127,7 +129,7 @@
         msg: "Pair upgrade cancelled at {{ pve_node }} + {{ k3s_node }}"
       when:
         - interactive_mode | bool
-        - pair_confirm.user_input | lower not in ['yes', 'y', 'skip', 's']
+        - pair_confirm.user_input | lower in ['n', 'no']
 
     - name: Pair {{ pve_node }} + {{ k3s_node }} skipped by operator
       ansible.builtin.debug:
@@ -154,7 +156,7 @@
               {% for v in discovered_shutdowns %}
                 - {{ v.vm_name }} ({{ v.vm_type }} {{ v.vm_id }})
               {% endfor %}
-              Continue? (yes/no)
+              Continue? [Y/n]
           register: vm_shutdown_confirm
           when:
             - interactive_mode | bool
@@ -166,7 +168,7 @@
           when:
             - interactive_mode | bool
             - discovered_shutdowns | length > 0
-            - vm_shutdown_confirm.user_input | lower not in ['yes', 'y']
+            - vm_shutdown_confirm.user_input | lower in ['n', 'no']
 
         - name: Persist this pair's VM shutdown list (for post-Proxmox-upgrade startup)
           ansible.builtin.set_fact:
@@ -215,7 +217,7 @@
               opnsense migrated to {{ opnsense_failover_node }}.
               Network test (ping google.com): {{ 'PASSED' if post_migrate_away_ping.rc == 0 else 'FAILED' }}
               Verify routing is working before draining {{ k3s_node }}.
-              Continue? (yes/no)
+              Continue? [Y/n]
           register: post_migrate_away_confirm
           when:
             - is_opnsense_pair | bool
@@ -227,7 +229,7 @@
           when:
             - is_opnsense_pair | bool
             - interactive_mode | bool
-            - post_migrate_away_confirm.user_input | lower not in ['yes', 'y']
+            - post_migrate_away_confirm.user_input | lower in ['n', 'no']
 
         # PRE-DRAIN: note whether Vault is on this node so we can unseal after migration
         - name: Check if Vault pod is on {{ k3s_node }}
@@ -276,7 +278,7 @@
 
               {{ k3s_node }} drained. Review pod status above.
               Non-running pods should be expected for this maintenance window.
-              Continue to upgrade {{ k3s_node }}? (yes/no)
+              Continue to upgrade {{ k3s_node }}? [Y/n]
           register: post_drain_confirm
           when: interactive_mode | bool
 
@@ -285,7 +287,7 @@
             msg: "Upgrade cancelled after drain of {{ k3s_node }}"
           when:
             - interactive_mode | bool
-            - post_drain_confirm.user_input | lower not in ['yes', 'y']
+            - post_drain_confirm.user_input | lower in ['n', 'no']
 
         # STEP 2: ubuntu apt dist-upgrade
         - name: Ubuntu apt dist-upgrade on {{ k3s_node }}
@@ -309,7 +311,7 @@
               CRITICAL POINT: PROXMOX UPGRADE
               ========================================
               VM {{ k3s_node }} is offline. Next: apt dist-upgrade + reboot {{ pve_node }}.
-              Continue? (yes/no)
+              Continue? [Y/n]
           register: pve_confirm
           when: interactive_mode | bool
 
@@ -318,7 +320,7 @@
             msg: "Proxmox upgrade cancelled for {{ pve_node }}"
           when:
             - interactive_mode | bool
-            - pve_confirm.user_input | lower not in ['yes', 'y']
+            - pve_confirm.user_input | lower in ['n', 'no']
 
         # STEP 5: Proxmox node upgrade + reboot
         - name: Upgrade Proxmox node {{ pve_node }}
@@ -374,27 +376,6 @@
             msg: "{{ post_migrate_back_ping.stdout_lines | default([]) }}"
           when: is_opnsense_pair | bool
 
-        - name: Confirm network OK after opnsense migrate-back
-          ansible.builtin.pause:
-            prompt: |
-
-              opnsense migrated back to {{ opnsense_home_node }}.
-              Network test (ping google.com): {{ 'PASSED' if post_migrate_back_ping.rc == 0 else 'FAILED' }}
-              Verify routing is restored before continuing.
-              Continue? (yes/no)
-          register: post_migrate_back_confirm
-          when:
-            - is_opnsense_pair | bool
-            - interactive_mode | bool
-
-        - name: Abort if network not confirmed after migrate-back
-          ansible.builtin.fail:
-            msg: "Aborting - network not confirmed after opnsense migrate-back"
-          when:
-            - is_opnsense_pair | bool
-            - interactive_mode | bool
-            - post_migrate_back_confirm.user_input | lower not in ['yes', 'y']
-
         - name: Pair completion status
           block:
             - name: Snapshot - final node status
@@ -418,7 +399,7 @@
             prompt: |
 
               Pair {{ pve_node }} + {{ k3s_node }} done. Status above.
-              Continue to next pair? (yes/no)
+              Continue to next pair? [Y/n]
           register: pair_done_confirm
           when:
             - interactive_mode | bool
@@ -430,6 +411,6 @@
           when:
             - interactive_mode | bool
             - pair != upgrade_pairs[-1]
-            - pair_done_confirm.user_input | lower not in ['yes', 'y']
+            - pair_done_confirm.user_input | lower in ['n', 'no']
 
       when: not skip_this_pair | bool

@@ -125,7 +125,9 @@ prompt on timeout). If the drained node hosted the Vault pod, the Vault
 unseal AWX job template is triggered automatically after uncordon. On the
 pve11 pair only: opnsense migrates `pve11→pve12` with a `ping google.com`
 connectivity test and operator pause before the drain, then migrates back
-after uncordon with another connectivity test. Post-flight: operator pause
+after uncordon with another connectivity test (displayed, no pause — pve11 is
+the last pair in the hardcoded order, so there's nothing left to confirm
+before post-flight). Post-flight: operator pause
 with cluster-wide health snapshot → disable CNPG maintenance (displays
 `kubectl get cluster -A`) → disable Ceph `noout` → wait for Ceph HEALTH_OK →
 verify all VMs/LXCs discovered during the run are running (safety net; each
@@ -135,14 +137,21 @@ iotawatt-sync → unmute alerts.
 Note: the per-pair and post-PVE-reboot Ceph health checks are currently
 disabled (`tasks/ops-upgrade-cluster-ceph-health.yaml` is a no-op).
 
-Interactive mode (default) has approximately 17 operator pause points across
-the full run (15 for non-pve11 pairs + 2 extra for opnsense network tests on
-the pve11 pair + 1 extra for the pve15 pair's VM shutdown-list confirmation,
-minus 1 because the last pair's "Continue to next pair?" pause is skipped —
-there's nothing left to confirm after the final pair), plus additional
-prompts for pods-ready failures. The VM shutdown-list pause is conditional —
-it only fires on whichever pair's Proxmox node actually has other running
-VMs/LXCs discovered on it (currently just pve15).
+Interactive mode (default) has approximately 16 operator pause points across
+the full run (15 for non-pve11 pairs + 1 extra for the opnsense migrate-away
+network test on the pve11 pair (the migrate-back test only displays its
+result, no pause — see above) + 1 extra for the pve15 pair's VM shutdown-list
+confirmation, minus 1 because the last pair's "Continue to next pair?" pause
+is skipped — there's nothing left to confirm after the final pair), plus
+additional prompts for pods-ready failures. The VM shutdown-list pause is
+conditional — it only fires on whichever pair's Proxmox node actually has
+other running VMs/LXCs discovered on it (currently just pve15).
+
+All yes/no-style pauses (including "Continue to next pair?") default to "yes"
+on a bare Enter — an operator must type `n`/`no` to stop. The
+opnsense-location-retry and pods-not-ready-timeout prompts aren't yes/no —
+they only check for `r`/`retry` or `a`/`abort`, so a bare Enter falls through
+to continuing without matching either.
 
 ### Standalone K3s Upgrade
 

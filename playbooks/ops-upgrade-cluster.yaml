@@ -115,7 +115,7 @@
         prompt: |
 
           About to start cluster maintenance. Estimated 60+ minutes.
-          Continue? (yes/no)
+          Continue? [Y/n]
       register: top_confirm
       when: interactive_mode | bool
 
@@ -124,7 +124,7 @@
         msg: "Cluster upgrade cancelled by user"
       when:
         - interactive_mode | bool
-        - top_confirm.user_input | lower not in ['yes', 'y']
+        - top_confirm.user_input | lower in ['n', 'no']
 
     - block:
         # PRE-FLIGHT: health gate
@@ -142,7 +142,7 @@
                 - Stop iotawatt-sync
                 - Set Ceph noout flag
                 - Enable CNPG maintenance mode
-              Proceed? (yes/skip/no)
+              Proceed? [Y/n/skip]
               (skip = maintenance setup already done, resuming after failure)
           register: preflight_proceed_confirm
           when: interactive_mode | bool
@@ -152,12 +152,12 @@
             msg: "Cluster upgrade cancelled before maintenance setup"
           when:
             - interactive_mode | bool
-            - preflight_proceed_confirm.user_input | lower not in ['yes', 'y', 'skip', 's']
+            - preflight_proceed_confirm.user_input | lower in ['n', 'no']
 
         - name: Run maintenance setup
           when: >-
             not interactive_mode | bool or
-            preflight_proceed_confirm.user_input | lower in ['yes', 'y']
+            preflight_proceed_confirm.user_input | lower not in ['skip', 's']
           block:
             # PRE-FLIGHT: mute alerts
             - name: Mute alerts (Graylog / Alertmanager / Uptime Kuma)
@@ -244,7 +244,7 @@
                   starts its own node's VMs/LXCs back up)
                 - Re-apply iotawatt-sync
                 - Unmute alerts (Graylog, Alertmanager, Uptime Kuma)
-              Proceed? (yes/no)
+              Proceed? [Y/n]
           register: postflight_confirm
           when: interactive_mode | bool
 
@@ -253,7 +253,7 @@
             msg: "Post-flight cancelled by operator"
           when:
             - interactive_mode | bool
-            - postflight_confirm.user_input | lower not in ['yes', 'y']
+            - postflight_confirm.user_input | lower in ['n', 'no']
 
         - name: Disable CNPG maintenance mode
           ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-cnpg-maintenance.yaml
