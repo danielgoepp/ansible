@@ -7,9 +7,10 @@
 # network blip mid-fetch) it holds the lock indefinitely.
 #
 # Variables:
-#   interactive_mode: true (default) — prompt when a lock holder is found;
-#     when false, just report and fall through to let the upgrade task fail
-#     with its normal error (unattended/AWX runs).
+#   interactive_mode: true (default) — prompt when a lock holder is found,
+#     letting the operator choose kill/wait/skip/abort; when false, kill the
+#     lock holder(s) automatically without prompting (unattended/AWX runs) —
+#     a stranded process shouldn't be running anyway.
 #   apt_lock_stale_minutes: 5 (default) — informational threshold shown to
 #     the operator; does not gate any automatic behavior.
 
@@ -63,44 +64,39 @@
       register: common_apt_lock_decision
       when: interactive_mode | bool
 
+    - name: Determine apt lock action
+      ansible.builtin.set_fact:
+        # Unattended runs default to killing the holder — a stranded process
+        # shouldn't be running anyway, so failing the upgrade over it is worse
+        # than clearing it automatically.
+        common_apt_lock_action: "{{ (common_apt_lock_decision.user_input | default('k', true)) | lower }}"
+
     - name: Abort on operator request (apt lock)
       ansible.builtin.fail:
         msg: "Operator aborted: apt/dpkg lock held by another process"
-      when:
-        - interactive_mode | bool
-        - common_apt_lock_decision.user_input | lower in ['a', 'abort']
+      when: common_apt_lock_action in ['a', 'abort']
 
     - name: Wait before recheck
       ansible.builtin.wait_for:
         timeout: 30
-      when:
-        - interactive_mode | bool
-        - common_apt_lock_decision.user_input | lower in ['w', 'wait']
+      when: common_apt_lock_action in ['w', 'wait']
 
     - name: Kill stranded apt/dpkg lock holders
       ansible.builtin.command:
         cmd: "kill -TERM {{ common_apt_lock_procs.stdout_lines | map('regex_replace', '^\\s*([0-9]+).*', '\\1') | join(' ') }}"
-      when:
-        - interactive_mode | bool
-        - common_apt_lock_decision.user_input | lower in ['k', 'kill']
+      when: common_apt_lock_action in ['k', 'kill']
 
     - name: Give killed processes a moment to release the lock
       ansible.builtin.wait_for:
         timeout: 5
-      when:
-        - interactive_mode | bool
-        - common_apt_lock_decision.user_input | lower in ['k', 'kill']
+      when: common_apt_lock_action in ['k', 'kill']
 
     - name: Reconcile dpkg state after clearing the lock
       ansible.builtin.command: dpkg --configure -a
       changed_when: false
       failed_when: false
-      when:
-        - interactive_mode | bool
-        - common_apt_lock_decision.user_input | lower in ['k', 'kill']
+      when: common_apt_lock_action in ['k', 'kill']
 
     - name: Recheck apt/dpkg lock
       ansible.builtin.include_tasks: check-apt-lock.yaml
-      when:
-        - interactive_mode | bool
-        - common_apt_lock_decision.user_input | lower in ['k', 'kill', 'w', 'wait']
+      when: common_apt_lock_action in ['k', 'kill', 'w', 'wait']
