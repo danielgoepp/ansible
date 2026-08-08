@@ -122,8 +122,7 @@ in-place k3s install (no `--server` flag, upgrade only; skipped entirely when
 operator pause before PVE upgrade → apt dist-upgrade + reboot PVE → start
 this node's discovered VMs/LXCs back up (ensures SMB mount is available before
 the k3s VM starts) → start k3s VM → uncordon → wait for pods ready (operator
-prompt on timeout). If the drained node hosted the Vault pod, the Vault
-unseal AWX job template is triggered automatically after uncordon. On the
+prompt on timeout). On the
 pve11 pair only: opnsense migrates `pve11→pve12` with a `ping google.com`
 connectivity test and operator pause before the drain, then migrates back
 after uncordon with another connectivity test (displayed, no pause — pve11 is
@@ -441,7 +440,6 @@ K3s application updates use a unified, configuration-driven approach:
 - **tasks/k3s-update-helm.yaml**: Reusable task file for Helm deployments
 - **tasks/k3s-update-rollout-restart.yaml**: Reusable task file for rollout restart deployments
 - **tasks/k3s-update-calico.yaml**: Reusable task file for the Calico CNI operator-based upgrade (stale ReplicaSet cleanup, versioned CRD + operator manifest apply with server-side force-conflicts, wait for TigeraStatus `Available`); see [Calico CNI Upgrade](#calico-cni-upgrade).
-- **tasks/ops-vault-unseal-awx.yaml**: Triggers the Vault unseal AWX job template and waits for completion; called during cluster node drains when the Vault pod is affected. (The `vault-prod` app upgrade no longer calls this inline — it is chained in an AWX Workflow Job Template: `vault-prod` update → `delete-vault-pod` → Vault unseal, so the running job never authenticates back to AWX.)
 - **playbooks/k3s/delete-vault-pod.yaml**: Deletes the Vault server pod(s) so the StatefulSet (OnDelete update strategy) recreates them on the new version after a Helm upgrade. The new pod comes up sealed; runs as the middle node of the Vault upgrade workflow, between the `vault-prod` update and the unseal. The delete task intentionally does not `wait:` for the pod to disappear — the StatefulSet recreates a pod with the same name almost immediately, so a label-selector-based wait-for-absent check can keep matching the replacement and time out (a real false failure seen in production that silently blocked the downstream unseal step and left Vault sealed for hours). The next task polls for the replacement to come up `Running` instead.
 - **playbooks/k3s/update-calico.yaml**: Thin wrapper around `update-app.yaml` with `app_name: calico` (same pattern as `update-cnpg-operator.yaml`), for CLI convenience.
 - **Benefits**: Single playbook for all updates, eliminates code duplication, consistent behavior, configuration-driven, easy to add new applications
@@ -481,10 +479,6 @@ All cluster upgrade task files use the prefix `ops-upgrade-cluster-` for consist
 - Proxmox node upgrade (`proxmox`)
 - Pre-upgrade snapshot of k3s-prod VMs (`snapshot-k3s`, called as first step of preflight)
 - Orchestration (`paired` for per-pair sequencing)
-
-**Supporting task (not `ops-upgrade-cluster-` prefixed)**:
-
-- `tasks/ops-vault-unseal-awx.yaml`: Triggers the Vault unseal AWX job template; called from `paired` after uncordon when Vault pod was on the drained node. (Not used by `update-app.yaml`; the `vault-prod` upgrade chains `vault-prod` update → `delete-vault-pod` → Vault unseal as nodes in an AWX Workflow Job Template instead.)
 
 Use `ls tasks/ops-upgrade-cluster-*.yaml` to see all cluster upgrade tasks.
 

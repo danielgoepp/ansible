@@ -72,8 +72,7 @@ ansible-playbook playbooks/ops-proxmox-snapshots.yaml -e delete_snapshots=true
 
 Rolling upgrade of the Proxmox cluster, the Ubuntu k3s VMs, and k3s itself.
 Includes a pre-flight health gate (with automatic k3s-prod VM snapshots),
-post-drain pod snapshots, automatic Vault unseal via AWX when the Vault pod
-is affected, and operator confirmation prompts throughout.
+post-drain pod snapshots, and operator confirmation prompts throughout.
 
 ```bash
 # With a k3s upgrade
@@ -101,10 +100,9 @@ live discovery of any other running VMs/LXCs on that Proxmox node (with an
 operator confirmation before shutdown), and an operator pause; after drain a
 pod snapshot is shown before the Ubuntu upgrade begins; a second pause gates
 the PVE reboot; after the PVE reboots, the discovered VMs/LXCs on that node
-are started before the k3s VM to ensure mounts are available; if the drained
-node hosted the Vault pod, the Vault unseal AWX job is triggered automatically
-after uncordon. The pve11 pair additionally migrates opnsense to pve12 with a
-network connectivity test before and after. Post-flight pauses for a final
+are started before the k3s VM to ensure mounts are available. The pve11 pair
+additionally migrates opnsense to pve12 with a network connectivity test
+before and after. Post-flight pauses for a final
 cluster review, then reverses maintenance gates and waits for Ceph HEALTH_OK;
 alerts are unmuted last.
 
