@@ -8,10 +8,11 @@
 #   ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=graylog
 #   ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=disable -e target=alertmanager
 #   ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=uptime-kuma
+#   ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=home-assistant
 #
 # Parameters:
 #   maintenance_action: "enable" (mutes alerts) or "disable" (unmutes alerts) (required)
-#   target: "all", "graylog", "alertmanager", or "uptime-kuma" (default: all)
+#   target: "all", "graylog", "alertmanager", "uptime-kuma", or "home-assistant" (default: all)
 #   duration_hours: int (default: 2) - for timed silences/maintenance windows
 
 - name: Manage cluster alerts
@@ -30,14 +31,15 @@
 
     - name: Validate target parameter
       ansible.builtin.fail:
-        msg: "target must be 'all', 'graylog', 'alertmanager', or 'uptime-kuma'"
-      when: alert_target not in ['all', 'graylog', 'alertmanager', 'uptime-kuma']
+        msg: "target must be 'all', 'graylog', 'alertmanager', 'uptime-kuma', or 'home-assistant'"
+      when: alert_target not in ['all', 'graylog', 'alertmanager', 'uptime-kuma', 'home-assistant']
 
     - name: Set credentials from AWX or vault
       ansible.builtin.set_fact:
         graylog_token: "{{ awx_graylog_token | default(vault_graylog_token | default('')) }}"
         uptime_kuma_username: "{{ awx_uptime_kuma_username | default(vault_uptime_kuma_username | default('')) }}"
         uptime_kuma_password: "{{ awx_uptime_kuma_password | default(vault_uptime_kuma_password | default('')) }}"
+        home_assistant_token: "{{ awx_home_assistant_token | default(vault_home_assistant_token | default('')) }}"
 
     - name: Manage Graylog alerts
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-graylog.yaml"
@@ -56,3 +58,9 @@
       vars:
         maintenance_action: "{{ maintenance_action }}"
       when: alert_target in ['all', 'uptime-kuma']
+
+    - name: Manage Home Assistant automations
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/ops-upgrade-cluster-alerts-homeassistant.yaml"
+      vars:
+        maintenance_action: "{{ maintenance_action }}"
+      when: alert_target in ['all', 'home-assistant']

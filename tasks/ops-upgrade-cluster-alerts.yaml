@@ -1,6 +1,6 @@
 ---
 # Alerts wrapper - mutes/unmutes alerts across all monitoring systems.
-# Fans out to graylog, alertmanager, uptime-kuma sub-tasks.
+# Fans out to graylog, alertmanager, uptime-kuma, home-assistant sub-tasks.
 #
 # Parameters:
 #   maintenance_action: "enable" (mute) or "disable" (unmute)
@@ -11,6 +11,7 @@
     graylog_token: "{{ awx_graylog_token | default(vault_graylog_token | default('')) }}"
     uptime_kuma_username: "{{ awx_uptime_kuma_username | default(vault_uptime_kuma_username | default('')) }}"
     uptime_kuma_password: "{{ awx_uptime_kuma_password | default(vault_uptime_kuma_password | default('')) }}"
+    home_assistant_token: "{{ awx_home_assistant_token | default(vault_home_assistant_token | default('')) }}"
     alert_duration_hours: "{{ alert_duration_hours | default(8) }}"
 
 - name: Manage Graylog alerts
@@ -21,3 +22,6 @@
 
 - name: Manage Uptime Kuma maintenance window
   ansible.builtin.include_tasks: ops-upgrade-cluster-alerts-uptime-kuma.yaml
+
+- name: Manage Home Assistant automations
+  ansible.builtin.include_tasks: ops-upgrade-cluster-alerts-homeassistant.yaml

@@ -11,6 +11,9 @@ graylog_api_url: "https://graylog-prod.goepp.net/api"
 alertmanager_api_url: "https://alertmanager-prod.goepp.net/api/v2"
 alertmanager_created_by: "ansible-automation"
 uptime_kuma_url: "https://uptime-kuma-prod.goepp.net"
+home_assistant_url: "https://homeassistant-prod.goepp.net"
+home_assistant_muted_automations:
+  - automation.zigbee_bridge_disconnected
 hashicorp_vault_url: "https://vault-prod.goepp.net"
 awx_api_url: "https://awx-prod.goepp.net"
 vault_unseal_awx_job_template_id: 49

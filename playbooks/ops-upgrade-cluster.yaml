@@ -13,7 +13,7 @@
 #   2. Snapshot k3s-prod VMs (pre-upgrade-YYYYMMDD)
 #   3. Health gate (Ceph HEALTH_OK, opnsense on pve11)
 #   4. [PAUSE] Confirm before any cluster-wide changes
-#   5. Mute alerts (Graylog, Alertmanager, Uptime Kuma)
+#   5. Mute alerts (Graylog, Alertmanager, Uptime Kuma, Home Assistant)
 #   6. Stop iotawatt-sync
 #   7. Set Ceph noout flag
 #   8. Set CNPG maintenance mode
@@ -29,7 +29,7 @@
 #   5. Wait for Ceph HEALTH_OK
 #   6. Verify discovered VMs/LXCs running (safety net; each pair starts its own)
 #   7. Re-apply iotawatt-sync
-#   8. Unmute alerts
+#   8. Unmute alerts (Graylog, Alertmanager, Uptime Kuma, Home Assistant)
 #
 # Optional:
 #   -e k3s_target_version=v1.31.5+k3s1   # upgrade k3s too; omit to skip the k3s install step
@@ -134,7 +134,7 @@
             prompt: |
 
               Pre-flight passed. About to make cluster-wide changes:
-                - Mute alerts (Graylog, Alertmanager, Uptime Kuma)
+                - Mute alerts (Graylog, Alertmanager, Uptime Kuma, Home Assistant)
                 - Stop iotawatt-sync
                 - Set Ceph noout flag
                 - Enable CNPG maintenance mode
@@ -156,7 +156,7 @@
             preflight_proceed_confirm.user_input | lower not in ['skip', 's']
           block:
             # PRE-FLIGHT: mute alerts
-            - name: Mute alerts (Graylog / Alertmanager / Uptime Kuma)
+            - name: Mute alerts (Graylog / Alertmanager / Uptime Kuma / Home Assistant)
               ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
               vars:
                 maintenance_action: enable
@@ -241,7 +241,7 @@
                 - Verify discovered VMs/LXCs running (safety net; each pair already
                   starts its own node's VMs/LXCs back up)
                 - Re-apply iotawatt-sync
-                - Unmute alerts (Graylog, Alertmanager, Uptime Kuma)
+                - Unmute alerts (Graylog, Alertmanager, Uptime Kuma, Home Assistant)
               Proceed? [Y/n]
           register: postflight_confirm
           when: interactive_mode | bool
@@ -282,7 +282,7 @@
           vars:
             iotawatt_action: start
 
-        - name: Unmute alerts
+        - name: Unmute alerts (Graylog / Alertmanager / Uptime Kuma / Home Assistant)
           ansible.builtin.include_tasks: ../tasks/ops-upgrade-cluster-alerts.yaml
           vars:
             maintenance_action: disable

@@ -211,6 +211,7 @@ ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=disab
 ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=graylog
 ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=alertmanager
 ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=uptime-kuma
+ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=home-assistant
 
 # Customize silence duration (default: 2 hours)
 ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e duration_hours=4
@@ -467,7 +468,7 @@ All cluster upgrade task files use the prefix `ops-upgrade-cluster-` for consist
 
 **Task Categories**:
 
-- Alert and monitoring management (alerts wrapper + per-system: graylog, alertmanager, uptime-kuma)
+- Alert and monitoring management (alerts wrapper + per-system: graylog, alertmanager, uptime-kuma, home-assistant)
 - Ceph storage operations (`ceph-noout`, `ceph-health` disabled no-op placeholder)
 - Database maintenance mode (`cnpg-maintenance`)
 - Node lifecycle (drain, shutdown via Proxmox API, startup via Proxmox API, uncordon)
@@ -502,9 +503,10 @@ The alert management system provides centralized control over monitoring alerts 
   - **tasks/ops-upgrade-cluster-alerts-graylog.yaml**: Manages Graylog event definitions
   - **tasks/ops-upgrade-cluster-alerts-alertmanager.yaml**: Manages Alertmanager silences with timed expiration
   - **tasks/ops-upgrade-cluster-alerts-uptime-kuma.yaml**: Manages Uptime Kuma maintenance windows (requires `pip install uptime-kuma-api`)
+  - **tasks/ops-upgrade-cluster-alerts-homeassistant.yaml**: Enables/disables Home Assistant automations via the native REST API (used to mute `automation.zigbee_bridge_disconnected`, which trips spuriously when zigbee2mqtt pods are drained/restarted during a pair upgrade)
 - **Configuration split**: Non-sensitive URLs in common.yml, credentials in vault.yml
 - **AWX compatible**: Uses native Ansible date/time filters instead of platform-specific shell commands
-- **Targeted control**: Can manage all systems or target specific ones (graylog, alertmanager, uptime-kuma)
+- **Targeted control**: Can manage all systems or target specific ones (graylog, alertmanager, uptime-kuma, home-assistant)
 
 ## Markdown Standards
 

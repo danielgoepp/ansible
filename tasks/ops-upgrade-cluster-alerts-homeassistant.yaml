@@ -1,0 +1,39 @@
+---
+# Home Assistant Automation Management
+# Enables/disables Home Assistant automations via the native REST API
+#
+# Parameters:
+#   maintenance_action: "enable" (mutes automations) or "disable" (unmutes automations)
+#   home_assistant_url: Home Assistant base URL
+#   home_assistant_token: Home Assistant long-lived access token
+#   home_assistant_muted_automations: list of automation entity_ids to mute
+
+# ENABLE MAINTENANCE (mute automations)
+- name: Turn off muted automations
+  ansible.builtin.uri:
+    url: "{{ home_assistant_url }}/api/services/automation/turn_off"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ home_assistant_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      entity_id: "{{ item }}"
+    status_code: [200]
+  loop: "{{ home_assistant_muted_automations }}"
+  when: maintenance_action == 'enable'
+
+# DISABLE MAINTENANCE (unmute automations)
+- name: Turn on muted automations
+  ansible.builtin.uri:
+    url: "{{ home_assistant_url }}/api/services/automation/turn_on"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ home_assistant_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      entity_id: "{{ item }}"
+    status_code: [200]
+  loop: "{{ home_assistant_muted_automations }}"
+  when: maintenance_action == 'disable'
