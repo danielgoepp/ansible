@@ -76,9 +76,12 @@ post-drain pod snapshots, automatic Vault unseal via AWX when the Vault pod
 is affected, and operator confirmation prompts throughout.
 
 ```bash
-# Required: target k3s version
+# With a k3s upgrade
 ansible-playbook playbooks/ops-upgrade-cluster.yaml \
   -e k3s_target_version=<version>
+
+# PVE/VM upgrade only - omit k3s_target_version to skip the k3s install step
+ansible-playbook playbooks/ops-upgrade-cluster.yaml
 
 # Run unattended (skip pause prompts)
 ansible-playbook playbooks/ops-upgrade-cluster.yaml \

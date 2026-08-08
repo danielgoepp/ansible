@@ -28,7 +28,7 @@
 # Parameters:
 #   pve_node: Proxmox host (e.g. pve11)
 #   k3s_node: K3s VM hostname (e.g. k3s-prod-11)
-#   k3s_target_version: target k3s version (required)
+#   k3s_target_version: target k3s version (optional - step 3 is skipped when unset)
 #   opnsense_vm_id (default 101)
 #   opnsense_home_node (default pve11)
 #   opnsense_failover_node (default pve12)
@@ -59,7 +59,11 @@
           {% endif %}
           1. Drain k3s node {{ k3s_node }}
           2. Ubuntu apt dist-upgrade on {{ k3s_node }}
+          {% if k3s_target_version | default('') | length > 0 %}
           3. k3s install {{ k3s_target_version }} on {{ k3s_node }}
+          {% else %}
+          3. k3s install skipped (k3s_target_version not set)
+          {% endif %}
           4. Shutdown k3s VM {{ k3s_node }}
           5. Upgrade Proxmox node {{ pve_node }} (apt + reboot)
           6. Start k3s VM {{ k3s_node }}
@@ -262,8 +266,8 @@
               echo "=== Nodes ==="
               kubectl get nodes -o wide
               echo ""
-              echo "=== Non-running / non-completed pods ==="
-              kubectl get pods --all-namespaces --no-headers | grep -v -E '\s+Running\s+|\s+Completed\s+' || echo "(none)"
+              echo "=== Pods on {{ k3s_node }} ==="
+              kubectl get pods --all-namespaces --field-selector spec.nodeName={{ k3s_node }} -o wide
           delegate_to: localhost
           register: post_drain_snapshot
           changed_when: false
@@ -293,9 +297,15 @@
         - name: Ubuntu apt dist-upgrade on {{ k3s_node }}
           ansible.builtin.include_tasks: ops-upgrade-cluster-ubuntu.yaml
 
-        # STEP 3: k3s in-place version install
+        # STEP 3: k3s in-place version install (skipped when k3s_target_version is unset)
         - name: k3s install {{ k3s_target_version }} on {{ k3s_node }}
           ansible.builtin.include_tasks: ops-upgrade-cluster-k3s-install.yaml
+          when: k3s_target_version | default('') | length > 0
+
+        - name: k3s install skipped on {{ k3s_node }} (k3s_target_version not set)
+          ansible.builtin.debug:
+            msg: "=== Skipping k3s install on {{ k3s_node }} — k3s_target_version not set ==="
+          when: k3s_target_version | default('') | length == 0
 
         # STEP 4: shutdown k3s VM (graceful via OS)
         - name: Shutdown k3s VM

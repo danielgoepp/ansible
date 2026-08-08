@@ -31,10 +31,8 @@
 #   7. Re-apply iotawatt-sync
 #   8. Unmute alerts
 #
-# Required:
-#   -e k3s_target_version=v1.31.5+k3s1
-#
 # Optional:
+#   -e k3s_target_version=v1.31.5+k3s1   # upgrade k3s too; omit to skip the k3s install step
 #   -e interactive_mode=false    # skip pause prompts
 #   -e verbose_status=false      # quieter status output
 #   -e skip_preflight=true       # skip health gate and maintenance setup
@@ -43,7 +41,8 @@
 # Usage:
 #   Local:  ansible-playbook playbooks/ops-upgrade-cluster.yaml \
 #             -e k3s_target_version=v1.31.5+k3s1
-#   AWX:    Run as job template with k3s_target_version set as an extra var
+#           ansible-playbook playbooks/ops-upgrade-cluster.yaml   # PVE/VM upgrade only, no k3s upgrade
+#   AWX:    Run as job template with k3s_target_version set as an extra var (omit to skip k3s)
 
 - name: Cluster Upgrade - Pre-flight
   hosts: localhost
@@ -67,12 +66,9 @@
     opnsense_failover_node: pve12
 
   tasks:
-    - name: Validate k3s_target_version
-      ansible.builtin.fail:
-        msg: |
-          k3s_target_version is required.
-          Example: -e k3s_target_version=v1.31.5+k3s1
-      when: k3s_target_version is not defined or k3s_target_version | length == 0
+    - name: Default k3s_target_version to empty (k3s install step is skipped when unset)
+      ansible.builtin.set_fact:
+        k3s_target_version: "{{ k3s_target_version | default('') }}"
 
     # Persist play vars as facts so they survive across plays (play vars are
     # scoped to a single play; facts persist on the host for the run).
@@ -93,7 +89,7 @@
           ===================================================
           CLUSTER MAINTENANCE PLAYBOOK
           ===================================================
-          k3s target version : {{ k3s_target_version }}
+          k3s target version : {{ k3s_target_version if k3s_target_version | length > 0 else '(none - k3s install step will be skipped)' }}
           Interactive mode   : {{ interactive_mode }}
           Verbose status     : {{ verbose_status }}
           Skip pre-flight    : {{ skip_preflight }}
@@ -197,6 +193,7 @@
     opnsense_vm_id: "{{ hostvars['localhost']['opnsense_vm_id'] }}"
     opnsense_home_node: "{{ hostvars['localhost']['opnsense_home_node'] }}"
     opnsense_failover_node: "{{ hostvars['localhost']['opnsense_failover_node'] }}"
+    k3s_target_version: "{{ hostvars['localhost']['k3s_target_version'] }}"
 
   tasks:
     - name: Upgrade each pair
@@ -216,6 +213,7 @@
   vars:
     all_discovered_shutdowns: "{{ hostvars['localhost']['all_discovered_shutdowns'] | default([]) }}"
     interactive_mode: "{{ hostvars['localhost']['interactive_mode'] | default(true) }}"
+    k3s_target_version: "{{ hostvars['localhost']['k3s_target_version'] | default('') }}"
     skip_postflight: false
 
   tasks:
@@ -297,7 +295,7 @@
               ===================================================
               CLUSTER MAINTENANCE COMPLETE
               ===================================================
-              k3s target version : {{ k3s_target_version }}
+              k3s target version : {{ k3s_target_version if k3s_target_version | length > 0 else '(none - k3s install step was skipped)' }}
 
               Manual checks (per planning notes):
               - Verify Postgres pods are accepting connections

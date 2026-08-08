@@ -78,7 +78,7 @@ Rolling upgrade of the Proxmox cluster, the Ubuntu k3s VMs, and k3s itself.
 Safety-critical playbook with operator confirmation prompts at each major step.
 
 ```bash
-# Required: target k3s version (no default)
+# Target k3s version (optional - omit to upgrade PVE/VMs only, skipping the k3s install step)
 ansible-playbook playbooks/ops-upgrade-cluster.yaml \
   -e k3s_target_version=v1.31.5+k3s1
 
@@ -117,7 +117,8 @@ hardcoded list — excludes this pair's k3s VM and, on the opnsense pair,
 opnsense itself) → operator pause to confirm the discovered shutdown list
 (only shown when the list is non-empty) → shut them down → drain →
 post-drain pod snapshot + operator pause → apt dist-upgrade on the k3s VM →
-in-place k3s install (no `--server` flag, upgrade only) → shutdown VM →
+in-place k3s install (no `--server` flag, upgrade only; skipped entirely when
+`k3s_target_version` is not set) → shutdown VM →
 operator pause before PVE upgrade → apt dist-upgrade + reboot PVE → start
 this node's discovered VMs/LXCs back up (ensures SMB mount is available before
 the k3s VM starts) → start k3s VM → uncordon → wait for pods ready (operator
