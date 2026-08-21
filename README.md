@@ -160,6 +160,9 @@ ansible-playbook playbooks/ops-maintenance-mode-single.yaml \
   reference
 - **[ANSIBLE.md](ANSIBLE.md)**: Detailed technical documentation and
   architecture
+- **[docs/runbook-cluster-upgrade.md](docs/runbook-cluster-upgrade.md)**:
+  Operator checklist for a cluster upgrade maintenance window, both via
+  Ansible and manual fallback
 
 ## Repository Structure
 

@@ -76,6 +76,8 @@ ls playbooks/k3s/                                     # List K3s playbooks
 
 Rolling upgrade of the Proxmox cluster, the Ubuntu k3s VMs, and k3s itself.
 Safety-critical playbook with operator confirmation prompts at each major step.
+Operator checklist (both Ansible and manual fallback):
+[`docs/runbook-cluster-upgrade.md`](docs/runbook-cluster-upgrade.md).
 
 ```bash
 # Target k3s version (optional - omit to upgrade PVE/VMs only, skipping the k3s install step)
