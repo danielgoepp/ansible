@@ -94,7 +94,7 @@ curl -H "Authorization: Bearer $AWX_TOKEN" \
 ### Basic Usage
 
 ```bash
-cd /Users/dang/Documents/Development/ansible
+cd /Users/dang/Development/ansible
 ./scripts/create_awx_templates.py
 ```
 
