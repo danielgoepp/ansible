@@ -1,0 +1,16 @@
+---
+# Configure and manage hermes server
+#
+# Usage:
+#   ansible-playbook playbooks/ssh/host-hermes.yaml
+#   ansible-playbook playbooks/ssh/host-hermes.yaml -e apt_dist_upgrade=true
+
+- name: Configure hermes server
+  hosts: "hermes"
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Run common role
+      ansible.builtin.include_role:
+        name: common
