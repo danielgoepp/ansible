@@ -30,6 +30,22 @@ ansible-playbook playbooks/ssh/host-smb.yaml
 # Include system updates
 ansible-playbook playbooks/ssh/common-ubuntu.yaml -e apt_dist_upgrade=true
 ansible-playbook playbooks/ssh/host-backup.yaml -e apt_dist_upgrade=true
+
+# Target specific hosts or groups
+ansible-playbook playbooks/ssh/common-ubuntu.yaml -l <hostname>
+ansible-playbook playbooks/ssh/common-ubuntu.yaml -l <host1>,<host2>
+
+# LLM host upgrades (NVIDIA drivers, Docker, Ollama, Open WebUI, Portainer)
+ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_all=true
+ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_component=<component>
+# Available components: docker, ollama, openwebui, portainer
+
+# UniFi OS Server upgrade (ui-network host)
+ansible-playbook playbooks/ssh/host-ui-network.yaml -e ui_network_upgrade=true
+
+# Discovery commands
+ls playbooks/ssh/          # List all SSH playbooks
+ansible-inventory --graph  # View host organization
 ```
 
 ### K3s Application Updates
@@ -53,6 +69,9 @@ ansible-playbook playbooks/esphome/upgrade-esphome.yaml
 
 # Upgrade specific device or pattern
 ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<device-name>
+
+# Skip build cache cleanup
+ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e esphome_clean_build=false
 ```
 
 ### Proxmox Snapshot Management
@@ -89,6 +108,11 @@ ansible-playbook playbooks/ops-upgrade-cluster.yaml \
 # Resume after a failure (maintenance already active)
 ansible-playbook playbooks/ops-upgrade-cluster.yaml \
   -e k3s_target_version=<version> -e skip_preflight=true
+
+# Concurrent network upgrade: extra pause per pair after each Proxmox node
+# reboots, before its VMs/LXCs and k3s VM are started back up
+ansible-playbook playbooks/ops-upgrade-cluster.yaml \
+  -e k3s_target_version=<version> -e network_upgrade_pause=true
 ```
 
 Pre-flight snapshots all k3s-prod VMs, checks opnsense location, then pauses
@@ -99,23 +123,51 @@ enable CNPG maintenance. Each pair opens with a pre-pair status snapshot, a
 live discovery of any other running VMs/LXCs on that Proxmox node (with an
 operator confirmation before shutdown), and an operator pause; after drain a
 pod snapshot is shown before the Ubuntu upgrade begins; a second pause gates
-the PVE reboot; after the PVE reboots, the discovered VMs/LXCs on that node
+the PVE reboot; after the PVE reboots (and, optionally, an extra pause there
+for a concurrent network upgrade's manual steps, before anything is started
+back up), the discovered VMs/LXCs on that node
 are started before the k3s VM to ensure mounts are available. The pve11 pair
 additionally migrates opnsense to pve12 with a network connectivity test
 before and after. Post-flight pauses for a final
 cluster review, then reverses maintenance gates and waits for Ceph HEALTH_OK;
 alerts are unmuted last.
 
+### Standalone K3s Upgrade
+
+In-place k3s version upgrade with no drain and no reboot - workloads keep
+running across the restart. Use this when only k3s needs upgrading; use the
+full cluster upgrade above when the Ubuntu VMs also need a kernel/apt
+dist-upgrade (which requires a reboot). Nodes upgrade one at a time, each
+waiting for cluster Ready before the next.
+
+```bash
+# Upgrade all k3s-prod nodes in place
+ansible-playbook playbooks/ops-k3s-upgrade.yaml -e k3s_target_version=<version>
+
+# Target a single node (or comma-separated list)
+ansible-playbook playbooks/ops-k3s-upgrade.yaml -e k3s_target_version=<version> -l k3s-prod-13
+```
+
+### Calico CNI Upgrade
+
+Upgrades Calico following Tigera's operator-based upgrade procedure (CRDs +
+operator manifest applied server-side, then waits for the Calico
+TigeraStatus to report `Available`).
+
+```bash
+ansible-playbook playbooks/k3s/update-calico.yaml -e calico_target_version=<version>
+```
+
 ### Maintenance Mode
 
 ```bash
-# Enable maintenance mode (mutes all alerts: Graylog, Alertmanager, Uptime Kuma)
+# Enable maintenance mode (mutes all alerts: Graylog, Alertmanager, Uptime Kuma, Home Assistant)
 ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable
 
 # Disable maintenance mode (unmutes all alerts)
 ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=disable
 
-# Target specific alert system
+# Target specific alert system (graylog, alertmanager, uptime-kuma, home-assistant)
 ansible-playbook playbooks/ops-maintenance-mode.yaml \
   -e maintenance_action=enable -e target=graylog
 
@@ -126,10 +178,33 @@ ansible-playbook playbooks/ops-maintenance-mode.yaml \
 # Silence a single Alertmanager alert (default: 1 hour)
 ansible-playbook playbooks/ops-maintenance-mode-single.yaml \
   -e 'alert_name="Node Exporter - CPU High"'
+ansible-playbook playbooks/ops-maintenance-mode-single.yaml \
+  -e 'alert_name="Node Exporter - CPU High"' -e duration_hours=2
 
 # Remove a single alert silence early
 ansible-playbook playbooks/ops-maintenance-mode-single.yaml \
   -e 'alert_name="Node Exporter - CPU High"' -e silence_action=disable
+```
+
+### Supporting Operations
+
+```bash
+# Vault operations
+ansible-vault edit inventories/group_vars/all/vault.yml
+ansible-vault view inventories/group_vars/all/vault.yml
+ansible-vault encrypt inventories/group_vars/all/vault.yml
+
+# Inventory and connectivity
+ansible-inventory --list
+ansible-inventory --graph
+ansible all -m ping
+ansible <group> -m ping
+
+# Validate a playbook without running it
+ansible-playbook <playbook>.yaml --syntax-check
+
+# Discover operational playbooks (cluster upgrades, maintenance, testing)
+ls playbooks/ops-*.yaml
 ```
 
 ## Infrastructure Overview
@@ -156,8 +231,8 @@ ansible-playbook playbooks/ops-maintenance-mode-single.yaml \
 
 ## Documentation
 
-- **[CLAUDE.md](CLAUDE.md)**: AI assistant working instructions and command
-  reference
+- **[CLAUDE.md](CLAUDE.md)**: AI assistant working instructions, plus
+  playbook behavior/internals not covered here
 - **[ANSIBLE.md](ANSIBLE.md)**: Detailed technical documentation and
   architecture
 - **[docs/runbook-cluster-upgrade.md](docs/runbook-cluster-upgrade.md)**:

@@ -2,8 +2,9 @@
 
 Operator checklist for a maintenance window covering Proxmox, the k3s-prod
 Ubuntu VMs, and k3s itself. This is the "what I actually do, in order" list —
-for full flag/option reference see [`CLAUDE.md`](../CLAUDE.md#cluster-upgrade)
-and [`README.md`](../README.md#cluster-upgrade).
+for the full flag/option reference see
+[`README.md`](../README.md#cluster-upgrade); for internal behavior and pause
+counts see [`CLAUDE.md`](../CLAUDE.md#cluster-upgrade).
 
 Use the **Ansible** section for a normal run. Use the **Manual** section only
 if Ansible/AWX itself is unavailable, or you need to pick up a step by hand
@@ -36,6 +37,10 @@ ansible-playbook playbooks/ops-upgrade-cluster.yaml -e k3s_target_version=<versi
 
 # PVE + Ubuntu only, unattended - omit k3s_target_version to skip the k3s install step
 ansible-playbook playbooks/ops-upgrade-cluster.yaml -e interactive_mode=false
+
+# Concurrent network upgrade: extra pause per pair after each PVE node reboots,
+# before its VMs/LXCs and k3s VM start back up (manual network steps go here)
+ansible-playbook playbooks/ops-upgrade-cluster.yaml -e k3s_target_version=<version> -e network_upgrade_pause=true
 ```
 
 ### Checking status (during or after)
@@ -122,6 +127,9 @@ Mirrors what `ops-upgrade-cluster.yaml` does automatically. Pair order is
       end
   - [ ] Wait for the node to come back up, Ceph to go HEALTH_OK (noout
         warning expected and fine)
+- [ ] **If doing a concurrent network upgrade:** node is up but nothing has
+      been started back up yet — do the manual network upgrade steps for
+      this node now
 - [ ] Start the VMs/LXCs that were shut down on this node, **then** the k3s
       VM (so SMB mounts are available first)
   - [ ] Wait for the k3s VM to settle (idle CPU/load) before continuing

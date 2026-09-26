@@ -8,69 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-This repository supports three primary operation types:
-
-1. **SSH Operations**: Configure and update hosts via SSH
-2. **ESPHome Operations**: Update ESPHome devices
-3. **K3s Operations**: Update Kubernetes applications
-
-### SSH Host Operations
-
-Update and configure hosts via SSH.
-
-```bash
-# Run group playbooks (apply common role to host groups)
-ansible-playbook playbooks/ssh/common-<group>.yaml
-
-# Run host playbooks (configure specific servers)
-ansible-playbook playbooks/ssh/host-<hostname>.yaml
-
-# Run with system updates (apt update && apt dist-upgrade)
-ansible-playbook playbooks/ssh/common-<group>.yaml -e apt_dist_upgrade=true
-
-# Target specific hosts or groups
-ansible-playbook playbooks/ssh/common-<group>.yaml -l <hostname>
-ansible-playbook playbooks/ssh/common-<group>.yaml -l <host1>,<host2>
-
-# LLM host upgrades (NVIDIA drivers, Docker, Ollama, Open WebUI, Portainer)
-ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_all=true
-ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_component=<component>
-# Available components: docker, ollama, openwebui, portainer
-
-# UniFi OS Server upgrade (ui-network host)
-ansible-playbook playbooks/ssh/host-ui-network.yaml -e ui_network_upgrade=true
-
-# Discovery commands
-ls playbooks/ssh/          # List all SSH playbooks
-ansible-inventory --graph  # View host organization
-```
-
-### ESPHome Device Operations
-
-Update ESPHome firmware on IoT devices.
-
-```bash
-ansible-playbook playbooks/esphome/upgrade-esphome.yaml                                          # Upgrade all devices (default)
-ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<device-name>          # Specific device
-ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e target_pattern=<regex>                # Devices matching pattern
-ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e esphome_clean_build=false             # Skip build cache cleanup
-```
-
-### K3s Application Operations
-
-Update Kubernetes applications (Helm charts and manifests).
-
-```bash
-# Unified update playbook (routes to appropriate deployment method)
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=<application>
-
-# Update specific instance (for multi-instance apps)
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=<application> -e target_instance=<instance>
-
-# Discovery commands
-cat inventories/group_vars/all/k3s_applications.yml  # List available applications
-ls playbooks/k3s/                                     # List K3s playbooks
-```
+See [README.md](README.md) for the full command reference — SSH host/group
+operations, ESPHome updates, K3s application updates, cluster upgrade,
+standalone k3s upgrade, Calico CNI upgrade, maintenance mode, and supporting
+operations (vault, inventory, validation). The subsections below cover
+behavior and internals worth knowing before modifying these playbooks, not
+command syntax.
 
 ### Cluster Upgrade
 
@@ -78,28 +21,6 @@ Rolling upgrade of the Proxmox cluster, the Ubuntu k3s VMs, and k3s itself.
 Safety-critical playbook with operator confirmation prompts at each major step.
 Operator checklist (both Ansible and manual fallback):
 [`docs/runbook-cluster-upgrade.md`](docs/runbook-cluster-upgrade.md).
-
-```bash
-# Target k3s version (optional - omit to upgrade PVE/VMs only, skipping the k3s install step)
-ansible-playbook playbooks/ops-upgrade-cluster.yaml \
-  -e k3s_target_version=v1.31.5+k3s1
-
-# Skip pause prompts (run unattended)
-ansible-playbook playbooks/ops-upgrade-cluster.yaml \
-  -e k3s_target_version=v1.31.5+k3s1 -e interactive_mode=false
-
-# Quieter status output
-ansible-playbook playbooks/ops-upgrade-cluster.yaml \
-  -e k3s_target_version=v1.31.5+k3s1 -e verbose_status=false
-
-# Skip pre-flight (health gate + maintenance setup already done)
-ansible-playbook playbooks/ops-upgrade-cluster.yaml \
-  -e k3s_target_version=v1.31.5+k3s1 -e skip_preflight=true
-
-# Skip post-flight cleanup (run cleanup separately or manually)
-ansible-playbook playbooks/ops-upgrade-cluster.yaml \
-  -e k3s_target_version=v1.31.5+k3s1 -e skip_postflight=true
-```
 
 Pair upgrade order is hardcoded: `pve15+k3s-prod-15` → `pve13+k3s-prod-13` →
 `pve12+k3s-prod-12` → `pve11+k3s-prod-11`. opnsense is migrated `pve11→pve12`
@@ -121,7 +42,10 @@ opnsense itself) → operator pause to confirm the discovered shutdown list
 post-drain pod snapshot + operator pause → apt dist-upgrade on the k3s VM →
 in-place k3s install (no `--server` flag, upgrade only; skipped entirely when
 `k3s_target_version` is not set) → shutdown VM →
-operator pause before PVE upgrade → apt dist-upgrade + reboot PVE → start
+operator pause before PVE upgrade → apt dist-upgrade + reboot PVE →
+(when `network_upgrade_pause=true`, an extra operator pause here — the node
+is back up but nothing has been started, giving a window for a concurrent
+network upgrade's manual steps) → start
 this node's discovered VMs/LXCs back up (ensures SMB mount is available before
 the k3s VM starts) → start k3s VM → uncordon → wait for pods ready (operator
 prompt on timeout). On the
@@ -147,7 +71,10 @@ confirmation, minus 1 because the last pair's "Continue to next pair?" pause
 is skipped — there's nothing left to confirm after the final pair), plus
 additional prompts for pods-ready failures. The VM shutdown-list pause is
 conditional — it only fires on whichever pair's Proxmox node actually has
-other running VMs/LXCs discovered on it (currently just pve15).
+other running VMs/LXCs discovered on it (currently just pve15). With
+`network_upgrade_pause=true`, one additional pause fires per pair (4 more
+total) right after each Proxmox node comes back up, before anything is
+started back up on it.
 
 All yes/no-style pauses (including "Continue to next pair?") default to "yes"
 on a bare Enter — an operator must type `n`/`no` to stop. The
@@ -165,14 +92,6 @@ upgrading; use the full cluster upgrade when the Ubuntu VMs also need a kernel/
 apt dist-upgrade (which requires a reboot). Nodes upgrade one at a time
 (`serial: 1`), each waiting for cluster Ready before the next.
 
-```bash
-# Upgrade all k3s_prod nodes in place (required: target version)
-ansible-playbook playbooks/ops-k3s-upgrade.yaml -e k3s_target_version=v1.31.5+k3s1
-
-# Target a single node (or comma-separated list)
-ansible-playbook playbooks/ops-k3s-upgrade.yaml -e k3s_target_version=v1.31.5+k3s1 -l k3s-prod-13
-```
-
 This reuses `tasks/ops-upgrade-cluster-k3s-install.yaml` with `k3s_skip_start=false`
 (the cluster upgrade keeps the default `true` and restarts k3s via the VM reboot).
 
@@ -186,72 +105,11 @@ unified `update-app.yaml` framework like any other app, via the
 `calico` entry in `k3s_applications.yml` has no other parameters since the
 manifest URLs are computed from `calico_target_version` at runtime.
 
-```bash
-# Required: target Calico version (no default)
-ansible-playbook playbooks/k3s/update-calico.yaml -e calico_target_version=v3.32.0
-# Equivalent: ansible-playbook playbooks/k3s/update-app.yaml -e app_name=calico -e calico_target_version=v3.32.0
-```
-
 Steps: delete stale (0-replica) ReplicaSets in the `tigera-operator` and
 `calico-system` namespaces → download `operator-crds.yaml` and
 `tigera-operator.yaml` for the target version → apply both server-side with
 `force_conflicts: true` → wait for the `calico` TigeraStatus to report
 `Available`.
-
-### Maintenance Mode
-
-Manage alerts across monitoring systems (Graylog, Alertmanager, Uptime Kuma).
-
-```bash
-# Enable maintenance mode (mutes all alerts)
-ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable
-
-# Disable maintenance mode (unmutes all alerts)
-ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=disable
-
-# Target specific alert system
-ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=graylog
-ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=alertmanager
-ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=uptime-kuma
-ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e target=home-assistant
-
-# Customize silence duration (default: 2 hours)
-ansible-playbook playbooks/ops-maintenance-mode.yaml -e maintenance_action=enable -e duration_hours=4
-
-# Silence a single alert (default: 1 hour)
-ansible-playbook playbooks/ops-maintenance-mode-single.yaml -e 'alert_name="Node Exporter - CPU High"'
-ansible-playbook playbooks/ops-maintenance-mode-single.yaml -e 'alert_name="Node Exporter - CPU High"' -e duration_hours=2
-
-# Remove a single alert silence early
-ansible-playbook playbooks/ops-maintenance-mode-single.yaml -e 'alert_name="Node Exporter - CPU High"' -e silence_action=disable
-```
-
-### Supporting Operations
-
-```bash
-# Vault operations
-ansible-vault edit inventories/group_vars/all/vault.yml
-ansible-vault view inventories/group_vars/all/vault.yml
-ansible-vault encrypt inventories/group_vars/all/vault.yml
-
-# Inventory and connectivity
-ansible-inventory --list
-ansible-inventory --graph
-ansible all -m ping
-ansible <group> -m ping
-
-# Validation
-ansible-playbook <playbook>.yaml --syntax-check
-
-# Operational playbooks (cluster upgrades, maintenance, testing)
-ls playbooks/ops-*.yaml
-ansible-playbook playbooks/ops-<operation>.yaml
-
-# Proxmox snapshot management
-ansible-playbook playbooks/ops-proxmox-snapshot-k3s.yaml           # Snapshot all k3s-prod VMs (pre-upgrade-YYYYMMDD)
-ansible-playbook playbooks/ops-proxmox-snapshots.yaml               # List all VM/LXC snapshots cluster-wide
-ansible-playbook playbooks/ops-proxmox-snapshots.yaml -e delete_snapshots=true  # Delete all snapshots
-```
 
 ## Architecture
 

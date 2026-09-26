@@ -15,6 +15,8 @@
 #   4.   Shutdown k3s VM
 #   4b.  [PAUSE] Confirm before Proxmox upgrade (CRITICAL)
 #   5.   Upgrade Proxmox node + reboot, wait for Ceph HEALTH_WARN-noout-only
+#   5b.  [PAUSE] (only when network_upgrade_pause=true) Node is up but nothing
+#        has been started back up yet — window for manual network upgrade steps
 #   6a.  Start this node's discovered VMs/LXCs back up (needed before k3s mounts)
 #   6b.  Start k3s VM
 #   7.   Wait for k3s node Ready
@@ -32,6 +34,9 @@
 #   opnsense_vm_id (default 101)
 #   opnsense_home_node (default pve11)
 #   opnsense_failover_node (default pve12)
+#   network_upgrade_pause (default false) - add an extra pause after each
+#     Proxmox node reboots, before its VMs/LXCs are started back up, for a
+#     concurrent network upgrade's manual steps
 
 - block:
     - name: Set paired upgrade defaults
@@ -42,6 +47,7 @@
         opnsense_home_node: "{{ opnsense_home_node | default('pve11') }}"
         opnsense_failover_node: "{{ opnsense_failover_node | default('pve12') }}"
         is_opnsense_pair: "{{ pve_node == (opnsense_home_node | default('pve11')) }}"
+        network_upgrade_pause: "{{ hostvars['localhost']['network_upgrade_pause'] | default(false) }}"
         skip_this_pair: false
 
     - name: Display paired upgrade banner
@@ -317,6 +323,31 @@
         # STEP 5: Proxmox node upgrade + reboot
         - name: Upgrade Proxmox node {{ pve_node }}
           ansible.builtin.include_tasks: ops-upgrade-cluster-proxmox.yaml
+
+        # STEP 5b: network upgrade window - node is up, nothing started back up yet
+        - name: Pause for concurrent network upgrade steps
+          ansible.builtin.pause:
+            prompt: |
+
+              ========================================
+              NETWORK UPGRADE WINDOW
+              ========================================
+              {{ pve_node }} is rebooted and back up. Nothing has been started
+              back up on it yet (VMs/LXCs and {{ k3s_node }} are still down).
+              Perform any manual network upgrade steps for this node now.
+              Continue? [Y/n]
+          register: network_upgrade_confirm
+          when:
+            - interactive_mode | bool
+            - network_upgrade_pause | bool
+
+        - name: Abort if network upgrade window not confirmed
+          ansible.builtin.fail:
+            msg: "Pair upgrade cancelled during network upgrade window for {{ pve_node }}"
+          when:
+            - interactive_mode | bool
+            - network_upgrade_pause | bool
+            - network_upgrade_confirm.user_input | lower in ['n', 'no']
 
         # STEP 6a: start this node's VMs/LXCs back up before k3s (needed for mounts)
         - name: Start VMs/LXCs on {{ pve_node }} before k3s startup
