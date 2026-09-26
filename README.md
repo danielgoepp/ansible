@@ -80,12 +80,23 @@ ansible-playbook playbooks/esphome/upgrade-esphome.yaml -e esphome_clean_build=f
 # Snapshot all k3s-prod VMs (creates pre-upgrade-YYYYMMDD snapshots)
 ansible-playbook playbooks/ops-proxmox-snapshot-k3s.yaml
 
+# Same, without the Todoist cleanup reminder (or change its due date)
+ansible-playbook playbooks/ops-proxmox-snapshot-k3s.yaml -e snapshot_todoist_reminder=false
+ansible-playbook playbooks/ops-proxmox-snapshot-k3s.yaml -e snapshot_reminder_days=5
+
 # List all VM/LXC snapshots cluster-wide
 ansible-playbook playbooks/ops-proxmox-snapshots.yaml
 
 # Delete all snapshots cluster-wide
 ansible-playbook playbooks/ops-proxmox-snapshots.yaml -e delete_snapshots=true
 ```
+
+The k3s snapshot step (standalone or as part of the cluster upgrade pre-flight)
+is safe to re-run: VMs that already have a `pre-upgrade-*` snapshot are
+skipped. When it does take snapshots, it also adds a Todoist task, due in 2
+days by default, as a reminder to remove them, so each set of snapshots gets
+exactly one reminder. The reminder is best-effort: if Todoist is unreachable,
+the playbook prints a warning and continues.
 
 ### Cluster Upgrade
 

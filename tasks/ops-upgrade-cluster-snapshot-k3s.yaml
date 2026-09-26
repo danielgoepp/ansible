@@ -3,11 +3,19 @@
 # Creates a timestamped snapshot on all k3s-prod QEMU VMs before maintenance.
 # Snapshot name: pre-upgrade-YYYYMMDD
 #
+# Idempotent across re-runs: a VM that already has any pre-upgrade-* snapshot
+# (from an earlier, possibly failed, run of this upgrade) is skipped. The Todoist
+# cleanup reminder is created in the same block as the snapshots, so it is only
+# created by the run that actually takes them.
+#
 # Parameters:
 #   k3s_snapshot_nodes: list of VM names to snapshot
 #                       (default: derived from upgrade_pairs if present,
 #                        else ['k3s-prod-11', 'k3s-prod-12', 'k3s-prod-13', 'k3s-prod-15'])
 #   proxmox_api_host:   API entry point (default: pve15)
+#   snapshot_todoist_reminder: create a Todoist task to remove the snapshots
+#                       (default: true)
+#   snapshot_reminder_days: days until the Todoist task is due (default: 2)
 
 - name: Set snapshot defaults
   ansible.builtin.set_fact:
@@ -15,6 +23,8 @@
     proxmox_api_token_secret: "{{ awx_proxmox_api_token_secret | default(vault_proxmox_api_token_secret | default('')) }}"
     proxmox_api_host: "{{ proxmox_api_host | default('pve15') }}"
     snapshot_name: "pre-upgrade-{{ now(utc=True, fmt='%Y%m%d') }}"
+    snapshot_todoist_reminder: "{{ snapshot_todoist_reminder | default(true) }}"
+    snapshot_reminder_days: "{{ snapshot_reminder_days | default(2) }}"
     k3s_snapshot_nodes: >-
       {{ (upgrade_pairs | default([]) | map(attribute='k3s') | list)
          if (upgrade_pairs | default([]) | length > 0)
@@ -26,7 +36,7 @@
 
 - name: Display snapshot banner
   ansible.builtin.debug:
-    msg: "=== Creating pre-upgrade snapshots: {{ snapshot_name }} on {{ k3s_snapshot_nodes | join(', ') }} ==="
+    msg: "=== Pre-upgrade snapshots: {{ snapshot_name }} on {{ k3s_snapshot_nodes | join(', ') }} ==="
 
 - name: Get all VMs from cluster
   ansible.builtin.uri:
@@ -55,24 +65,7 @@
       Missing: {{ k3s_snapshot_nodes | difference(k3s_vms_to_snapshot | map(attribute='name') | list) }}
   when: k3s_vms_to_snapshot | length != k3s_snapshot_nodes | length
 
-- name: Create pre-upgrade snapshot on each k3s VM
-  ansible.builtin.uri:
-    url: "https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ item.node }}/qemu/{{ item.vmid }}/snapshot"
-    method: POST
-    body_format: form-urlencoded
-    body:
-      snapname: "{{ snapshot_name }}"
-      description: "Pre-upgrade snapshot {{ now(utc=True, fmt='%Y-%m-%d %H:%M UTC') }}"
-      vmstate: 0
-    headers:
-      Authorization: "{{ proxmox_auth_header }}"
-    validate_certs: false
-    status_code: [200]
-  loop: "{{ k3s_vms_to_snapshot }}"
-  loop_control:
-    label: "{{ item.name }} ({{ item.vmid }}) on {{ item.node }}"
-
-- name: Verify snapshot exists on each k3s VM
+- name: Get existing snapshots on each k3s VM
   ansible.builtin.uri:
     url: "https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ item.node }}/qemu/{{ item.vmid }}/snapshot"
     method: GET
@@ -82,11 +75,105 @@
   loop: "{{ k3s_vms_to_snapshot }}"
   loop_control:
     label: "{{ item.name }}"
-  register: verify_snap
-  until: verify_snap.json.data | selectattr('name', 'equalto', snapshot_name) | list | length > 0
-  retries: 12
-  delay: 10
+  register: existing_snaps
 
-- name: Snapshot creation complete
+- name: Reset list of k3s VMs needing a snapshot
+  ansible.builtin.set_fact:
+    k3s_vms_needing_snapshot: []
+
+- name: Collect k3s VMs without an existing pre-upgrade snapshot
+  ansible.builtin.set_fact:
+    k3s_vms_needing_snapshot: "{{ k3s_vms_needing_snapshot + [item.item] }}"
+  loop: "{{ existing_snaps.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.json.data | selectattr('name', 'match', 'pre-upgrade-') | list | length == 0
+
+- name: Display existing pre-upgrade snapshots (skipped)
   ansible.builtin.debug:
-    msg: "Snapshot '{{ snapshot_name }}' verified on: {{ k3s_vms_to_snapshot | map(attribute='name') | join(', ') }}"
+    msg: >-
+      {{ item.item.name }} already has
+      {{ item.json.data | selectattr('name', 'match', 'pre-upgrade-') | map(attribute='name') | join(', ') }}
+      - not taking another snapshot
+  loop: "{{ existing_snaps.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.json.data | selectattr('name', 'match', 'pre-upgrade-') | list | length > 0
+
+- name: Take pre-upgrade snapshots and create cleanup reminder
+  when: k3s_vms_needing_snapshot | length > 0
+  block:
+    - name: Create pre-upgrade snapshot on each k3s VM
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ item.node }}/qemu/{{ item.vmid }}/snapshot"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          snapname: "{{ snapshot_name }}"
+          description: "Pre-upgrade snapshot {{ now(utc=True, fmt='%Y-%m-%d %H:%M UTC') }}"
+          vmstate: 0
+        headers:
+          Authorization: "{{ proxmox_auth_header }}"
+        validate_certs: false
+        status_code: [200]
+      loop: "{{ k3s_vms_needing_snapshot }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.vmid }}) on {{ item.node }}"
+
+    - name: Verify snapshot exists on each k3s VM
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ item.node }}/qemu/{{ item.vmid }}/snapshot"
+        method: GET
+        headers:
+          Authorization: "{{ proxmox_auth_header }}"
+        validate_certs: false
+      loop: "{{ k3s_vms_needing_snapshot }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: verify_snap
+      until: verify_snap.json.data | selectattr('name', 'equalto', snapshot_name) | list | length > 0
+      retries: 12
+      delay: 10
+
+    - name: Snapshot creation complete
+      ansible.builtin.debug:
+        msg: "Snapshot '{{ snapshot_name }}' verified on: {{ k3s_vms_needing_snapshot | map(attribute='name') | join(', ') }}"
+
+    # Reminder to clean up the snapshots once the upgrade has proven stable.
+    # Best-effort: a Todoist failure only warns, it never blocks the upgrade.
+    - name: Create Todoist reminder to remove snapshots
+      when: snapshot_todoist_reminder | bool
+      block:
+        - name: Create Todoist task to remove pre-upgrade snapshots
+          ansible.builtin.uri:
+            url: "https://api.todoist.com/api/v1/tasks"
+            method: POST
+            headers:
+              Authorization: "Bearer {{ awx_todoist_api_token | default(vault_todoist_api_token) }}"
+            body_format: json
+            body:
+              content: "Remove Proxmox snapshot {{ snapshot_name }} from k3s-prod VMs"
+              description: >-
+                Created by the cluster upgrade playbook. Delete snapshot
+                '{{ snapshot_name }}' on: {{ k3s_vms_needing_snapshot
+                | map(attribute='name') | join(', ') }}
+                (ansible-playbook playbooks/ops-proxmox-snapshots.yaml
+                -e delete_snapshots=true removes all snapshots cluster-wide).
+              due_string: "in {{ snapshot_reminder_days }} days"
+              due_lang: en
+            status_code: [200]
+          register: snapshot_todoist_task
+
+        - name: Display Todoist reminder
+          ansible.builtin.debug:
+            msg: "Todoist reminder created: '{{ snapshot_todoist_task.json.content }}' due {{ snapshot_todoist_task.json.due.date }}"
+
+      rescue:
+        - name: Warn that Todoist reminder could not be created
+          ansible.builtin.debug:
+            msg: "WARNING: could not create Todoist reminder - remember to remove snapshot '{{ snapshot_name }}' manually."
+
+- name: Snapshots already in place
+  ansible.builtin.debug:
+    msg: "All k3s-prod VMs already have a pre-upgrade snapshot - skipping snapshot and Todoist reminder."
+  when: k3s_vms_needing_snapshot | length == 0

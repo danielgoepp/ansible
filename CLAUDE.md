@@ -343,7 +343,7 @@ All cluster upgrade task files use the prefix `ops-upgrade-cluster-` for consist
 - K3s in-place version install (`k3s-install`)
 - iotawatt-sync deployment management (`iotawatt`)
 - Proxmox node upgrade (`proxmox`)
-- Pre-upgrade snapshot of k3s-prod VMs (`snapshot-k3s`, called as first step of preflight)
+- Pre-upgrade snapshot of k3s-prod VMs (`snapshot-k3s`, called as first step of preflight; idempotent across re-runs — VMs that already have any `pre-upgrade-*` snapshot are skipped, and the Todoist reminder lives in the same block as snapshot creation so it is only created by the run that takes the snapshots; creates a best-effort Todoist task, due in `snapshot_reminder_days` (default 2), to remove the snapshots, using `awx_todoist_api_token`/`vault_todoist_api_token`; disable with `snapshot_todoist_reminder=false`)
 - Orchestration (`paired` for per-pair sequencing)
 
 Use `ls tasks/ops-upgrade-cluster-*.yaml` to see all cluster upgrade tasks.
