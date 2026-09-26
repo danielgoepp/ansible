@@ -11,7 +11,8 @@
 #
 # Parameters:
 #   k3s_node: hostname of the k3s VM
-#   k3s_target_version: target k3s version (e.g. v1.31.5+k3s1) - REQUIRED, no default
+#   k3s_target_version: target k3s version (e.g. v1.31.5+k3s1) - REQUIRED, no default.
+#     A missing leading "v" is added automatically (release tags are v-prefixed).
 #   k3s_token: cluster token (default: k3s-prod)
 #   k3s_skip_start: pass INSTALL_K3S_SKIP_START=true (default: true)
 
@@ -24,10 +25,12 @@
   ansible.builtin.set_fact:
     k3s_token: "{{ k3s_token | default('k3s-prod') }}"
     k3s_skip_start: "{{ k3s_skip_start | default(true) }}"
+    # Separate fact because -e extra vars can't be overridden by set_fact
+    k3s_install_version: "{{ k3s_target_version if k3s_target_version is match('v') else 'v' ~ k3s_target_version }}"
 
 - name: Display k3s upgrade target
   ansible.builtin.debug:
-    msg: "=== k3s install {{ k3s_target_version }} on {{ k3s_node }} ==="
+    msg: "=== k3s install {{ k3s_install_version }} on {{ k3s_node }} ==="
 
 - name: Check current k3s version on {{ k3s_node }}
   ansible.builtin.command: k3s --version
@@ -38,14 +41,14 @@
 
 - name: Display current k3s version
   ansible.builtin.debug:
-    msg: "Current: {{ k3s_current_version.stdout_lines[0] }}  Target: {{ k3s_target_version }}"
+    msg: "Current: {{ k3s_current_version.stdout_lines[0] }}  Target: {{ k3s_install_version }}"
 
 - name: Run k3s installer (skip_start={{ k3s_skip_start }})
   ansible.builtin.shell:
     cmd: >-
       curl -sfL https://get.k3s.io |
       K3S_TOKEN={{ k3s_token }}
-      INSTALL_K3S_VERSION={{ k3s_target_version }}
+      INSTALL_K3S_VERSION={{ k3s_install_version }}
       {% if k3s_skip_start | bool %}INSTALL_K3S_SKIP_START=true{% endif %}
       INSTALL_K3S_EXEC="server"
       sh -s -
@@ -67,7 +70,7 @@
   become: true
   register: k3s_post_version
   changed_when: false
-  failed_when: k3s_target_version not in k3s_post_version.stdout
+  failed_when: k3s_install_version not in k3s_post_version.stdout
 
 - name: Display new k3s version
   ansible.builtin.debug:
