@@ -49,7 +49,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ pve_node }}"
+        api_host: "{{ pve_node }}.{{ proxmox_api_domain }}"
         node: "{{ pve_node }}"
       register: discover_vm_query
 
@@ -86,7 +86,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ pve_node }}"
+        api_host: "{{ pve_node }}.{{ proxmox_api_domain }}"
         node: "{{ item.target_node }}"
         vmid: "{{ item.vm_id }}"
         migrate: true
@@ -101,7 +101,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ item.target_node }}"
+        api_host: "{{ item.target_node }}.{{ proxmox_api_domain }}"
         node: "{{ item.target_node }}"
         vmid: "{{ item.vm_id }}"
       register: migrate_away_status
@@ -123,7 +123,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ item.target_node }}"
+        api_host: "{{ item.target_node }}.{{ proxmox_api_domain }}"
         node: "{{ pve_node }}"
         vmid: "{{ item.vm_id }}"
         migrate: true
@@ -138,7 +138,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ pve_node }}"
+        api_host: "{{ pve_node }}.{{ proxmox_api_domain }}"
         node: "{{ pve_node }}"
         vmid: "{{ item.vm_id }}"
       register: migrate_back_status
@@ -160,7 +160,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ item.host_node }}"
+        api_host: "{{ item.host_node }}.{{ proxmox_api_domain }}"
         node: "{{ item.host_node }}"
         vmid: "{{ item.vm_id }}"
         state: stopped
@@ -174,7 +174,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ item.host_node }}"
+        api_host: "{{ item.host_node }}.{{ proxmox_api_domain }}"
         node: "{{ item.host_node }}"
         vmid: "{{ item.vm_id }}"
         state: stopped
@@ -192,7 +192,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ item.host_node }}"
+        api_host: "{{ item.host_node }}.{{ proxmox_api_domain }}"
         node: "{{ item.host_node }}"
         vmid: "{{ item.vm_id }}"
         state: started
@@ -206,7 +206,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ item.host_node }}"
+        api_host: "{{ item.host_node }}.{{ proxmox_api_domain }}"
         node: "{{ item.host_node }}"
         vmid: "{{ item.vm_id }}"
       register: qemu_start_status
@@ -224,7 +224,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ item.host_node }}"
+        api_host: "{{ item.host_node }}.{{ proxmox_api_domain }}"
         node: "{{ item.host_node }}"
         vmid: "{{ item.vm_id }}"
         state: started
@@ -238,7 +238,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ item.host_node }}"
+        api_host: "{{ item.host_node }}.{{ proxmox_api_domain }}"
         node: "{{ item.host_node }}"
         vmid: "{{ item.vm_id }}"
       register: lxc_start_status

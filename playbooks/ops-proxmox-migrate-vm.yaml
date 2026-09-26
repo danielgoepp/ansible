@@ -21,7 +21,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: pve13
+        api_host: "pve13.{{ proxmox_api_domain }}"
         vmid: 105
         name: dev
         node: pve15

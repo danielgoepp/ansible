@@ -240,6 +240,11 @@ ansible-playbook playbooks/k3s/update-app.yaml -e app_name=grafana -e k3s_defaul
 - **Consistent**: Same pattern across all secrets
 - **Flexible**: Easy to override for testing
 
+**Proxmox API host**: `community.proxmox` >= 2.0.0 verifies TLS certificates
+by default, and the Proxmox node certs are only valid for the FQDN. Always pass
+`api_host: "<node>.{{ proxmox_api_domain }}"` (defined in `common.yml`), never
+the bare short name; `node:` stays the short Proxmox node name.
+
 **Examples in Codebase**:
 
 - [roles/backup/tasks/main.yml](roles/backup/tasks/main.yml) - OPNsense, and SSH credentials

@@ -45,7 +45,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ pve_node }}"
+        api_host: "{{ pve_node }}.{{ proxmox_api_domain }}"
         node: "{{ pve_node }}"
         name: "{{ k3s_node }}"
       register: k3s_vm_lookup
@@ -60,7 +60,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ pve_node }}"
+        api_host: "{{ pve_node }}.{{ proxmox_api_domain }}"
         node: "{{ pve_node }}"
         vmid: "{{ k3s_vm_lookup.proxmox_vms[0].vmid }}"
         state: stopped
@@ -71,7 +71,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ pve_node }}"
+        api_host: "{{ pve_node }}.{{ proxmox_api_domain }}"
         node: "{{ pve_node }}"
         vmid: "{{ k3s_vm_lookup.proxmox_vms[0].vmid }}"
       register: k3s_vm_stopped
@@ -94,7 +94,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ pve_node }}"
+        api_host: "{{ pve_node }}.{{ proxmox_api_domain }}"
         node: "{{ pve_node }}"
         name: "{{ k3s_node }}"
       register: k3s_vm_lookup
@@ -109,7 +109,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ pve_node }}"
+        api_host: "{{ pve_node }}.{{ proxmox_api_domain }}"
         node: "{{ pve_node }}"
         vmid: "{{ k3s_vm_lookup.proxmox_vms[0].vmid }}"
         state: started

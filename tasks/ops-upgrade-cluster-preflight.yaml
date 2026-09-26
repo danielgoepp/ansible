@@ -52,7 +52,7 @@
         api_user: root@pam
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        api_host: "{{ opnsense_home_node }}"
+        api_host: "{{ opnsense_home_node }}.{{ proxmox_api_domain }}"
         node: "{{ opnsense_home_node }}"
         vmid: "{{ opnsense_vm_id }}"
       register: opnsense_info

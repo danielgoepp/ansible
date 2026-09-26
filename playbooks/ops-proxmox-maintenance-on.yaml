@@ -14,7 +14,7 @@
       api_user: root@pam
       api_token_id: "{{ proxmox_api_token_id }}"
       api_token_secret: "{{ proxmox_api_token_secret }}"
-      api_host: pve11
+      api_host: "pve11.{{ proxmox_api_domain }}"
       node: pve11
     register: vm_info
 

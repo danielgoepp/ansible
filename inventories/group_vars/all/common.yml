@@ -6,6 +6,10 @@
 k3s_config_base_path: "{{ playbook_dir }}/../files/k3s-config"
 k3s_default_context: "k3s-prod"
 
+# Proxmox API: community.proxmox >= 2.0.0 verifies TLS certs by default, and the
+# node certs are only valid for the FQDN, so api_host is "<node>.<domain>"
+proxmox_api_domain: "goepp.net"
+
 # Alert system URLs (non-sensitive)
 graylog_api_url: "https://graylog-prod.goepp.net/api"
 alertmanager_api_url: "https://alertmanager-prod.goepp.net/api/v2"
