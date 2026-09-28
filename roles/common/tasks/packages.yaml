@@ -25,3 +25,14 @@
       - python3-venv
     state: present
     update_cache: true
+
+# Enable optional node_exporter collectors per host, e.g. in the inventory:
+#   node_exporter_extra_collectors: ['drm']
+- name: Configure extra node_exporter collectors
+  ansible.builtin.lineinfile:
+    path: /etc/default/prometheus-node-exporter
+    regexp: '^ARGS='
+    line: >-
+      ARGS="{{ node_exporter_extra_collectors | map('regex_replace', '^', '--collector.') | join(' ') }}"
+  when: node_exporter_extra_collectors | default([]) | length > 0
+  notify: Restart prometheus-node-exporter

@@ -6,6 +6,10 @@
 llm_install_openwebui: true
 llm_install_portainer: true
 
+# AMD GPU configuration
+# runpm=0 keeps the GPU powered on; runtime PM wakes caused hard freezes
+llm_grub_cmdline_linux_default: "amdgpu.runpm=0"
+
 # Ollama configuration
 ollama_bind_address: "0.0.0.0"
 ollama_port: 11434

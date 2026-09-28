@@ -22,7 +22,7 @@ ansible/
 ├── roles/                 # Ansible roles
 │   ├── backup/            # Backup server configuration
 │   ├── common/            # Shared config (packages, users, mounts, rsyslog)
-│   ├── llm/               # GPU server setup (NVIDIA, Docker, Ollama, Open WebUI)
+│   ├── llm/               # GPU server setup (AMD GPU, Docker, Ollama, Open WebUI)
 │   ├── rpi/               # Raspberry Pi (NUT, Wyoming satellite)
 │   ├── samba/             # Samba file server configuration
 │   ├── ui-network/        # UniFi Network controller

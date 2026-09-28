@@ -1,24 +1,7 @@
 ---
-# Disable nouveau driver before installing NVIDIA
-- name: Blacklist nouveau driver
-  ansible.builtin.copy:
-    content: |
-      blacklist nouveau
-      options nouveau modeset=0
-    dest: /etc/modprobe.d/blacklist-nouveau.conf
-    mode: '0644'
-  notify:
-    - Update initramfs
-    - Reboot system
-
-# Install NVIDIA drivers
-- name: Install NVIDIA drivers
-  ansible.builtin.apt:
-    name:
-      - nvidia-driver-575-server-open
-    state: present
-    update_cache: true
-  notify: Reboot system
+# AMD GPU kernel and driver settings
+- name: Include AMD GPU setup tasks
+  ansible.builtin.include_tasks: amdgpu.yml
 
 # Install Docker
 - name: Install Docker prerequisites

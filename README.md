@@ -35,7 +35,7 @@ ansible-playbook playbooks/ssh/host-backup.yaml -e apt_dist_upgrade=true
 ansible-playbook playbooks/ssh/common-ubuntu.yaml -l <hostname>
 ansible-playbook playbooks/ssh/common-ubuntu.yaml -l <host1>,<host2>
 
-# LLM host upgrades (NVIDIA drivers, Docker, Ollama, Open WebUI, Portainer)
+# LLM host upgrades (AMD GPU setup, Docker, Ollama, Open WebUI, Portainer)
 ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_all=true
 ansible-playbook playbooks/ssh/host-<llm-host>.yaml -e llm_upgrade_component=<component>
 # Available components: docker, ollama, openwebui, portainer
@@ -231,6 +231,8 @@ ls playbooks/ops-*.yaml
 - **Clear playbook naming**: `common-*` for groups, `host-*` for specific servers
 - **Service-based configuration**: Hosts define their roles via `services` variables
 - **Unified update architecture**: Single playbook for all K3s application updates
+- **Per-host node_exporter collectors**: Set `node_exporter_extra_collectors`
+  (e.g. `['drm']` for AMD GPU load/VRAM) in the inventory
 - **Optional system updates**: Add `-e apt_dist_upgrade=true` to any playbook using
   common role
 - **Centralized alert management**: Control alerts across Graylog, Alertmanager,

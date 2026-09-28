@@ -129,7 +129,7 @@ Steps: delete stale (0-replica) ReplicaSets in the `tigera-operator` and
 - **roles/**: Ansible roles for modular configuration
   - **backup/**: Backup server configuration (OPNsense, SSH backups)
   - **common/**: Shared configuration (packages, users, mounts, rsyslog, oh-my-zsh)
-  - **llm/**: GPU server setup (NVIDIA drivers, Docker, Ollama, Open WebUI, Portainer)
+  - **llm/**: GPU server setup (AMD GPU kernel/grub settings, Docker, Ollama, Open WebUI, Portainer)
   - **rpi/**: Raspberry Pi configuration (NUT UPS, Wyoming satellite)
   - **samba/**: Samba file server configuration
   - **ui-network/**: UniFi Network controller
@@ -278,6 +278,12 @@ rockyledge:
 ```
 
 Tasks use conditionals like `when: "'nut' in (services | default([]))"` to run service-specific configuration.
+
+Optional node_exporter collectors are enabled per host with
+`node_exporter_extra_collectors` (e.g. `['drm']` on adambalm for amdgpu load and
+VRAM metrics). The common role writes them to `ARGS` in
+`/etc/default/prometheus-node-exporter` and restarts the service. GPU
+temperature, power, and fan metrics already come from the default `hwmon` collector.
 
 ### Storage Architecture
 

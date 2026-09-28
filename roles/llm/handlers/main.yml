@@ -1,6 +1,7 @@
 ---
-- name: Reboot system
-  ansible.builtin.reboot:
+- name: Update grub
+  ansible.builtin.command: update-grub
+  changed_when: true
 
 - name: Update initramfs
   ansible.builtin.command: update-initramfs -u
@@ -31,3 +32,7 @@
   ansible.builtin.systemd:
     name: ollama
     state: restarted
+
+# Keep last: handlers run in file order, so this runs after the others
+- name: Reboot system
+  ansible.builtin.reboot:

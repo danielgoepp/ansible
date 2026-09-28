@@ -1,0 +1,25 @@
+---
+# AMD GPU setup (amdgpu driver, RDNA4)
+# The in-tree amdgpu driver and firmware are used; no vendor driver package is needed.
+# Ollama's ROCm runtime is installed by the Ollama install script (see ollama.yml).
+
+# The stock 6.8 kernel fails amdgpu init on RDNA4; the HWE kernel (7.0+) is required
+- name: Install HWE kernel and GPU tools
+  ansible.builtin.apt:
+    name:
+      - linux-generic-hwe-24.04
+      - zstd
+      - nvtop
+    state: present
+    update_cache: true
+  notify: Reboot system
+
+- name: Set kernel command line for amdgpu
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT="{{ llm_grub_cmdline_linux_default }}"'
+    backup: true
+  notify:
+    - Update grub
+    - Reboot system

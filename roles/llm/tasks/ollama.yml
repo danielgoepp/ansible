@@ -30,6 +30,20 @@
     - Reload systemd daemon
     - Restart Ollama service
 
+# install.sh downloads the ROCm runtime when lspci shows an AMD GPU
+- name: Find Ollama ROCm runtime
+  ansible.builtin.find:
+    paths: /usr/local/lib/ollama
+    patterns: 'rocm_v*'
+    file_type: directory
+  register: ollama_rocm_dirs
+
+- name: Verify Ollama ROCm runtime is installed
+  ansible.builtin.assert:
+    that: ollama_rocm_dirs.matched > 0
+    fail_msg: "No rocm_v* runtime in /usr/local/lib/ollama - Ollama will run on CPU only"
+    quiet: true
+
 - name: Get installed Ollama version
   ansible.builtin.command: ollama --version
   register: ollama_new_version
