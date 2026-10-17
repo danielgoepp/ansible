@@ -5,6 +5,11 @@
 # requests to a sealed Vault pod). AWX execution uses the in-cluster service
 # URL directly, set via awx_vault_api_url in the job template extra vars.
 #
+# Before submitting keys, the playbook polls /v1/sys/seal-status until Vault
+# responds (default 30 retries x 10s), so it is safe to run immediately after
+# the Vault pod is recreated. Tune with vault_connect_retries/vault_connect_delay
+# (or awx_vault_connect_retries/awx_vault_connect_delay).
+#
 # Usage:
 #   Local:  ansible-playbook playbooks/ops-vault-unseal.yaml
 #   AWX:    Run as job template with extra var:
@@ -19,6 +24,9 @@
     vault_local_port: 18200
     vault_api_url: "{{ awx_vault_api_url | default('http://localhost:' + vault_local_port | string) }}"
     use_port_forward: "{{ awx_vault_api_url is not defined }}"
+    # Connectivity gate before unsealing (default: up to 5 minutes)
+    vault_connect_retries: "{{ awx_vault_connect_retries | default(30) }}"
+    vault_connect_delay: "{{ awx_vault_connect_delay | default(10) }}"
     unseal_keys:
       - "{{ awx_hashicorp_vault_unseal_key_1 | default(vault_hashicorp_vault_unseal_key_1) }}"
       - "{{ awx_hashicorp_vault_unseal_key_2 | default(vault_hashicorp_vault_unseal_key_2) }}"
@@ -29,6 +37,29 @@
   tasks:
     - name: Vault unseal
       block:
+        # kubectl port-forward exits immediately if no running pod backs the
+        # service, so make sure the Vault container is up before starting it.
+        - name: Wait for Vault server container to be running
+          kubernetes.core.k8s_info:
+            api_version: v1
+            kind: Pod
+            namespace: vault
+            context: "{{ vault_k3s_context }}"
+            label_selectors:
+              - "app.kubernetes.io/name=vault"
+              - "component=server"
+          register: vault_pods
+          until: >-
+            vault_pods.resources | length > 0 and
+            (vault_pods.resources
+              | map(attribute='status.containerStatuses', default=[])
+              | flatten
+              | selectattr('state.running', 'defined')
+              | list | length) > 0
+          retries: "{{ vault_connect_retries }}"
+          delay: "{{ vault_connect_delay }}"
+          when: use_port_forward
+
         - name: Start kubectl port-forward to Vault service
           ansible.builtin.shell: |
             kubectl --context {{ vault_k3s_context }} port-forward service/vault {{ vault_local_port }}:8200 -n vault >/dev/null 2>&1 &
@@ -43,11 +74,22 @@
             timeout: 15
           when: use_port_forward
 
-        - name: Check Vault seal status
+        # Connectivity gate: when this runs right after the Vault pod is
+        # recreated (upgrade workflow), the pod can be Running before the Vault
+        # process is listening or the service has endpoints. Poll until Vault
+        # answers with a valid seal-status response before submitting keys.
+        - name: Wait for Vault API to respond with seal status
           ansible.builtin.uri:
             url: "{{ vault_api_url }}/v1/sys/seal-status"
             method: GET
+            timeout: 10
           register: seal_status
+          until: >-
+            seal_status.status == 200 and
+            seal_status.json is defined and
+            seal_status.json.sealed is defined
+          retries: "{{ vault_connect_retries }}"
+          delay: "{{ vault_connect_delay }}"
 
         - name: Report already unsealed
           ansible.builtin.debug:
