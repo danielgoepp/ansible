@@ -55,6 +55,10 @@
   ansible.builtin.include_tasks: mount-smb.yaml
   when: inventory_hostname in groups['k3s_prod']
 
+- name: Configure k3s node kernel settings
+  ansible.builtin.include_tasks: k3s-node.yaml
+  when: inventory_hostname in groups['k3s_prod']
+
 - name: Mount Ceph shares
   ansible.builtin.include_tasks: mount-ceph.yaml
   when: >

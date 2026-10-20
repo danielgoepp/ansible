@@ -285,6 +285,14 @@ VRAM metrics). The common role writes them to `ARGS` in
 `/etc/default/prometheus-node-exporter` and restarts the service. GPU
 temperature, power, and fan metrics already come from the default `hwmon` collector.
 
+On `k3s_prod` hosts the common role also raises the inotify limits
+(`fs.inotify.max_user_instances=8192`, `fs.inotify.max_user_watches=524288`
+in `/etc/sysctl.d/99-k3s-inotify.conf`, via `roles/common/tasks/k3s-node.yaml`).
+At the Ubuntu default of 128 instances, the kubelet can't open a watcher to
+follow container logs ("failed to create fsnotify watcher: too many open
+files"). AWX jobs then fail with "Failed to JSON parse a line from worker
+stream" even though the playbook keeps running in the job pod.
+
 ### Storage Architecture
 
 - **SMB mounts**: Media storage available to k3s_prod hosts at `/mnt/smb_media`

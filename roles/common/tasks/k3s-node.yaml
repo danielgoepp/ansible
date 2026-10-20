@@ -1,0 +1,22 @@
+---
+# k3s node kernel tuning
+#
+# The kubelet uses an inotify instance for every followed container log
+# (kubectl logs -f, AWX/receptor job streams), on top of what containerd and
+# the workloads use. The Ubuntu default of 128 instances per user is exhausted
+# on busy nodes, which makes log follows fail with
+# "failed to create fsnotify watcher: too many open files" and AWX jobs error
+# with "Failed to JSON parse a line from worker stream".
+
+- name: Raise inotify limits for k3s nodes
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/99-k3s-inotify.conf
+    reload: true
+    state: present
+  loop:
+    - { name: fs.inotify.max_user_instances, value: '8192' }
+    - { name: fs.inotify.max_user_watches, value: '524288' }
+  loop_control:
+    label: "{{ item.name }}={{ item.value }}"
