@@ -1,5 +1,5 @@
 ---
-- name: Update K3s Application
+- name: "Update K3s Application: {{ app_name | default('undefined') }}"
   hosts: localhost
   gather_facts: false
 
