@@ -31,6 +31,18 @@
           - "app.kubernetes.io/name=vault"
           - "component=server"
 
+    # The replacement pod reuses the same name and labels, and the old pod still
+    # reports phase Running while it terminates. Record the old UIDs so the wait
+    # below can tell the replacement apart from the pod being deleted.
+    - name: Get current Vault server pod(s)
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ vault_namespace }}"
+        context: "{{ vault_context }}"
+        label_selectors: "{{ vault_label_selectors }}"
+      register: old_vault_pods
+
     # No wait: true here — the StatefulSet recreates a pod with the same name
     # almost immediately, so a wait-for-absent check (which re-queries by this
     # same label selector) can keep matching the replacement pod and time out
@@ -53,9 +65,17 @@
         context: "{{ vault_context }}"
         label_selectors: "{{ vault_label_selectors }}"
       register: vault_pods
+      vars:
+        old_uids: "{{ old_vault_pods.resources | map(attribute='metadata.uid') | list }}"
+        current_uids: "{{ vault_pods.resources | map(attribute='metadata.uid') | list }}"
       until: >-
         vault_pods.resources | length > 0 and
-        (vault_pods.resources | map(attribute='status.phase') | list | unique) == ['Running']
+        (current_uids | intersect(old_uids) | length) == 0 and
+        (vault_pods.resources
+          | map(attribute='status.containerStatuses', default=[])
+          | flatten
+          | selectattr('state.running', 'defined')
+          | list | length) == (vault_pods.resources | length)
       retries: 30
       delay: 10
 
