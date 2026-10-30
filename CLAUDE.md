@@ -111,6 +111,27 @@ Steps: delete stale (0-replica) ReplicaSets in the `tigera-operator` and
 `force_conflicts: true` → wait for the `calico` TigeraStatus to report
 `Available`.
 
+### Kernel Cleanup
+
+`playbooks/ops-cleanup-kernels.yaml` targets the `ubuntu` group only (`serial: 1`,
+stops on first failure). `k3s_prod`, `pve`, `rpi`, `lxc`, and `ui_protect` are
+deliberately excluded. Plain `apt autoremove` is not enough on these hosts, for
+two reasons:
+
+- The GA meta-packages (`linux-virtual`, `linux-image-generic`, etc.) depend on
+  the old 6.x kernel and reinstall each new 6.x build on dist-upgrade, so they
+  are purged (after `apt-mark manual linux-generic-hwe-<release>`).
+- apt's built-in kernel protection always keeps the running, newest, and one
+  previous kernel, so with a single 7.x installed the last 6.x would survive
+  autoremove. Every `linux-*-<major>.x.y-z` package below
+  `kernel_cleanup_min_major` (default 7, `awx_kernel_cleanup_min_major`) is
+  purged explicitly, then autoremove runs normally.
+
+A host fails the safety check unless its running kernel is at least the minimum
+major version and the HWE meta is installed; a post-check asserts the running
+kernel image is still present. In `--check` mode the `command` steps (apt-mark,
+rc purge) are skipped and the post-check is not asserted.
+
 ## Architecture
 
 ### Repository Structure

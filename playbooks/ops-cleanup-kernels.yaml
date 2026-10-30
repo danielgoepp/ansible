@@ -1,0 +1,146 @@
+---
+# Remove old, unused kernels from Ubuntu servers that have moved to the HWE kernel
+#
+# The GA kernel meta-packages (linux-virtual, linux-image-generic, ...) keep the
+# old 6.x kernel installed and pull in every new 6.x build on dist-upgrade, so
+# plain autoremove never cleans them up. This playbook removes those metas
+# (keeping the HWE meta), purges every kernel package below
+# kernel_cleanup_min_major, autoremoves (which keeps the running kernel plus one
+# previous 7.x as a fallback), and purges leftover config-only (rc) entries.
+#
+# Scope is the ubuntu group only. k3s_prod (still on 6.x by design), pve, rpi,
+# lxc, and ui_protect are intentionally not targeted.
+#
+# Safety: a host is skipped with a failure unless it is running a kernel of at
+# least kernel_cleanup_min_major and has the HWE meta-package installed. Ubuntu's
+# autoremove rules always keep the running kernel; a final check asserts it.
+#
+# Usage:
+#   Local:  ansible-playbook playbooks/ops-cleanup-kernels.yaml
+#           ansible-playbook playbooks/ops-cleanup-kernels.yaml -l dev
+#           ansible-playbook playbooks/ops-cleanup-kernels.yaml --check --diff
+#   AWX:    Run as job template (no additional configuration required)
+#
+# Variables:
+#   kernel_cleanup_min_major: 7 (default) — minimum running kernel major version
+#                             (AWX: awx_kernel_cleanup_min_major)
+
+- name: Remove old kernels from Ubuntu servers
+  hosts: ubuntu
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  gather_facts: true
+  gather_subset: [min]
+
+  vars:
+    kernel_cleanup_min_major: "{{ awx_kernel_cleanup_min_major | default(7) }}"
+    kernel_cleanup_hwe_meta: "linux-generic-hwe-{{ ansible_distribution_version }}"
+    kernel_cleanup_ga_metas:
+      - linux-generic
+      - linux-virtual
+      - linux-image-generic
+      - linux-image-virtual
+      - linux-image-extra-virtual
+      - linux-headers-generic
+      - linux-headers-virtual
+
+  tasks:
+    - name: Gather installed packages
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Verify host is running a new enough kernel with the HWE meta installed
+      ansible.builtin.assert:
+        that:
+          - ansible_kernel.split('.')[0] | int >= kernel_cleanup_min_major | int
+          - kernel_cleanup_hwe_meta in ansible_facts.packages
+          - ('linux-image-' ~ ansible_kernel) in ansible_facts.packages
+        fail_msg: >-
+          Refusing to clean kernels on {{ inventory_hostname }}: running {{ ansible_kernel }}
+          (need >= {{ kernel_cleanup_min_major }}.x), HWE meta {{ kernel_cleanup_hwe_meta }}
+          {{ 'present' if kernel_cleanup_hwe_meta in ansible_facts.packages else 'missing' }}
+        success_msg: "Running {{ ansible_kernel }} with {{ kernel_cleanup_hwe_meta }} installed"
+
+    - name: Mark HWE meta-package as manually installed so autoremove keeps it
+      ansible.builtin.command:
+        cmd: "apt-mark manual {{ kernel_cleanup_hwe_meta }}"
+      register: kernel_cleanup_mark
+      changed_when: "'already set' not in kernel_cleanup_mark.stdout"
+
+    - name: Remove GA kernel meta-packages
+      ansible.builtin.apt:
+        name: "{{ kernel_cleanup_ga_metas }}"
+        state: absent
+        purge: true
+
+    # apt's autoremove always keeps the running, newest, and one previous
+    # kernel, so with a single 7.x installed the last 6.x would be kept forever
+    - name: Collect kernel packages older than the minimum major version
+      ansible.builtin.set_fact:
+        kernel_cleanup_old_pkgs: >-
+          {{ ansible_facts.packages.keys()
+             | select('match', '^linux-[a-z-]+-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+')
+             | select('regex', '^linux-[a-z-]+-(' ~ range(1, kernel_cleanup_min_major | int) | join('|') ~ ')\.')
+             | sort }}
+
+    - name: Purge kernel packages older than the minimum major version
+      ansible.builtin.apt:
+        name: "{{ kernel_cleanup_old_pkgs }}"
+        state: absent
+        purge: true
+      when: kernel_cleanup_old_pkgs | length > 0
+
+    - name: Autoremove remaining unused kernels and dependencies
+      ansible.builtin.apt:
+        autoremove: true
+        purge: true
+
+    - name: Find leftover config-only kernel packages
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          dpkg -l | awk '$1 == "rc" && $2 ~ /^linux-(image|modules|modules-extra|headers)-[0-9]/ {print $2}'
+        executable: /bin/bash
+      register: kernel_cleanup_rc
+      changed_when: false
+      check_mode: false
+
+    - name: Purge leftover config-only kernel packages
+      ansible.builtin.command:
+        cmd: "dpkg --purge {{ kernel_cleanup_rc.stdout_lines | join(' ') }}"
+      when: kernel_cleanup_rc.stdout_lines | length > 0
+      changed_when: true
+
+    - name: Re-gather installed packages
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Collect remaining kernel images
+      ansible.builtin.set_fact:
+        kernel_cleanup_remaining: >-
+          {{ ansible_facts.packages.keys() | select('match', '^linux-image-[0-9]') | sort }}
+
+    - name: Verify running kernel is still installed and no old-major kernels remain
+      ansible.builtin.assert:
+        that:
+          - ('linux-image-' ~ ansible_kernel) in ansible_facts.packages
+          - kernel_cleanup_remaining
+            | map('regex_replace', '^linux-image-([0-9]+)\\..*$', '\\1')
+            | map('int') | min >= kernel_cleanup_min_major | int
+        fail_msg: "Unexpected kernel state: {{ kernel_cleanup_remaining }}"
+      when: not ansible_check_mode
+
+    - name: Check /boot usage
+      ansible.builtin.command:
+        cmd: df -h /boot
+      register: kernel_cleanup_boot
+      changed_when: false
+      check_mode: false
+
+    - name: Report result
+      ansible.builtin.debug:
+        msg:
+          - "Running kernel: {{ ansible_kernel }}"
+          - "Installed kernel images: {{ kernel_cleanup_remaining | join(', ') }}"
+          - "/boot: {{ kernel_cleanup_boot.stdout_lines[-1] }}"

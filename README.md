@@ -197,6 +197,26 @@ ansible-playbook playbooks/ops-maintenance-mode-single.yaml \
   -e 'alert_name="Node Exporter - CPU High"' -e silence_action=disable
 ```
 
+### Kernel Cleanup
+
+Removes old kernels from Ubuntu servers that have moved to the HWE kernel. The
+GA kernel meta-packages are removed (so old-series kernels stop being pulled in
+on upgrade), every kernel package below the minimum major version is purged,
+and leftover config-only kernel entries are cleaned up. The running kernel and
+one previous kernel of the current series are kept. Only the `ubuntu` group is
+targeted; hosts not running a new enough kernel fail the safety check and are
+left untouched.
+
+```bash
+# Preview, then run across all Ubuntu servers (one host at a time)
+ansible-playbook playbooks/ops-cleanup-kernels.yaml --check
+ansible-playbook playbooks/ops-cleanup-kernels.yaml
+
+# Single host, or a different minimum kernel major version (default: 7)
+ansible-playbook playbooks/ops-cleanup-kernels.yaml -l dev
+ansible-playbook playbooks/ops-cleanup-kernels.yaml -e kernel_cleanup_min_major=8
+```
+
 ### Supporting Operations
 
 ```bash
