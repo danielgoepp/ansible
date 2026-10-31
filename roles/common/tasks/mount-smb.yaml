@@ -23,6 +23,7 @@
     owner: root
     group: root
     mode: '0755'
+  when: inventory_hostname in groups['k3s_prod']
 
 - name: Mount smb media directory
   ansible.posix.mount:
@@ -31,6 +32,7 @@
     state: mounted
     fstype: cifs
     opts: credentials=/etc/smb_cifs_credentials
+  when: inventory_hostname in groups['k3s_prod']
 
 - name: Create smb kopia-hdd directory
   ansible.builtin.file:
@@ -49,3 +51,25 @@
     fstype: cifs
     opts: credentials=/etc/smb_cifs_credentials
   when: inventory_hostname in groups['k3s_prod']
+
+# Raspberry Pis get /mnt/backups from smb instead of CephFS (their kernels can't
+# use aes256k Ceph keys). The share forces root:root 0644/0755 on the smb side.
+# IP rather than smb.goepp.net: the remote Pis resolve via Tailscale MagicDNS,
+# which doesn't serve goepp.net
+- name: Create smb backups directory
+  ansible.builtin.file:
+    path: /mnt/backups
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: inventory_hostname in groups['rpi'] and inventory_hostname != 'probepi'
+
+- name: Mount smb backups directory
+  ansible.posix.mount:
+    src: //10.1.11.106/backups
+    path: /mnt/backups
+    state: mounted
+    fstype: cifs
+    opts: credentials=/etc/smb_cifs_credentials,_netdev,nofail
+  when: inventory_hostname in groups['rpi'] and inventory_hostname != 'probepi'

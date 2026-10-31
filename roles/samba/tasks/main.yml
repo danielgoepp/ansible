@@ -13,7 +13,7 @@
     group: root
     mode: '0644'
   notify:
-    - Restart smbd
+    - Reload smbd
 
 - name: Create user jen
   ansible.builtin.user:

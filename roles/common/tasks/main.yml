@@ -53,7 +53,7 @@
 
 - name: Mount SMB shares
   ansible.builtin.include_tasks: mount-smb.yaml
-  when: inventory_hostname in groups['k3s_prod']
+  when: inventory_hostname in groups['k3s_prod'] or inventory_hostname in groups['rpi']
 
 - name: Configure k3s node kernel settings
   ansible.builtin.include_tasks: k3s-node.yaml
@@ -65,7 +65,8 @@
     ansible_hostname != 'adambalm' and
     ansible_hostname != 'gru' and
     ansible_hostname != 'ui-network' and
-    inventory_hostname not in groups['pve']
+    inventory_hostname not in groups['pve'] and
+    inventory_hostname not in groups['rpi']
 
 - name: Configure rsyslog
   ansible.builtin.include_tasks: rsyslog.yaml

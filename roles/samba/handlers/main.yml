@@ -1,5 +1,7 @@
 ---
-- name: Restart smbd
+# Reload, not restart: a restart drops every client session (k3s media/kopia
+# mounts, backup jobs); share changes apply to new connections after a reload
+- name: Reload smbd
   ansible.builtin.systemd:
     name: smbd
-    state: restarted
+    state: reloaded

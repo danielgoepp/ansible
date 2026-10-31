@@ -317,8 +317,13 @@ stream" even though the playbook keeps running in the job pod.
 ### Storage Architecture
 
 - **SMB mounts**: Media storage available to k3s_prod hosts at `/mnt/smb_media`
+  (`roles/common/tasks/mount-smb.yaml`). Raspberry Pis mount `/mnt/backups` from
+  the smb `backups` share instead of CephFS (their kernels can't use `aes256k`
+  Ceph keys), by IP because the remote Pis resolve via Tailscale MagicDNS, which
+  doesn't serve `goepp.net`. The share forces root ownership on the smb side.
+  probepi gets no `/mnt/backups`.
 - **Ceph mounts**: Production Kubernetes data, homes, and backups for k3s_prod hosts
-  (`roles/common/tasks/mount-ceph.yaml`). Hosts mount as the shared
+  (`roles/common/tasks/mount-ceph.yaml`). Not used on Raspberry Pis. Hosts mount as the shared
   `ubuntu-vault` CephFS user by default; set `ceph_client_name` and
   `ceph_secret_file` (a vault-encrypted file in `roles/common/files/ceph/`) on a
   host to move it to another user. Used to move hosts to the `aes256k` key
@@ -326,7 +331,7 @@ stream" even though the playbook keeps running in the job pod.
   parse the key (Ubuntu 24.04's 19.2.3 `mount.ceph` rejects it as "not valid
   base64"). Set `ceph_upstream_release` (e.g. `tentacle`) on such a host to add
   the `download.ceph.com` repo and install ceph-common from it. Hosts with older
-  kernels (k3s_prod on 6.8, rpi) stay on `ubuntu-vault`. The old secret file is
+  kernels (k3s_prod on 6.8) stay on `ubuntu-vault`. The old secret file is
   left on the host so switching back is just removing the vars. Changing the
   user only rewrites fstab — the mount module's in-place remount keeps the old
   user, so each mount needs an explicit `umount` + `mount` afterwards.
