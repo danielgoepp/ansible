@@ -1,22 +1,61 @@
 ---
+# Ceph user and secret file are overridable per host (e.g. to move a host to a
+# new aes256k key); defaults keep the shared ubuntu-vault user
+- name: Set Ceph client user and secret file
+  ansible.builtin.set_fact:
+    ceph_client: "{{ ceph_client_name | default('ubuntu-vault') }}"
+    ceph_secret: "{{ ceph_secret_file | default('ceph-vault.secret') }}"
+
+# Distro ceph-common may be too old for the cluster (e.g. Ubuntu 24.04's 19.2.3
+# mount.ceph can't parse aes256k keys); set ceph_upstream_release (e.g. tentacle)
+# on a host to install ceph-common from download.ceph.com instead
+# Plain get_url + copy rather than deb822_repository, which needs python3-debian
+# on the host and can't run in check mode without it
+- name: Add upstream Ceph signing key
+  ansible.builtin.get_url:
+    url: https://download.ceph.com/keys/release.asc
+    dest: /etc/apt/keyrings/ceph.asc
+    mode: '0644'
+  when: ceph_upstream_release is defined
+
+- name: Add upstream Ceph repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/ceph.sources
+    content: |
+      Components: main
+      X-Repolib-Name: ceph
+      Signed-By: /etc/apt/keyrings/ceph.asc
+      Suites: {{ ansible_distribution_release }}
+      Types: deb
+      URIs: https://download.ceph.com/debian-{{ ceph_upstream_release }}
+    mode: '0644'
+  when: ceph_upstream_release is defined
+
+- name: Install ceph-common from upstream Ceph repository
+  ansible.builtin.apt:
+    name: ceph-common
+    state: latest
+    update_cache: true
+  when: ceph_upstream_release is defined
+
 # Set Ceph mount variables based on platform
 # Ubuntu uses mon_addr format, Raspberry Pi uses traditional monitor:port format
 - name: Set Ceph mount parameters for Ubuntu
   ansible.builtin.set_fact:
-    ceph_src_format: "ubuntu-vault@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd="
-    ceph_opts_base: "mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev"
+    ceph_src_format: "{{ ceph_client }}@851299c9-d4fb-4042-89e8-23e838351f4e.ceph-ssd="
+    ceph_opts_base: "mon_addr=10.1.11.11:6789/10.1.11.12:6789/10.1.11.13:6789,secretfile=/etc/ceph/{{ ceph_secret }},rw,noatime,_netdev"
   when: inventory_hostname not in groups['rpi']
 
 - name: Set Ceph mount parameters for Raspberry Pi
   ansible.builtin.set_fact:
     ceph_src_format: "10.1.11.11:6789,10.1.11.12:6789,10.1.11.13:6789:"
-    ceph_opts_base: "name=ubuntu-vault,mds_namespace=ceph-ssd,secretfile=/etc/ceph/ceph-vault.secret,rw,noatime,_netdev"
+    ceph_opts_base: "name={{ ceph_client }},mds_namespace=ceph-ssd,secretfile=/etc/ceph/{{ ceph_secret }},rw,noatime,_netdev"
   when: inventory_hostname in groups['rpi']
 
-- name: Copy ceph-vault secret
+- name: Copy Ceph secret
   ansible.builtin.copy:
-    src: ceph/ceph-vault.secret
-    dest: "/etc/ceph/ceph-vault.secret"
+    src: "ceph/{{ ceph_secret }}"
+    dest: "/etc/ceph/{{ ceph_secret }}"
     decrypt: true
     owner: root
     group: root
