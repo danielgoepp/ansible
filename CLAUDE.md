@@ -330,8 +330,9 @@ stream" even though the playbook keeps running in the job pod.
   `cephfs-ubuntu`, which needs a 7.0+ kernel *and* a ceph-common new enough to
   parse the key (Ubuntu 24.04's 19.2.3 `mount.ceph` rejects it as "not valid
   base64"). Set `ceph_upstream_release` (e.g. `tentacle`) on such a host to add
-  the `download.ceph.com` repo and install ceph-common from it. Hosts with older
-  kernels (k3s_prod on 6.8) stay on `ubuntu-vault`. The old secret file is
+  the `download.ceph.com` repo and install ceph-common from it. The `ubuntu` and
+  `k3s_prod` groups and the smb LXC set these vars; a k3s node must be on the
+  HWE 7.0 kernel before the common role runs on it. The old secret file is
   left on the host so switching back is just removing the vars. Changing the
   user only rewrites fstab — the mount module's in-place remount keeps the old
   user, so each mount needs an explicit `umount` + `mount` afterwards.
