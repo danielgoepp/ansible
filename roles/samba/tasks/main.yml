@@ -28,3 +28,27 @@
     create_home: false
     shell: /dev/null
     password: "!"
+
+# Shared [scansnap] share: both users write through the scansnap group
+# (force group + setgid dir), so either can edit the other's scans
+- name: Create scansnap group
+  ansible.builtin.group:
+    name: scansnap
+    state: present
+
+- name: Add users to scansnap group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: scansnap
+    append: true
+  loop:
+    - dang
+    - jen
+
+- name: Create scansnap share directory
+  ansible.builtin.file:
+    path: /mnt/homes/scansnap
+    state: directory
+    owner: root
+    group: scansnap
+    mode: '2770'

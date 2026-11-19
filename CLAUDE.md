@@ -152,7 +152,10 @@ rc purge) are skipped and the post-check is not asserted.
   - **common/**: Shared configuration (packages, users, mounts, rsyslog, oh-my-zsh)
   - **llm/**: GPU server setup (AMD GPU kernel/grub settings, Docker, Ollama, Open WebUI, Portainer)
   - **rpi/**: Raspberry Pi configuration (NUT UPS, Wyoming satellite)
-  - **samba/**: Samba file server configuration
+  - **samba/**: Samba file server configuration. Shares live in the static
+    `files/smb.conf`. The `scansnap` share (`/mnt/homes/scansnap` on CephFS)
+    is shared by two users through the `scansnap` group (setgid dir +
+    `force group`). Samba passwords (`smbpasswd`) are set by hand, not by Ansible.
   - **ui-network/**: UniFi Network controller
   - **ui-protect/**: UniFi Protect
 - **tasks/**: Reusable task files
