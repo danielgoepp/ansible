@@ -9,12 +9,13 @@
 #   uptime_kuma_password: Uptime Kuma password
 #
 # Requirements:
-#   pip install uptime-kuma-api
+#   pip install uptime-kuma-api (into the Python that runs Ansible; the script is
+#   run with ansible_playbook_python, not whatever python3 is first on PATH)
 
 - name: Manage Uptime Kuma maintenance window
   ansible.builtin.command:
     cmd: >-
-      python3 {{ playbook_dir }}/../scripts/uptime_kuma_maintenance.py
+      {{ ansible_playbook_python }} {{ playbook_dir }}/../scripts/uptime_kuma_maintenance.py
       --action {{ maintenance_action }}
       --url "{{ uptime_kuma_url }}"
       --username "{{ uptime_kuma_username }}"
