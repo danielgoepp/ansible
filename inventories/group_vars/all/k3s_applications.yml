@@ -180,6 +180,13 @@ k3s_applications:
     helm_namespace: mongodb
     helm_values_file: "{{ playbook_dir }}/../../files/k3s-config/mongodb/helm/mongodb-prod-values.yaml"
 
+  mosquitto-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/mosquitto/manifests/mosquitto-prod.yaml"
+    service_namespace: mosquitto
+    deployment_name: mosquitto
+    app_label: mosquitto
+
   n8n-prod:
     deployment_method: manifest
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/n8n/manifests/n8n-prod.yaml"
