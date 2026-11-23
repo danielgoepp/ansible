@@ -201,6 +201,23 @@ k3s_applications:
     deployment_name: n8n
     app_label: n8n
 
+  # Instance AI sandbox: the manifest holds both sandbox-api and
+  # sandbox-runner-1; the apply rolls both, readiness is awaited on the API
+  # (the runner has no readiness probe).
+  n8n-sandbox-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/n8n/manifests/n8n-sandbox-prod.yaml"
+    service_namespace: n8n
+    deployment_name: sandbox-api
+    app_label: sandbox-api
+
+  n8n-searxng-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/n8n/manifests/n8n-searxng-prod.yaml"
+    service_namespace: n8n
+    deployment_name: searxng
+    app_label: searxng
+
   openclaw-prod:
     deployment_method: manifest
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/openclaw/manifests/openclaw-prod.yaml"
