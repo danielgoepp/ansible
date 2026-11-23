@@ -73,6 +73,12 @@ k3s_applications:
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-homeassistant-prod.yaml"
     service_namespace: cnpg-homeassistant
 
+  cnpg-miniflux-prod:
+    deployment_method: manifest-cnpg
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/cnpg/manifests/cnpg-miniflux-prod.yaml"
+    service_namespace: cnpg-miniflux
+    cluster_name: miniflux-prod
+
   esphome-prod:
     deployment_method: manifest
     manifest_path: "{{ playbook_dir }}/../../files/k3s-config/esphome/manifests/esphome-prod.yaml"
