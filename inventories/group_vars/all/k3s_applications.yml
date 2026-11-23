@@ -147,6 +147,13 @@ k3s_applications:
     deployment_name: music-assistant
     app_label: music-assistant
 
+  miniflux-prod:
+    deployment_method: manifest
+    manifest_path: "{{ playbook_dir }}/../../files/k3s-config/miniflux/manifests/miniflux-prod.yaml"
+    service_namespace: miniflux
+    deployment_name: miniflux
+    app_label: miniflux
+
   minio-operator:
     deployment_method: helm
     helm_release_name: operator
