@@ -52,13 +52,12 @@ ansible-inventory --graph  # View host organization
 
 ```bash
 # Unified update playbook for all K3s applications
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=grafana
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=homeassistant
-ansible-playbook playbooks/k3s/update-app.yaml -e app_name=traefik
+# app_name is the {app}-{instance} key from k3s_applications.yml
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=grafana-prod
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=traefik-prod
 
-# Update specific instance of multi-instance apps
-ansible-playbook playbooks/k3s/update-app.yaml \
-  -e app_name=homeassistant -e target_instance=prod
+# Apps on other clusters have their own {app}-{instance} entries with k8s_context set
+ansible-playbook playbooks/k3s/update-app.yaml -e app_name=<app>-<instance>
 ```
 
 ### ESPHome Device Updates

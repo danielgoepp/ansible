@@ -354,6 +354,9 @@ Playbooks typically have multiple plays:
 K3s application updates use a unified, configuration-driven approach:
 
 - **inventories/group_vars/all/k3s_applications.yml**: Centralized application configuration defining all K3s applications, their deployment methods (helm, manifest, manifest-multi, manifest-cnpg, manifest-multi-cnpg, rollout-restart, calico-operator), and deployment-specific parameters
+  - Apps on the remote Pi clusters are separate `{app}-{instance}` entries with `k8s_context: k3s-morgspi` / `k3s-mudderpi` (e.g. `homeassistant-mudderpi`, `cert-manager-mudderpi`); entries without `k8s_context` use `k3s_default_context` (`k3s-prod`)
+  - Helm entries with no `helm_chart_version` install the newest chart in the repo on every run
+  - `update-app.yaml` re-clones k3s-config from GitHub `main` each run, so a new or changed values file/manifest must be pushed to k3s-config before its job will pick it up
 - **playbooks/k3s/update-app.yaml**: Unified playbook that loads application config and routes to appropriate task file based on deployment method
 - **tasks/k3s-update-manifest.yaml**: Reusable task file for single manifest deployments
 - **tasks/k3s-update-manifest-multi.yaml**: Reusable task file for multi-instance manifest deployments
